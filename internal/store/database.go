@@ -21,7 +21,7 @@ type Database struct {
 }
 
 // GetConfigDir returns the appropriate configuration directory based on the OS
-func GetConfigDir() (string, error) {
+var GetConfigDir = func() (string, error) {
 	var configDir string
 
 	switch runtime.GOOS {
