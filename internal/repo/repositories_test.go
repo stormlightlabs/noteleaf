@@ -20,7 +20,6 @@ func createFullTestDB(t *testing.T) *sql.DB {
 		t.Fatalf("Failed to enable foreign keys: %v", err)
 	}
 
-	// Create all tables
 	schema := `
 		-- Tasks table
 		CREATE TABLE IF NOT EXISTS tasks (
@@ -77,6 +76,18 @@ func createFullTestDB(t *testing.T) *sql.DB {
 			added DATETIME DEFAULT CURRENT_TIMESTAMP,
 			started DATETIME,
 			finished DATETIME
+		);
+
+		-- Notes table
+		CREATE TABLE IF NOT EXISTS notes (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			title TEXT NOT NULL,
+			content TEXT NOT NULL,
+			tags TEXT,
+			archived BOOLEAN DEFAULT FALSE,
+			created DATETIME DEFAULT CURRENT_TIMESTAMP,
+			modified DATETIME DEFAULT CURRENT_TIMESTAMP,
+			file_path TEXT
 		);
 	`
 
@@ -155,6 +166,19 @@ func TestRepositories(t *testing.T) {
 			if bookID == 0 {
 				t.Error("Expected non-zero book ID")
 			}
+
+			note := &models.Note{
+				Title:   "Integration Note",
+				Content: "This is test content for integration",
+				Tags:    []string{"integration", "test"},
+			}
+			noteID, err := repos.Notes.Create(ctx, note)
+			if err != nil {
+				t.Errorf("Failed to create note: %v", err)
+			}
+			if noteID == 0 {
+				t.Error("Expected non-zero note ID")
+			}
 		})
 
 		t.Run("Retrieve all resources", func(t *testing.T) {
@@ -188,6 +212,14 @@ func TestRepositories(t *testing.T) {
 			}
 			if len(books) != 1 {
 				t.Errorf("Expected 1 book, got %d", len(books))
+			}
+
+			notes, err := repos.Notes.List(ctx, NoteListOptions{})
+			if err != nil {
+				t.Errorf("Failed to list notes: %v", err)
+			}
+			if len(notes) != 1 {
+				t.Errorf("Expected 1 note, got %d", len(notes))
 			}
 		})
 
@@ -257,6 +289,14 @@ func TestRepositories(t *testing.T) {
 			if len(queuedBooks) != 1 {
 				t.Errorf("Expected 1 queued book, got %d", len(queuedBooks))
 			}
+
+			activeNotes, err := repos.Notes.GetActive(ctx)
+			if err != nil {
+				t.Errorf("Failed to get active notes: %v", err)
+			}
+			if len(activeNotes) != 1 {
+				t.Errorf("Expected 1 active note, got %d", len(activeNotes))
+			}
 		})
 	})
 
@@ -276,6 +316,9 @@ func TestRepositories(t *testing.T) {
 			}
 			if repos.Books == nil {
 				t.Error("Books repository should be initialized")
+			}
+			if repos.Notes == nil {
+				t.Error("Notes repository should be initialized")
 			}
 		})
 

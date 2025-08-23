@@ -10,6 +10,7 @@ type Repositories struct {
 	Movies *MovieRepository
 	TV     *TVRepository
 	Books  *BookRepository
+	Notes  *NoteRepository
 }
 
 // NewRepositories creates a new set of repositories
@@ -19,5 +20,6 @@ func NewRepositories(db *sql.DB) *Repositories {
 		Movies: NewMovieRepository(db),
 		TV:     NewTVRepository(db),
 		Books:  NewBookRepository(db),
+		Notes:  NewNoteRepository(db),
 	}
 }
