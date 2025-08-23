@@ -94,6 +94,18 @@ type Book struct {
 	Finished *time.Time `json:"finished,omitempty"`
 }
 
+// Note represents a markdown note
+type Note struct {
+	ID       int64     `json:"id"`
+	Title    string    `json:"title"`
+	Content  string    `json:"content"`
+	Tags     []string  `json:"tags,omitempty"`
+	Archived bool      `json:"archived"`
+	Created  time.Time `json:"created"`
+	Modified time.Time `json:"modified"`
+	FilePath string    `json:"file_path,omitempty"`
+}
+
 // MarshalTags converts tags slice to JSON string for database storage
 func (t *Task) MarshalTags() (string, error) {
 	if len(t.Tags) == 0 {
@@ -226,3 +238,34 @@ func (b *Book) GetCreatedAt() time.Time     { return b.Added }
 func (b *Book) SetCreatedAt(time time.Time) { b.Added = time }
 func (b *Book) GetUpdatedAt() time.Time     { return b.Added }
 func (b *Book) SetUpdatedAt(time time.Time) { b.Added = time }
+
+// MarshalTags converts tags slice to JSON string for database storage
+func (n *Note) MarshalTags() (string, error) {
+	if len(n.Tags) == 0 {
+		return "", nil
+	}
+	data, err := json.Marshal(n.Tags)
+	return string(data), err
+}
+
+// UnmarshalTags converts JSON string from database to tags slice
+func (n *Note) UnmarshalTags(data string) error {
+	if data == "" {
+		n.Tags = nil
+		return nil
+	}
+	return json.Unmarshal([]byte(data), &n.Tags)
+}
+
+// IsArchived returns true if the note is archived
+func (n *Note) IsArchived() bool {
+	return n.Archived
+}
+
+func (n *Note) GetID() int64                { return n.ID }
+func (n *Note) SetID(id int64)              { n.ID = id }
+func (n *Note) GetTableName() string        { return "notes" }
+func (n *Note) GetCreatedAt() time.Time     { return n.Created }
+func (n *Note) SetCreatedAt(time time.Time) { n.Created = time }
+func (n *Note) GetUpdatedAt() time.Time     { return n.Modified }
+func (n *Note) SetUpdatedAt(time time.Time) { n.Modified = time }

@@ -533,6 +533,142 @@ func TestModels(t *testing.T) {
 		})
 	})
 
+	t.Run("Note Model", func(t *testing.T) {
+		t.Run("Model Interface Implementation", func(t *testing.T) {
+			note := &Note{
+				ID:      1,
+				Title:   "Test Note",
+				Content: "This is test content",
+				Created: time.Now(),
+			}
+
+			if note.GetID() != 1 {
+				t.Errorf("Expected ID 1, got %d", note.GetID())
+			}
+
+			note.SetID(2)
+			if note.GetID() != 2 {
+				t.Errorf("Expected ID 2 after SetID, got %d", note.GetID())
+			}
+
+			if note.GetTableName() != "notes" {
+				t.Errorf("Expected table name 'notes', got '%s'", note.GetTableName())
+			}
+
+			createdAt := time.Now()
+			note.SetCreatedAt(createdAt)
+			if !note.GetCreatedAt().Equal(createdAt) {
+				t.Errorf("Expected created at %v, got %v", createdAt, note.GetCreatedAt())
+			}
+
+			updatedAt := time.Now().Add(time.Hour)
+			note.SetUpdatedAt(updatedAt)
+			if !note.GetUpdatedAt().Equal(updatedAt) {
+				t.Errorf("Expected updated at %v, got %v", updatedAt, note.GetUpdatedAt())
+			}
+		})
+
+		t.Run("Archive Methods", func(t *testing.T) {
+			note := &Note{Archived: false}
+
+			if note.IsArchived() {
+				t.Error("Note should not be archived")
+			}
+
+			note.Archived = true
+			if !note.IsArchived() {
+				t.Error("Note should be archived")
+			}
+		})
+
+		t.Run("Tags Marshaling", func(t *testing.T) {
+			note := &Note{}
+
+			result, err := note.MarshalTags()
+			if err != nil {
+				t.Fatalf("MarshalTags failed: %v", err)
+			}
+			if result != "" {
+				t.Errorf("Expected empty string for empty tags, got '%s'", result)
+			}
+
+			note.Tags = []string{"personal", "work", "idea"}
+			result, err = note.MarshalTags()
+			if err != nil {
+				t.Fatalf("MarshalTags failed: %v", err)
+			}
+
+			expected := `["personal","work","idea"]`
+			if result != expected {
+				t.Errorf("Expected %s, got %s", expected, result)
+			}
+
+			newNote := &Note{}
+			err = newNote.UnmarshalTags(result)
+			if err != nil {
+				t.Fatalf("UnmarshalTags failed: %v", err)
+			}
+
+			if len(newNote.Tags) != 3 {
+				t.Errorf("Expected 3 tags, got %d", len(newNote.Tags))
+			}
+			if newNote.Tags[0] != "personal" || newNote.Tags[1] != "work" || newNote.Tags[2] != "idea" {
+				t.Errorf("Tags not unmarshaled correctly: %v", newNote.Tags)
+			}
+
+			emptyNote := &Note{}
+			err = emptyNote.UnmarshalTags("")
+			if err != nil {
+				t.Fatalf("UnmarshalTags with empty string failed: %v", err)
+			}
+			if emptyNote.Tags != nil {
+				t.Error("Expected nil tags for empty string")
+			}
+		})
+
+		t.Run("JSON Marshaling", func(t *testing.T) {
+			now := time.Now()
+			modified := now.Add(time.Hour)
+			note := &Note{
+				ID:       1,
+				Title:    "Test Note",
+				Content:  "This is test content with **markdown**",
+				Tags:     []string{"personal", "markdown"},
+				Archived: false,
+				Created:  now,
+				Modified: modified,
+				FilePath: "/path/to/note.md",
+			}
+
+			data, err := json.Marshal(note)
+			if err != nil {
+				t.Fatalf("JSON marshal failed: %v", err)
+			}
+
+			var unmarshaled Note
+			err = json.Unmarshal(data, &unmarshaled)
+			if err != nil {
+				t.Fatalf("JSON unmarshal failed: %v", err)
+			}
+
+			if unmarshaled.ID != note.ID {
+				t.Errorf("Expected ID %d, got %d", note.ID, unmarshaled.ID)
+			}
+			if unmarshaled.Title != note.Title {
+				t.Errorf("Expected title %s, got %s", note.Title, unmarshaled.Title)
+			}
+			if unmarshaled.Content != note.Content {
+				t.Errorf("Expected content %s, got %s", note.Content, unmarshaled.Content)
+			}
+			if unmarshaled.Archived != note.Archived {
+				t.Errorf("Expected archived %v, got %v", note.Archived, unmarshaled.Archived)
+			}
+			if unmarshaled.FilePath != note.FilePath {
+				t.Errorf("Expected file path %s, got %s", note.FilePath, unmarshaled.FilePath)
+			}
+		})
+	})
+
 	t.Run("Interface Implementations", func(t *testing.T) {
 		t.Run("All models implement Model interface", func(t *testing.T) {
 			var models []Model
@@ -541,11 +677,12 @@ func TestModels(t *testing.T) {
 			movie := &Movie{}
 			tvShow := &TVShow{}
 			book := &Book{}
+			note := &Note{}
 
-			models = append(models, task, movie, tvShow, book)
+			models = append(models, task, movie, tvShow, book, note)
 
-			if len(models) != 4 {
-				t.Errorf("Expected 4 models, got %d", len(models))
+			if len(models) != 5 {
+				t.Errorf("Expected 5 models, got %d", len(models))
 			}
 
 			// Test that all models have the required methods
@@ -627,6 +764,7 @@ func TestModels(t *testing.T) {
 			movie := &Movie{}
 			tvShow := &TVShow{}
 			book := &Book{}
+			note := &Note{}
 
 			// Test that zero values don't cause panics
 			if task.IsCompleted() || task.IsPending() || task.IsDeleted() {
@@ -647,6 +785,10 @@ func TestModels(t *testing.T) {
 
 			if book.ProgressPercent() != 0 {
 				t.Errorf("Zero value book should have 0%% progress, got %d%%", book.ProgressPercent())
+			}
+
+			if note.IsArchived() {
+				t.Error("Zero value note should not be archived")
 			}
 		})
 	})

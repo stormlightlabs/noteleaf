@@ -72,3 +72,10 @@
 - `read|view` - Displays formatted note content with syntax highlighting
 - `edit|update` - Opens configured editor OR Replaces note content with new markdown file
 - `remove|rm|delete|del` - Permanently removes the note file and metadata
+
+- `search` - Search notes by content, title, or tags
+- `tag` - Add/remove tags from notes
+- `recent` - Show recently created/modified notes
+- `templates` - Create notes from predefined templates
+- `archive` - Archive old notes
+- `export` - Export notes to various formats

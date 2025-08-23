@@ -112,7 +112,7 @@ func TestMigrationRunner_RunMigrations(t *testing.T) {
 			t.Fatalf("RunMigrations failed: %v", err)
 		}
 
-		expectedTables := []string{"migrations", "tasks", "movies", "tv_shows", "books"}
+		expectedTables := []string{"migrations", "tasks", "movies", "tv_shows", "books", "notes"}
 
 		for _, tableName := range expectedTables {
 			var count int
@@ -354,7 +354,7 @@ func TestMigrationIntegration(t *testing.T) {
 			t.Error("No migrations were applied")
 		}
 
-		tables := []string{"tasks", "movies", "tv_shows", "books"}
+		tables := []string{"tasks", "movies", "tv_shows", "books", "notes"}
 		for _, table := range tables {
 			var count int
 			err = db.QueryRow("SELECT COUNT(*) FROM " + table).Scan(&count)
