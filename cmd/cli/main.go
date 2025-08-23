@@ -3,12 +3,13 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 
 	"github.com/charmbracelet/fang"
 	"github.com/spf13/cobra"
+	"stormlightlabs.org/noteleaf/cmd/handlers"
 	"stormlightlabs.org/noteleaf/internal/store"
+	"stormlightlabs.org/noteleaf/internal/utils"
 )
 
 // App represents the main CLI application
@@ -44,9 +45,13 @@ func (app *App) Close() error {
 }
 
 func main() {
+	// Initialize logging early
+	logger := utils.NewLogger("info", "text")
+	utils.Logger = logger
+
 	app, err := NewApp()
 	if err != nil {
-		log.Fatalf("Failed to initialize application: %v", err)
+		logger.Fatal("Failed to initialize application", "error", err)
 	}
 	defer app.Close()
 
@@ -55,7 +60,30 @@ func main() {
 		Short: "A TaskWarrior-inspired CLI with media queues and reading lists",
 	}
 
-	// Task management commands
+	rootCmd.AddCommand(&cobra.Command{
+		Use:   "setup",
+		Short: "Initialize the application database and configuration",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return handlers.Setup(cmd.Context(), args)
+		},
+	})
+
+	rootCmd.AddCommand(&cobra.Command{
+		Use:   "reset",
+		Short: "Reset the application (removes all data)",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return handlers.Reset(cmd.Context(), args)
+		},
+	})
+
+	rootCmd.AddCommand(&cobra.Command{
+		Use:   "status",
+		Short: "Show application status and configuration",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return handlers.Status(cmd.Context(), args)
+		},
+	})
+
 	rootCmd.AddCommand(&cobra.Command{
 		Use:   "add [description]",
 		Short: "Add a new task",
@@ -91,7 +119,6 @@ func main() {
 		},
 	})
 
-	// Movie queue commands
 	movieCmd := &cobra.Command{
 		Use:   "movie",
 		Short: "Manage movie watch queue",
@@ -121,7 +148,6 @@ func main() {
 
 	rootCmd.AddCommand(movieCmd)
 
-	// TV show commands
 	tvCmd := &cobra.Command{
 		Use:   "tv",
 		Short: "Manage TV show watch queue",
@@ -151,7 +177,6 @@ func main() {
 
 	rootCmd.AddCommand(tvCmd)
 
-	// Book commands
 	bookCmd := &cobra.Command{
 		Use:   "book",
 		Short: "Manage reading list",
@@ -181,7 +206,6 @@ func main() {
 
 	rootCmd.AddCommand(bookCmd)
 
-	// Configuration commands
 	rootCmd.AddCommand(&cobra.Command{
 		Use:   "config [key] [value]",
 		Short: "Manage configuration",
