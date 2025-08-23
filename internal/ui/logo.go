@@ -12,14 +12,14 @@ import (
 type Logo int
 
 const (
-	Collosal Logo = iota
+	Colossal Logo = iota
 	Georgia
 	Alligator
 	ANSI
 	ANSIShadow
 )
 
-const collosal string = `
+const colossal string = `
 888b    888          888            888                    .d888
 8888b   888          888            888                   d88P"
 88888b  888          888            888                   888
@@ -62,8 +62,8 @@ var georgia string
 
 func (l Logo) String() string {
 	switch l {
-	case Collosal:
-		return collosal
+	case Colossal:
+		return colossal
 	case Georgia:
 		return georgia
 	case Alligator:
@@ -73,7 +73,7 @@ func (l Logo) String() string {
 	case ANSIShadow:
 		return ansiShadow
 	default:
-		return collosal
+		return colossal
 	}
 }
 
@@ -130,10 +130,7 @@ func (l Logo) ColoredInViewport(renderer ...*lipgloss.Renderer) string {
 	vp := viewport.New(maxWidth+4, len(lines))
 	vp.SetContent(coloredLogo)
 
-	style := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#6b7280")).
-		Padding(1)
+	style := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("#6b7280")).PaddingLeft(1)
 
 	if len(renderer) > 0 && renderer[0] != nil {
 		style = style.Renderer(renderer[0])

@@ -270,7 +270,7 @@ func TestUI(t *testing.T) {
 			name     string
 			contains string
 		}{
-			{Collosal, "Collosal", "888b    888"},
+			{Colossal, "Collosal", "888b    888"},
 			{Georgia, "Georgia", "`7MN.   `7MF'"},
 			{Alligator, "Alligator", "::::    :::  ::::::::"},
 			{ANSI, "ANSI", "███    ██"},
@@ -308,7 +308,7 @@ func TestUI(t *testing.T) {
 
 		t.Run("Colored in Viewport", func(t *testing.T) {
 			withColor(t, func(r *lipgloss.Renderer) {
-				logo := Collosal
+				logo := Colossal
 				viewport := logo.ColoredInViewport(r)
 				t.Logf("viewport output:\n%s", viewport)
 

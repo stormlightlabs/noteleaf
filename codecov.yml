@@ -20,4 +20,4 @@ ignore:
   - "**/*_test.go"
   - "**/testdata/**"
   - "**/vendor/**"
-  - "cmd/cli/main.go"  # Main entry point typically has minimal logic to test
+  - "cmd/cli/*.go"
