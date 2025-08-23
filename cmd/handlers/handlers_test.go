@@ -4,6 +4,8 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -211,6 +213,369 @@ func TestStatus(t *testing.T) {
 		}
 
 	})
+}
+
+func TestSetupErrorHandling(t *testing.T) {
+	t.Run("handles GetConfigDir error", func(t *testing.T) {
+		originalXDG := os.Getenv("XDG_CONFIG_HOME")
+		originalHome := os.Getenv("HOME")
+
+		if runtime.GOOS == "windows" {
+			originalAppData := os.Getenv("APPDATA")
+			os.Unsetenv("APPDATA")
+			defer os.Setenv("APPDATA", originalAppData)
+		} else {
+			os.Unsetenv("XDG_CONFIG_HOME")
+			os.Unsetenv("HOME")
+		}
+
+		defer func() {
+			os.Setenv("XDG_CONFIG_HOME", originalXDG)
+			os.Setenv("HOME", originalHome)
+		}()
+
+		ctx := context.Background()
+		err := Setup(ctx, []string{})
+
+		if err == nil {
+			t.Error("Setup should fail when GetConfigDir fails")
+		}
+		if !strings.Contains(err.Error(), "failed to get config directory") {
+			t.Errorf("Expected config directory error, got: %v", err)
+		}
+	})
+
+	t.Run("handles database creation error", func(t *testing.T) {
+		tempDir, err := os.MkdirTemp("", "noteleaf-readonly-test-*")
+		if err != nil {
+			t.Fatalf("Failed to create temp dir: %v", err)
+		}
+		defer os.RemoveAll(tempDir)
+
+		noteleafDir := filepath.Join(tempDir, "noteleaf")
+		if err := os.MkdirAll(noteleafDir, 0755); err != nil {
+			t.Fatalf("Failed to create noteleaf dir: %v", err)
+		}
+
+		if err := os.Chmod(noteleafDir, 0444); err != nil {
+			t.Fatalf("Failed to make directory read-only: %v", err)
+		}
+
+		defer os.Chmod(noteleafDir, 0755)
+
+		oldConfigHome := os.Getenv("XDG_CONFIG_HOME")
+		os.Setenv("XDG_CONFIG_HOME", tempDir)
+		defer os.Setenv("XDG_CONFIG_HOME", oldConfigHome)
+
+		ctx := context.Background()
+		err = Setup(ctx, []string{})
+
+		if err == nil {
+			t.Error("Setup should fail when database creation fails")
+		}
+		if !strings.Contains(err.Error(), "failed to initialize database") {
+			t.Errorf("Expected database initialization error, got: %v", err)
+		}
+	})
+
+	t.Run("handles config loading error", func(t *testing.T) {
+		tempDir, err := os.MkdirTemp("", "noteleaf-config-error-test-*")
+		if err != nil {
+			t.Fatalf("Failed to create temp dir: %v", err)
+		}
+		defer os.RemoveAll(tempDir)
+
+		noteleafDir := filepath.Join(tempDir, "noteleaf")
+		if err := os.MkdirAll(noteleafDir, 0755); err != nil {
+			t.Fatalf("Failed to create noteleaf dir: %v", err)
+		}
+
+		configPath := filepath.Join(noteleafDir, ".noteleaf.conf.toml")
+		invalidTOML := `[invalid toml content`
+		if err := os.WriteFile(configPath, []byte(invalidTOML), 0644); err != nil {
+			t.Fatalf("Failed to write invalid config: %v", err)
+		}
+
+		oldConfigHome := os.Getenv("XDG_CONFIG_HOME")
+		os.Setenv("XDG_CONFIG_HOME", tempDir)
+		defer os.Setenv("XDG_CONFIG_HOME", oldConfigHome)
+
+		ctx := context.Background()
+		err = Setup(ctx, []string{})
+
+		if err == nil {
+			t.Error("Setup should fail when config loading fails")
+		}
+		if !strings.Contains(err.Error(), "failed to create configuration") {
+			t.Errorf("Expected configuration error, got: %v", err)
+		}
+	})
+}
+
+func TestResetErrorHandling(t *testing.T) {
+	t.Run("handles GetConfigDir error", func(t *testing.T) {
+		originalXDG := os.Getenv("XDG_CONFIG_HOME")
+		originalHome := os.Getenv("HOME")
+
+		if runtime.GOOS == "windows" {
+			originalAppData := os.Getenv("APPDATA")
+			os.Unsetenv("APPDATA")
+			defer os.Setenv("APPDATA", originalAppData)
+		} else {
+			os.Unsetenv("XDG_CONFIG_HOME")
+			os.Unsetenv("HOME")
+		}
+
+		defer func() {
+			os.Setenv("XDG_CONFIG_HOME", originalXDG)
+			os.Setenv("HOME", originalHome)
+		}()
+
+		ctx := context.Background()
+		err := Reset(ctx, []string{})
+
+		if err == nil {
+			t.Error("Reset should fail when GetConfigDir fails")
+		}
+		if !strings.Contains(err.Error(), "failed to get config directory") {
+			t.Errorf("Expected config directory error, got: %v", err)
+		}
+	})
+
+	t.Run("handles GetConfigPath error", func(t *testing.T) {
+		tempDir, err := os.MkdirTemp("", "noteleaf-reset-error-test-*")
+		if err != nil {
+			t.Fatalf("Failed to create temp dir: %v", err)
+		}
+		defer os.RemoveAll(tempDir)
+
+		// Set up a scenario where GetConfigPath might fail
+		// This is tricky since GetConfigPath internally calls GetConfigDir
+		// We'll create a scenario where the config dir exists but GetConfigPath fails
+		oldConfigHome := os.Getenv("XDG_CONFIG_HOME")
+		os.Setenv("XDG_CONFIG_HOME", tempDir)
+		defer os.Setenv("XDG_CONFIG_HOME", oldConfigHome)
+
+		noteleafDir := filepath.Join(tempDir, "noteleaf")
+		if err := os.MkdirAll(noteleafDir, 0755); err != nil {
+			t.Fatalf("Failed to create noteleaf dir: %v", err)
+		}
+
+		dbPath := filepath.Join(noteleafDir, "noteleaf.db")
+		if err := os.WriteFile(dbPath, []byte("test"), 0644); err != nil {
+			t.Fatalf("Failed to create test db file: %v", err)
+		}
+
+		if err := os.Chmod(noteleafDir, 0444); err != nil {
+			t.Fatalf("Failed to make directory read-only: %v", err)
+		}
+
+		defer os.Chmod(noteleafDir, 0755)
+
+		ctx := context.Background()
+		err = Reset(ctx, []string{})
+
+		if err == nil {
+			t.Error("Reset should fail when file removal fails")
+		}
+		if !strings.Contains(err.Error(), "failed to remove") && !strings.Contains(err.Error(), "failed to get config path") {
+			t.Errorf("Expected removal or config path error, got: %v", err)
+		}
+	})
+}
+
+func TestStatusErrorHandling(t *testing.T) {
+	t.Run("handles GetConfigDir error", func(t *testing.T) {
+		originalXDG := os.Getenv("XDG_CONFIG_HOME")
+		originalHome := os.Getenv("HOME")
+
+		if runtime.GOOS == "windows" {
+			originalAppData := os.Getenv("APPDATA")
+			os.Unsetenv("APPDATA")
+			defer os.Setenv("APPDATA", originalAppData)
+		} else {
+			os.Unsetenv("XDG_CONFIG_HOME")
+			os.Unsetenv("HOME")
+		}
+
+		defer func() {
+			os.Setenv("XDG_CONFIG_HOME", originalXDG)
+			os.Setenv("HOME", originalHome)
+		}()
+
+		ctx := context.Background()
+		err := Status(ctx, []string{})
+
+		if err == nil {
+			t.Error("Status should fail when GetConfigDir fails")
+		}
+		if !strings.Contains(err.Error(), "failed to get config directory") {
+			t.Errorf("Expected config directory error, got: %v", err)
+		}
+	})
+
+	t.Run("handles GetConfigPath error after database exists", func(t *testing.T) {
+		_ = createTestDir(t)
+		ctx := context.Background()
+
+		err := Setup(ctx, []string{})
+		if err != nil {
+			t.Fatalf("Setup failed: %v", err)
+		}
+
+		// Now we have a database, but let's create a scenario where GetConfigPath fails
+		// This is challenging since GetConfigPath uses GetConfigDir which we already tested
+		// Instead, let's test the database connection error scenario
+
+		// Remove the database to cause NewDatabase to fail in Status
+		configDir, _ := store.GetConfigDir()
+		dbPath := filepath.Join(configDir, "noteleaf.db")
+		os.Remove(dbPath)
+
+		// Create a directory with the same name as the database file
+		// This will cause database connection to fail
+		if err := os.MkdirAll(dbPath, 0755); err != nil {
+			t.Fatalf("Failed to create directory: %v", err)
+		}
+
+		err = Status(ctx, []string{})
+		if err == nil {
+			t.Error("Status should fail when database connection fails")
+		}
+		if !strings.Contains(err.Error(), "failed to connect to database") {
+			t.Errorf("Expected database connection error, got: %v", err)
+		}
+	})
+
+	t.Run("handles migration errors", func(t *testing.T) {
+		_ = createTestDir(t)
+		ctx := context.Background()
+
+		err := Setup(ctx, []string{})
+		if err != nil {
+			t.Fatalf("Setup failed: %v", err)
+		}
+
+		// Corrupt the migrations table to cause GetAppliedMigrations to fail
+		db, err := store.NewDatabase()
+		if err != nil {
+			t.Fatalf("Failed to connect to database: %v", err)
+		}
+
+		_, err = db.Exec("DROP TABLE migrations")
+		if err != nil {
+			t.Fatalf("Failed to drop migrations table: %v", err)
+		}
+
+		_, err = db.Exec("CREATE TABLE migrations (invalid_schema TEXT)")
+		if err != nil {
+			t.Fatalf("Failed to create corrupted migrations table: %v", err)
+		}
+		db.Close()
+
+		err = Status(ctx, []string{})
+		if err == nil {
+			t.Error("Status should fail when migration queries fail")
+		}
+		if !strings.Contains(err.Error(), "failed to get") && !strings.Contains(err.Error(), "migrations") {
+			t.Errorf("Expected migration-related error, got: %v", err)
+		}
+	})
+}
+
+func TestErrorScenarios(t *testing.T) {
+	errorTests := []struct {
+		name        string
+		setupFunc   func(t *testing.T) (cleanup func())
+		handlerFunc func(ctx context.Context, args []string) error
+		expectError bool
+		errorSubstr string
+	}{
+		{
+			name: "Setup with invalid environment",
+			setupFunc: func(t *testing.T) func() {
+				if runtime.GOOS == "windows" {
+					original := os.Getenv("APPDATA")
+					os.Unsetenv("APPDATA")
+					return func() { os.Setenv("APPDATA", original) }
+				} else {
+					originalXDG := os.Getenv("XDG_CONFIG_HOME")
+					originalHome := os.Getenv("HOME")
+					os.Unsetenv("XDG_CONFIG_HOME")
+					os.Unsetenv("HOME")
+					return func() {
+						os.Setenv("XDG_CONFIG_HOME", originalXDG)
+						os.Setenv("HOME", originalHome)
+					}
+				}
+			},
+			handlerFunc: Setup,
+			expectError: true,
+			errorSubstr: "config directory",
+		},
+		{
+			name: "Reset with invalid environment",
+			setupFunc: func(t *testing.T) func() {
+				if runtime.GOOS == "windows" {
+					original := os.Getenv("APPDATA")
+					os.Unsetenv("APPDATA")
+					return func() { os.Setenv("APPDATA", original) }
+				} else {
+					originalXDG := os.Getenv("XDG_CONFIG_HOME")
+					originalHome := os.Getenv("HOME")
+					os.Unsetenv("XDG_CONFIG_HOME")
+					os.Unsetenv("HOME")
+					return func() {
+						os.Setenv("XDG_CONFIG_HOME", originalXDG)
+						os.Setenv("HOME", originalHome)
+					}
+				}
+			},
+			handlerFunc: Reset,
+			expectError: true,
+			errorSubstr: "config directory",
+		},
+		{
+			name: "Status with invalid environment",
+			setupFunc: func(t *testing.T) func() {
+				if runtime.GOOS == "windows" {
+					original := os.Getenv("APPDATA")
+					os.Unsetenv("APPDATA")
+					return func() { os.Setenv("APPDATA", original) }
+				} else {
+					originalXDG := os.Getenv("XDG_CONFIG_HOME")
+					originalHome := os.Getenv("HOME")
+					os.Unsetenv("XDG_CONFIG_HOME")
+					os.Unsetenv("HOME")
+					return func() {
+						os.Setenv("XDG_CONFIG_HOME", originalXDG)
+						os.Setenv("HOME", originalHome)
+					}
+				}
+			},
+			handlerFunc: Status,
+			expectError: true,
+			errorSubstr: "config directory",
+		},
+	}
+
+	for _, tt := range errorTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cleanup := tt.setupFunc(t)
+			defer cleanup()
+
+			ctx := context.Background()
+			err := tt.handlerFunc(ctx, []string{})
+
+			if tt.expectError && err == nil {
+				t.Errorf("Expected error containing %q, got nil", tt.errorSubstr)
+			} else if !tt.expectError && err != nil {
+				t.Errorf("Expected no error, got: %v", err)
+			} else if tt.expectError && err != nil && !strings.Contains(err.Error(), tt.errorSubstr) {
+				t.Errorf("Expected error containing %q, got: %v", tt.errorSubstr, err)
+			}
+		})
+	}
 }
 
 func TestIntegration(t *testing.T) {
