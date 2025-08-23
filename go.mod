@@ -9,6 +9,8 @@ require (
 	github.com/spf13/cobra v1.9.1
 )
 
+require github.com/google/uuid v1.6.0
+
 require (
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/charmbracelet/colorprofile v0.3.1 // indirect
