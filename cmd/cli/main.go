@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/charmbracelet/fang"
 	"github.com/spf13/cobra"
 	"stormlightlabs.org/noteleaf/cmd/handlers"
 	"stormlightlabs.org/noteleaf/internal/store"
+	"stormlightlabs.org/noteleaf/internal/ui"
 	"stormlightlabs.org/noteleaf/internal/utils"
 )
 
@@ -45,7 +47,6 @@ func (app *App) Close() error {
 }
 
 func main() {
-	// Initialize logging early
 	logger := utils.NewLogger("info", "text")
 	utils.Logger = logger
 
@@ -58,6 +59,16 @@ func main() {
 	rootCmd := &cobra.Command{
 		Use:   "noteleaf",
 		Short: "A TaskWarrior-inspired CLI with media queues and reading lists",
+		Run: func(cmd *cobra.Command, args []string) {
+			if len(args) == 0 {
+				fmt.Println(ui.Collosal.ColoredInViewport())
+				cmd.Help()
+				return
+			}
+
+			output := strings.Join(args, " ")
+			fmt.Println(output)
+		},
 	}
 
 	rootCmd.AddCommand(&cobra.Command{

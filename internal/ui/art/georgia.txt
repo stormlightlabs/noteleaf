@@ -1,6 +1,3 @@
-# Noteleaf
-
-```sh
                                     ,,                       ,...
 `7MN.   `7MF'         mm          `7MM                     .d' ""
   MMN.    M           MM            MM                     dM`
@@ -9,10 +6,3 @@
   M   `MM.M 8M     M8 MM  8M""""""  MM 8M""""""  ,pm9MM    MM
   M     YMM YA.   ,A9 MM  YM.    ,  MM YM.    , 8M   MM    MM
 .JML.    YM  `Ybmd9'  `Mbmo`Mbmmd'.JMML.`Mbmmd' `Moo9^Yo..JMML.
-```
-
-A note, task & time management CLI built with Golang & Charm.sh libs. Inspired by TaskWarrior & todo.txt CLI applications.
-
-## Development
-
-Requires Go v1.24+

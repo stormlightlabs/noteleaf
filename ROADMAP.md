@@ -6,7 +6,7 @@
 - `projects` - List all project names
 - `tags` - List all tag names
 
-- `create` - Add new task with description and optional metadata
+- `create|new` - Add new task with description and optional metadata
 
 - `view` - View task by ID
 - `done` - Mark task as completed
@@ -63,3 +63,12 @@
 - `config` - Manage configuration settings
 
 - `undo` - Reverse last operation
+
+## Notes
+
+- `create|new` - Creates a new markdown note and optionally opens in configured editor
+    - Creates a note from existing markdown file content
+- `list` - Opens interactive TUI browser for navigating and viewing notes
+- `read|view` - Displays formatted note content with syntax highlighting
+- `edit|update` - Opens configured editor OR Replaces note content with new markdown file
+- `remove|rm|delete|del` - Permanently removes the note file and metadata

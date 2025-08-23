@@ -21,9 +21,9 @@ test-coverage:
 
 # Build the binary to /tmp/
 build:
-    mkdir -p /tmp/
-    go build -o /tmp/noteleaf ./cmd/cli/
-    @echo "Binary built: /tmp/noteleaf/noteleaf"
+    mkdir -p ./tmp/
+    go build -o ./tmp/noteleaf ./cmd/cli/
+    @echo "Binary built: ./tmp/noteleaf"
 
 # Clean build artifacts
 clean:
