@@ -669,6 +669,178 @@ func TestModels(t *testing.T) {
 		})
 	})
 
+	t.Run("Album Model", func(t *testing.T) {
+		t.Run("Model Interface Implementation", func(t *testing.T) {
+			album := &Album{
+				ID:      1,
+				Title:   "Test Album",
+				Artist:  "Test Artist",
+				Created: time.Now(),
+			}
+
+			if album.GetID() != 1 {
+				t.Errorf("Expected ID 1, got %d", album.GetID())
+			}
+
+			album.SetID(2)
+			if album.GetID() != 2 {
+				t.Errorf("Expected ID 2 after SetID, got %d", album.GetID())
+			}
+
+			if album.GetTableName() != "albums" {
+				t.Errorf("Expected table name 'albums', got '%s'", album.GetTableName())
+			}
+
+			createdAt := time.Now()
+			album.SetCreatedAt(createdAt)
+			if !album.GetCreatedAt().Equal(createdAt) {
+				t.Errorf("Expected created at %v, got %v", createdAt, album.GetCreatedAt())
+			}
+
+			updatedAt := time.Now().Add(time.Hour)
+			album.SetUpdatedAt(updatedAt)
+			if !album.GetUpdatedAt().Equal(updatedAt) {
+				t.Errorf("Expected updated at %v, got %v", updatedAt, album.GetUpdatedAt())
+			}
+		})
+
+		t.Run("Rating Methods", func(t *testing.T) {
+			album := &Album{}
+
+			if album.HasRating() {
+				t.Error("Album with zero rating should return false for HasRating")
+			}
+
+			if album.IsValidRating() {
+				t.Error("Album with zero rating should return false for IsValidRating")
+			}
+
+			album.Rating = 3
+			if !album.HasRating() {
+				t.Error("Album with rating should return true for HasRating")
+			}
+
+			if !album.IsValidRating() {
+				t.Error("Album with valid rating should return true for IsValidRating")
+			}
+
+			testCases := []struct {
+				rating  int
+				isValid bool
+			}{
+				{0, false},
+				{1, true},
+				{3, true},
+				{5, true},
+				{6, false},
+				{-1, false},
+			}
+
+			for _, tc := range testCases {
+				album.Rating = tc.rating
+				if album.IsValidRating() != tc.isValid {
+					t.Errorf("Rating %d: expected IsValidRating %v, got %v", tc.rating, tc.isValid, album.IsValidRating())
+				}
+			}
+		})
+
+		t.Run("Tracks Marshaling", func(t *testing.T) {
+			album := &Album{}
+
+			result, err := album.MarshalTracks()
+			if err != nil {
+				t.Fatalf("MarshalTracks failed: %v", err)
+			}
+			if result != "" {
+				t.Errorf("Expected empty string for empty tracks, got '%s'", result)
+			}
+
+			album.Tracks = []string{"Track 1", "Track 2", "Interlude"}
+			result, err = album.MarshalTracks()
+			if err != nil {
+				t.Fatalf("MarshalTracks failed: %v", err)
+			}
+
+			expected := `["Track 1","Track 2","Interlude"]`
+			if result != expected {
+				t.Errorf("Expected %s, got %s", expected, result)
+			}
+
+			newAlbum := &Album{}
+			err = newAlbum.UnmarshalTracks(result)
+			if err != nil {
+				t.Fatalf("UnmarshalTracks failed: %v", err)
+			}
+
+			if len(newAlbum.Tracks) != 3 {
+				t.Errorf("Expected 3 tracks, got %d", len(newAlbum.Tracks))
+			}
+			if newAlbum.Tracks[0] != "Track 1" || newAlbum.Tracks[1] != "Track 2" || newAlbum.Tracks[2] != "Interlude" {
+				t.Errorf("Tracks not unmarshaled correctly: %v", newAlbum.Tracks)
+			}
+
+			emptyAlbum := &Album{}
+			err = emptyAlbum.UnmarshalTracks("")
+			if err != nil {
+				t.Fatalf("UnmarshalTracks with empty string failed: %v", err)
+			}
+			if emptyAlbum.Tracks != nil {
+				t.Error("Expected nil tracks for empty string")
+			}
+		})
+
+		t.Run("JSON Marshaling", func(t *testing.T) {
+			now := time.Now()
+			modified := now.Add(time.Hour)
+			album := &Album{
+				ID:              1,
+				Title:           "Test Album",
+				Artist:          "Test Artist",
+				Genre:           "Rock",
+				ReleaseYear:     2023,
+				Tracks:          []string{"Track 1", "Track 2"},
+				DurationSeconds: 3600,
+				AlbumArtPath:    "/path/to/art.jpg",
+				Rating:          4,
+				Created:         now,
+				Modified:        modified,
+			}
+
+			data, err := json.Marshal(album)
+			if err != nil {
+				t.Fatalf("JSON marshal failed: %v", err)
+			}
+
+			var unmarshaled Album
+			err = json.Unmarshal(data, &unmarshaled)
+			if err != nil {
+				t.Fatalf("JSON unmarshal failed: %v", err)
+			}
+
+			if unmarshaled.ID != album.ID {
+				t.Errorf("Expected ID %d, got %d", album.ID, unmarshaled.ID)
+			}
+			if unmarshaled.Title != album.Title {
+				t.Errorf("Expected title %s, got %s", album.Title, unmarshaled.Title)
+			}
+			if unmarshaled.Artist != album.Artist {
+				t.Errorf("Expected artist %s, got %s", album.Artist, unmarshaled.Artist)
+			}
+			if unmarshaled.Genre != album.Genre {
+				t.Errorf("Expected genre %s, got %s", album.Genre, unmarshaled.Genre)
+			}
+			if unmarshaled.ReleaseYear != album.ReleaseYear {
+				t.Errorf("Expected release year %d, got %d", album.ReleaseYear, unmarshaled.ReleaseYear)
+			}
+			if unmarshaled.DurationSeconds != album.DurationSeconds {
+				t.Errorf("Expected duration %d, got %d", album.DurationSeconds, unmarshaled.DurationSeconds)
+			}
+			if unmarshaled.Rating != album.Rating {
+				t.Errorf("Expected rating %d, got %d", album.Rating, unmarshaled.Rating)
+			}
+		})
+	})
+
 	t.Run("Interface Implementations", func(t *testing.T) {
 		t.Run("All models implement Model interface", func(t *testing.T) {
 			var models []Model
@@ -678,11 +850,12 @@ func TestModels(t *testing.T) {
 			tvShow := &TVShow{}
 			book := &Book{}
 			note := &Note{}
+			album := &Album{}
 
-			models = append(models, task, movie, tvShow, book, note)
+			models = append(models, task, movie, tvShow, book, note, album)
 
-			if len(models) != 5 {
-				t.Errorf("Expected 5 models, got %d", len(models))
+			if len(models) != 6 {
+				t.Errorf("Expected 6 models, got %d", len(models))
 			}
 
 			// Test that all models have the required methods

@@ -9,22 +9,16 @@ import (
 type Model interface {
 	// GetID returns the primary key identifier
 	GetID() int64
-
 	// SetID sets the primary key identifier
 	SetID(id int64)
-
 	// GetTableName returns the database table name for this model
 	GetTableName() string
-
 	// GetCreatedAt returns when the model was created
 	GetCreatedAt() time.Time
-
 	// SetCreatedAt sets when the model was created
 	SetCreatedAt(t time.Time)
-
 	// GetUpdatedAt returns when the model was last updated
 	GetUpdatedAt() time.Time
-
 	// SetUpdatedAt sets when the model was last updated
 	SetUpdatedAt(t time.Time)
 }
@@ -104,6 +98,21 @@ type Note struct {
 	Created  time.Time `json:"created"`
 	Modified time.Time `json:"modified"`
 	FilePath string    `json:"file_path,omitempty"`
+}
+
+// Album represents a music album
+type Album struct {
+	ID              int64     `json:"id"`
+	Title           string    `json:"title"`
+	Artist          string    `json:"artist"`
+	Genre           string    `json:"genre,omitempty"`
+	ReleaseYear     int       `json:"release_year,omitempty"`
+	Tracks          []string  `json:"tracks,omitempty"`
+	DurationSeconds int       `json:"duration_seconds,omitempty"`
+	AlbumArtPath    string    `json:"album_art_path,omitempty"`
+	Rating          int       `json:"rating,omitempty"`
+	Created         time.Time `json:"created"`
+	Modified        time.Time `json:"modified"`
 }
 
 // MarshalTags converts tags slice to JSON string for database storage
@@ -269,3 +278,39 @@ func (n *Note) GetCreatedAt() time.Time     { return n.Created }
 func (n *Note) SetCreatedAt(time time.Time) { n.Created = time }
 func (n *Note) GetUpdatedAt() time.Time     { return n.Modified }
 func (n *Note) SetUpdatedAt(time time.Time) { n.Modified = time }
+
+// MarshalTracks converts tracks slice to JSON string for database storage
+func (a *Album) MarshalTracks() (string, error) {
+	if len(a.Tracks) == 0 {
+		return "", nil
+	}
+	data, err := json.Marshal(a.Tracks)
+	return string(data), err
+}
+
+// UnmarshalTracks converts JSON string from database to tracks slice
+func (a *Album) UnmarshalTracks(data string) error {
+	if data == "" {
+		a.Tracks = nil
+		return nil
+	}
+	return json.Unmarshal([]byte(data), &a.Tracks)
+}
+
+// HasRating returns true if the album has a rating set
+func (a *Album) HasRating() bool {
+	return a.Rating > 0
+}
+
+// IsValidRating returns true if the rating is between 1 and 5
+func (a *Album) IsValidRating() bool {
+	return a.Rating >= 1 && a.Rating <= 5
+}
+
+func (a *Album) GetID() int64                { return a.ID }
+func (a *Album) SetID(id int64)              { a.ID = id }
+func (a *Album) GetTableName() string        { return "albums" }
+func (a *Album) GetCreatedAt() time.Time     { return a.Created }
+func (a *Album) SetCreatedAt(time time.Time) { a.Created = time }
+func (a *Album) GetUpdatedAt() time.Time     { return a.Modified }
+func (a *Album) SetUpdatedAt(time time.Time) { a.Modified = time }

@@ -32,14 +32,12 @@ func todoCmd() *cobra.Command {
 	}
 
 	root.AddCommand(&cobra.Command{
-		Use:   "add [description]",
-		Short: "Add a new task",
-		Args:  cobra.MinimumNArgs(1),
+		Use:     "add [description]",
+		Short:   "Add a new task",
+		Aliases: []string{"create", "new"},
+		Args:    cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			description := args[0]
-			fmt.Printf("Adding task: %s\n", description)
-			// TODO: Implement task creation
-			return nil
+			return handlers.CreateTask(cmd.Context(), args)
 		},
 	})
 
@@ -48,21 +46,74 @@ func todoCmd() *cobra.Command {
 		Short:   "List tasks",
 		Aliases: []string{"ls"},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Println("Listing tasks...")
-			// TODO: Implement task listing
+			return handlers.ListTasks(cmd.Context(), args)
+		},
+	})
+
+	root.AddCommand(&cobra.Command{
+		Use:   "view [task-id]",
+		Short: "View task by ID",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return handlers.ViewTask(cmd.Context(), args)
+		},
+	})
+
+	root.AddCommand(&cobra.Command{
+		Use:   "update [task-id] [options...]",
+		Short: "Update task properties",
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return handlers.UpdateTask(cmd.Context(), args)
+		},
+	})
+
+	root.AddCommand(&cobra.Command{
+		Use:   "delete [task-id]",
+		Short: "Delete a task",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return handlers.DeleteTask(cmd.Context(), args)
+		},
+	})
+
+	root.AddCommand(&cobra.Command{
+		Use:     "projects",
+		Short:   "List projects",
+		Aliases: []string{"proj"},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			fmt.Println("Listing projects...")
 			return nil
 		},
 	})
 
 	root.AddCommand(&cobra.Command{
-		Use:   "done [task-id]",
-		Short: "Mark task as completed",
-		Args:  cobra.ExactArgs(1),
+		Use:     "tags",
+		Short:   "List tags",
+		Aliases: []string{"t"},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			taskID := args[0]
-			fmt.Printf("Marking task %s as done\n", taskID)
-			// TODO: Implement task completion
+			fmt.Println("Listing tags...")
 			return nil
+		},
+	})
+
+	root.AddCommand(&cobra.Command{
+		Use:     "contexts",
+		Short:   "List contexts (locations)",
+		Aliases: []string{"loc", "ctx", "locations"},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			fmt.Println("Listing task contexts...")
+			return nil
+		},
+	})
+
+	root.AddCommand(&cobra.Command{
+		Use:     "done [task-id]",
+		Short:   "Mark task as completed",
+		Aliases: []string{"complete"},
+		Args:    cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return handlers.DoneTask(cmd.Context(), args)
 		},
 	})
 
