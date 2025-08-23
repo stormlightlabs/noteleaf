@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/stormlightlabs/noteleaf/internal/models"
@@ -13,6 +14,8 @@ import (
 	"github.com/stormlightlabs/noteleaf/internal/store"
 	"github.com/stormlightlabs/noteleaf/internal/utils"
 )
+
+type editorFunc func(editor, filePath string) error
 
 // NoteHandler handles all note-related commands
 type NoteHandler struct {
@@ -79,6 +82,26 @@ func Create(ctx context.Context, args []string) error {
 // New is an alias for Create
 func New(ctx context.Context, args []string) error {
 	return Create(ctx, args)
+}
+
+// Edit handles note editing by ID
+func Edit(ctx context.Context, args []string) error {
+	if len(args) != 1 {
+		return fmt.Errorf("edit requires exactly one argument: note ID")
+	}
+
+	id, err := strconv.ParseInt(args[0], 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid note ID: %s", args[0])
+	}
+
+	handler, err := NewNoteHandler()
+	if err != nil {
+		return err
+	}
+	defer handler.Close()
+
+	return handler.editNote(ctx, id)
 }
 
 func (h *NoteHandler) createInteractive(ctx context.Context) error {
@@ -279,8 +302,6 @@ func (h *NoteHandler) getEditor() string {
 
 	return ""
 }
-
-type editorFunc func(editor, filePath string) error
 
 func defaultOpenInEditor(editor, filePath string) error {
 	cmd := exec.Command(editor, filePath)

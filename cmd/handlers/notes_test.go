@@ -695,3 +695,224 @@ func TestNoteHandlerClosesResources(t *testing.T) {
 		t.Errorf("Close should handle nil database gracefully: %v", err)
 	}
 }
+
+func TestEdit(t *testing.T) {
+	t.Run("validates argument count", func(t *testing.T) {
+		_, cleanup := setupNoteTest(t)
+		defer cleanup()
+
+		ctx := context.Background()
+
+		err := Edit(ctx, []string{})
+		if err == nil {
+			t.Error("Edit should fail with no arguments")
+		}
+		if !strings.Contains(err.Error(), "edit requires exactly one argument") {
+			t.Errorf("Expected argument count error, got: %v", err)
+		}
+
+		err = Edit(ctx, []string{"1", "2"})
+		if err == nil {
+			t.Error("Edit should fail with too many arguments")
+		}
+		if !strings.Contains(err.Error(), "edit requires exactly one argument") {
+			t.Errorf("Expected argument count error, got: %v", err)
+		}
+	})
+
+	t.Run("validates note ID format", func(t *testing.T) {
+		_, cleanup := setupNoteTest(t)
+		defer cleanup()
+
+		ctx := context.Background()
+
+		err := Edit(ctx, []string{"invalid"})
+		if err == nil {
+			t.Error("Edit should fail with invalid note ID")
+		}
+		if !strings.Contains(err.Error(), "invalid note ID") {
+			t.Errorf("Expected invalid ID error, got: %v", err)
+		}
+
+		err = Edit(ctx, []string{"-1"})
+		if err == nil {
+			t.Error("Edit should fail with negative note ID")
+		}
+
+		if !strings.Contains(err.Error(), "failed to get note") {
+			t.Errorf("Expected note not found error for negative ID, got: %v", err)
+		}
+	})
+
+	t.Run("handles non-existent note", func(t *testing.T) {
+		_, cleanup := setupNoteTest(t)
+		defer cleanup()
+
+		ctx := context.Background()
+
+		err := Edit(ctx, []string{"999"})
+		if err == nil {
+			t.Error("Edit should fail with non-existent note ID")
+		}
+		if !strings.Contains(err.Error(), "failed to get note") {
+			t.Errorf("Expected note not found error, got: %v", err)
+		}
+	})
+
+	t.Run("handles no editor configured", func(t *testing.T) {
+		_, cleanup := setupNoteTest(t)
+		defer cleanup()
+
+		originalEditor := os.Getenv("EDITOR")
+		originalPath := os.Getenv("PATH")
+		os.Setenv("EDITOR", "")
+		os.Setenv("PATH", "")
+		defer func() {
+			os.Setenv("EDITOR", originalEditor)
+			os.Setenv("PATH", originalPath)
+		}()
+
+		ctx := context.Background()
+
+		err := Create(ctx, []string{"Test Note", "Test content"})
+		if err != nil {
+			t.Fatalf("Failed to create test note: %v", err)
+		}
+
+		err = Edit(ctx, []string{"1"})
+		if err == nil {
+			t.Error("Edit should fail when no editor is configured")
+		}
+
+		if !strings.Contains(err.Error(), "no editor configured") && !strings.Contains(err.Error(), "failed to open editor") {
+			t.Errorf("Expected no editor or editor failure error, got: %v", err)
+		}
+	})
+
+	t.Run("handles editor command failure", func(t *testing.T) {
+		_, cleanup := setupNoteTest(t)
+		defer cleanup()
+
+		originalEditor := os.Getenv("EDITOR")
+		os.Setenv("EDITOR", "nonexistent-editor-12345")
+		defer os.Setenv("EDITOR", originalEditor)
+
+		ctx := context.Background()
+
+		err := Create(ctx, []string{"Test Note", "Test content"})
+		if err != nil {
+			t.Fatalf("Failed to create test note: %v", err)
+		}
+
+		err = Edit(ctx, []string{"1"})
+		if err == nil {
+			t.Error("Edit should fail when editor command fails")
+		}
+		if !strings.Contains(err.Error(), "failed to open editor") {
+			t.Errorf("Expected editor failure error, got: %v", err)
+		}
+	})
+
+	t.Run("edits note successfully with mocked editor", func(t *testing.T) {
+		_, cleanup := setupNoteTest(t)
+		defer cleanup()
+
+		originalEditor := os.Getenv("EDITOR")
+		os.Setenv("EDITOR", "test-editor")
+		defer os.Setenv("EDITOR", originalEditor)
+
+		ctx := context.Background()
+
+		err := Create(ctx, []string{"Original Title", "Original content"})
+		if err != nil {
+			t.Fatalf("Failed to create test note: %v", err)
+		}
+
+		handler, err := NewNoteHandler()
+		if err != nil {
+			t.Fatalf("NewNoteHandler failed: %v", err)
+		}
+		defer handler.Close()
+
+		handler.openInEditorFunc = func(editor, filePath string) error {
+			newContent := `# Updated Title
+
+This is updated content.
+
+<!-- Tags: updated, test -->`
+			return os.WriteFile(filePath, []byte(newContent), 0644)
+		}
+
+		err = handler.editNote(ctx, 1)
+		if err != nil {
+			t.Errorf("Edit should succeed with mocked editor: %v", err)
+		}
+
+		note, err := handler.repos.Notes.Get(ctx, 1)
+		if err != nil {
+			t.Fatalf("Failed to get updated note: %v", err)
+		}
+
+		if note.Title != "Updated Title" {
+			t.Errorf("Expected title 'Updated Title', got %q", note.Title)
+		}
+
+		if !strings.Contains(note.Content, "This is updated content") {
+			t.Errorf("Expected content to contain 'This is updated content', got %q", note.Content)
+		}
+
+		expectedTags := []string{"updated", "test"}
+		if len(note.Tags) != len(expectedTags) {
+			t.Errorf("Expected %d tags, got %d", len(expectedTags), len(note.Tags))
+		}
+		for i, tag := range expectedTags {
+			if i >= len(note.Tags) || note.Tags[i] != tag {
+				t.Errorf("Expected tag %q at index %d, got %q", tag, i, note.Tags[i])
+			}
+		}
+	})
+
+	t.Run("handles editor cancellation (no changes)", func(t *testing.T) {
+		_, cleanup := setupNoteTest(t)
+		defer cleanup()
+
+		originalEditor := os.Getenv("EDITOR")
+		os.Setenv("EDITOR", "test-editor")
+		defer os.Setenv("EDITOR", originalEditor)
+
+		ctx := context.Background()
+
+		err := Create(ctx, []string{"Test Note", "Test content"})
+		if err != nil {
+			t.Fatalf("Failed to create test note: %v", err)
+		}
+
+		handler, err := NewNoteHandler()
+		if err != nil {
+			t.Fatalf("NewNoteHandler failed: %v", err)
+		}
+		defer handler.Close()
+
+		handler.openInEditorFunc = func(editor, filePath string) error {
+			return nil
+		}
+
+		err = handler.editNote(ctx, 1)
+		if err != nil {
+			t.Errorf("Edit should handle cancellation gracefully: %v", err)
+		}
+
+		note, err := handler.repos.Notes.Get(ctx, 1)
+		if err != nil {
+			t.Fatalf("Failed to get note: %v", err)
+		}
+
+		if note.Title != "Test Note" {
+			t.Errorf("Expected title 'Test Note', got %q", note.Title)
+		}
+
+		if note.Content != "Test content" {
+			t.Errorf("Expected content 'Test content', got %q", note.Content)
+		}
+	})
+}
