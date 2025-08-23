@@ -217,6 +217,22 @@ func main() {
 
 	rootCmd.AddCommand(bookCmd)
 
+	noteCmd := &cobra.Command{
+		Use:   "note",
+		Short: "Manage notes",
+	}
+
+	noteCmd.AddCommand(&cobra.Command{
+		Use:     "create [title] [content...]",
+		Short:   "Create a new note",
+		Aliases: []string{"new"},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return handlers.Create(cmd.Context(), args)
+		},
+	})
+
+	rootCmd.AddCommand(noteCmd)
+
 	rootCmd.AddCommand(&cobra.Command{
 		Use:   "config [key] [value]",
 		Short: "Manage configuration",
