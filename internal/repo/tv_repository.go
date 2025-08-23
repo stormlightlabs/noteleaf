@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"stormlightlabs.org/noteleaf/internal/models"
+	"github.com/stormlightlabs/noteleaf/internal/models"
 )
 
 // TVRepository provides database operations for TV shows

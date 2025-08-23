@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"stormlightlabs.org/noteleaf/internal/models"
+	"github.com/stormlightlabs/noteleaf/internal/models"
 )
 
 // MovieRepository provides database operations for movies

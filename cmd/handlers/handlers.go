@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"stormlightlabs.org/noteleaf/internal/store"
-	"stormlightlabs.org/noteleaf/internal/utils"
+	"github.com/stormlightlabs/noteleaf/internal/store"
+	"github.com/stormlightlabs/noteleaf/internal/utils"
 )
 
 // Setup initializes the application database and configuration

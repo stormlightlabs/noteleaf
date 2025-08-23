@@ -8,10 +8,10 @@ import (
 
 	"github.com/charmbracelet/fang"
 	"github.com/spf13/cobra"
-	"stormlightlabs.org/noteleaf/cmd/handlers"
-	"stormlightlabs.org/noteleaf/internal/store"
-	"stormlightlabs.org/noteleaf/internal/ui"
-	"stormlightlabs.org/noteleaf/internal/utils"
+	"github.com/stormlightlabs/noteleaf/cmd/handlers"
+	"github.com/stormlightlabs/noteleaf/internal/store"
+	"github.com/stormlightlabs/noteleaf/internal/ui"
+	"github.com/stormlightlabs/noteleaf/internal/utils"
 )
 
 // App represents the main CLI application

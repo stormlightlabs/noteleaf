@@ -7,7 +7,7 @@ import (
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
-	"stormlightlabs.org/noteleaf/internal/models"
+	"github.com/stormlightlabs/noteleaf/internal/models"
 )
 
 func createBookTestDB(t *testing.T) *sql.DB {

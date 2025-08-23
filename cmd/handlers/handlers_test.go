@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"stormlightlabs.org/noteleaf/internal/store"
+	"github.com/stormlightlabs/noteleaf/internal/store"
 )
 
 func createTestDir(t *testing.T) string {

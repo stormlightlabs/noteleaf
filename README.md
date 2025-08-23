@@ -1,5 +1,10 @@
 # Noteleaf
 
+[![codecov](https://codecov.io/gh/stormlightlabs/noteleaf/branch/main/graph/badge.svg)](https://codecov.io/gh/stormlightlabs/noteleaf)
+[![Go Report Card](https://goreportcard.com/badge/github.com/stormlightlabs/noteleaf)](https://goreportcard.com/report/github.com/stormlightlabs/noteleaf)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/stormlightlabs/noteleaf)](go.mod)
+
 ```sh
                                     ,,                       ,...
 `7MN.   `7MF'         mm          `7MM                     .d' ""

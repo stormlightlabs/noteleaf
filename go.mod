@@ -1,4 +1,4 @@
-module stormlightlabs.org/noteleaf
+module github.com/stormlightlabs/noteleaf
 
 go 1.24.5
 
