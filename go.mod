@@ -10,14 +10,20 @@ require (
 )
 
 require (
+	github.com/charmbracelet/bubbletea v1.3.4
+	github.com/charmbracelet/huh v0.7.0
 	github.com/google/uuid v1.6.0
 	golang.org/x/time v0.12.0
 )
 
 require (
-	github.com/charmbracelet/bubbletea v1.3.4 // indirect
+	github.com/atotto/clipboard v0.1.4 // indirect
+	github.com/catppuccin/go v0.3.0 // indirect
+	github.com/charmbracelet/x/exp/strings v0.0.0-20240722160745-212f7b056ed0 // indirect
+	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/erikgeiser/coninput v0.0.0-20211004153227-1c3628e74d0f // indirect
 	github.com/mattn/go-localereader v0.0.1 // indirect
+	github.com/mitchellh/hashstructure/v2 v2.0.2 // indirect
 	github.com/muesli/ansi v0.0.0-20230316100256-276c6243b2f6 // indirect
 	golang.org/x/sync v0.13.0 // indirect
 )
