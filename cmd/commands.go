@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/stormlightlabs/noteleaf/cmd/handlers"
+	"github.com/stormlightlabs/noteleaf/internal/handlers"
 	"github.com/stormlightlabs/noteleaf/internal/ui"
 )
 
@@ -245,7 +245,7 @@ Use the -i flag for an interactive interface with navigation keys.`,
 		},
 	})
 
-	// book progress - Update reading progress percentage  
+	// book progress - Update reading progress percentage
 	root.AddCommand(&cobra.Command{
 		Use:   "progress <id> <percentage>",
 		Short: "Update reading progress percentage (0-100)",
