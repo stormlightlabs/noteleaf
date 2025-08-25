@@ -188,25 +188,80 @@ func bookCmd() *cobra.Command {
 		Short: "Manage reading list",
 	}
 
-	root.AddCommand(&cobra.Command{
-		Use:   "add [title]",
-		Short: "Add book to reading list",
-		Args:  cobra.MinimumNArgs(1),
+	// book add - Search and add book to reading list
+	addCmd := &cobra.Command{
+		Use:   "add [search query...]",
+		Short: "Search and add book to reading list",
+		Long: `Search for books and add them to your reading list.
+
+By default, shows search results in a simple list format where you can select by number.
+Use the -i flag for an interactive interface with navigation keys.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			title := args[0]
-			fmt.Printf("Adding book: %s\n", title)
-			// TODO: Implement book addition
-			return nil
+			interactive, _ := cmd.Flags().GetBool("interactive")
+			return handlers.SearchAndAddWithOptions(cmd.Context(), args, interactive)
+		},
+	}
+	addCmd.Flags().BoolP("interactive", "i", false, "Use interactive interface for book selection")
+	root.AddCommand(addCmd)
+
+	// book list - Show reading queue with progress
+	root.AddCommand(&cobra.Command{
+		Use:   "list [--all|--reading|--finished|--queued]",
+		Short: "Show reading queue with progress",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return handlers.ListBooks(cmd.Context(), args)
 		},
 	})
 
+	// book reading - Mark book as currently reading (alias for update status)
 	root.AddCommand(&cobra.Command{
-		Use:   "list",
-		Short: "List books in reading list",
+		Use:   "reading <id>",
+		Short: "Mark book as currently reading",
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Println("Listing books...")
-			// TODO: Implement book listing
-			return nil
+			return handlers.UpdateBookStatus(cmd.Context(), []string{args[0], "reading"})
+		},
+	})
+
+	// book finished - Mark book as completed
+	root.AddCommand(&cobra.Command{
+		Use:     "finished <id>",
+		Short:   "Mark book as completed",
+		Aliases: []string{"read"},
+		Args:    cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return handlers.UpdateBookStatus(cmd.Context(), []string{args[0], "finished"})
+		},
+	})
+
+	// book remove - Remove from reading list
+	root.AddCommand(&cobra.Command{
+		Use:     "remove <id>",
+		Short:   "Remove from reading list",
+		Aliases: []string{"rm"},
+		Args:    cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return handlers.UpdateBookStatus(cmd.Context(), []string{args[0], "removed"})
+		},
+	})
+
+	// book progress - Update reading progress percentage  
+	root.AddCommand(&cobra.Command{
+		Use:   "progress <id> <percentage>",
+		Short: "Update reading progress percentage (0-100)",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return handlers.UpdateBookProgress(cmd.Context(), args)
+		},
+	})
+
+	// book update - Update book status
+	root.AddCommand(&cobra.Command{
+		Use:   "update <id> <status>",
+		Short: "Update book status (queued|reading|finished|removed)",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return handlers.UpdateBookStatus(cmd.Context(), args)
 		},
 	})
 

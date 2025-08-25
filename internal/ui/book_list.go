@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
@@ -17,9 +18,12 @@ import (
 
 // BookListOptions configures the book list UI behavior
 type BookListOptions struct {
-	Output     io.Writer // Output destination (stdout for interactive, buffer for testing)
-	Input      io.Reader // Input source (stdin for interactive, strings reader for testing)
-	StaticMode bool      // Enable static mode for testing (no interactive components)
+	// Output destination (stdout for interactive, buffer for testing)
+	Output io.Writer
+	// Input source (stdin for interactive, strings reader for testing)
+	Input io.Reader
+	// Enable static mode (no interactive components)
+	Static bool
 }
 
 // BookList handles book search and selection UI
@@ -64,7 +68,7 @@ type errorMsg error
 type bookAddedMsg *models.Book
 
 func (m searchModel) Init() tea.Cmd {
-	return nil
+	return m.searchBooks(m.query)
 }
 
 func (m searchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -106,7 +110,9 @@ func (m searchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case bookAddedMsg:
 		m.addedBook = (*models.Book)(msg)
 		m.confirmed = true
-		return m, tea.Quit
+		return m, tea.Tick(2*time.Second, func(t time.Time) tea.Msg {
+			return tea.Quit()
+		})
 	}
 	return m, nil
 }
@@ -204,8 +210,8 @@ func (m searchModel) addBook(book *models.Book) tea.Cmd {
 
 // SearchAndSelect searches for books with the given query and allows selection
 func (bl *BookList) SearchAndSelect(ctx context.Context, query string) error {
-	if bl.opts.StaticMode {
-		return bl.searchAndSelectStatic(ctx, query)
+	if bl.opts.Static {
+		return bl.staticSelect(ctx, query)
 	}
 
 	model := searchModel{
@@ -219,13 +225,11 @@ func (bl *BookList) SearchAndSelect(ctx context.Context, query string) error {
 
 	program := tea.NewProgram(model, tea.WithInput(bl.opts.Input), tea.WithOutput(bl.opts.Output))
 
-	program.Send(tea.Cmd(model.searchBooks(query)))
-
 	_, err := program.Run()
 	return err
 }
 
-func (bl *BookList) searchAndSelectStatic(ctx context.Context, query string) error {
+func (bl *BookList) staticSelect(ctx context.Context, query string) error {
 	results, err := bl.service.Search(ctx, query, 1, 10)
 	if err != nil {
 		fmt.Fprintf(bl.opts.Output, "Error: %s\n", err)
@@ -270,8 +274,8 @@ func (bl *BookList) searchAndSelectStatic(ctx context.Context, query string) err
 
 // InteractiveSearch provides an interactive search interface
 func (bl *BookList) InteractiveSearch(ctx context.Context) error {
-	if bl.opts.StaticMode {
-		return bl.interactiveSearchStatic(ctx)
+	if bl.opts.Static {
+		return bl.staticSearch(ctx)
 	}
 
 	var query string
@@ -295,7 +299,7 @@ func (bl *BookList) InteractiveSearch(ctx context.Context) error {
 	return bl.SearchAndSelect(ctx, query)
 }
 
-func (bl *BookList) interactiveSearchStatic(ctx context.Context) error {
+func (bl *BookList) staticSearch(ctx context.Context) error {
 	fmt.Fprintf(bl.opts.Output, "Search for books: test query\n")
-	return bl.searchAndSelectStatic(ctx, "test query")
+	return bl.staticSelect(ctx, "test query")
 }

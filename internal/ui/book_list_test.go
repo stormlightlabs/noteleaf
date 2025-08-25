@@ -40,7 +40,7 @@ func TestBookList(t *testing.T) {
 	t.Run("Options", func(t *testing.T) {
 		t.Run("default options", func(t *testing.T) {
 			opts := BookListOptions{}
-			if opts.StaticMode {
+			if opts.Static {
 				t.Error("StaticMode should default to false")
 			}
 		})
@@ -48,11 +48,11 @@ func TestBookList(t *testing.T) {
 		t.Run("static mode enabled", func(t *testing.T) {
 			var buf bytes.Buffer
 			opts := BookListOptions{
-				Output:     &buf,
-				StaticMode: true,
+				Output: &buf,
+				Static: true,
 			}
 
-			if !opts.StaticMode {
+			if !opts.Static {
 				t.Error("StaticMode should be enabled")
 			}
 			if opts.Output != &buf {
@@ -73,12 +73,12 @@ func TestBookList(t *testing.T) {
 				service: service,
 				repo:    nil,
 				opts: BookListOptions{
-					Output:     &buf,
-					StaticMode: true,
+					Output: &buf,
+					Static: true,
 				},
 			}
 
-			err := bl.searchAndSelectStatic(context.Background(), "test query")
+			err := bl.staticSelect(context.Background(), "test query")
 			if err == nil {
 				t.Fatal("Expected error, got nil")
 			}
@@ -100,12 +100,12 @@ func TestBookList(t *testing.T) {
 				service: service,
 				repo:    nil,
 				opts: BookListOptions{
-					Output:     &buf,
-					StaticMode: true,
+					Output: &buf,
+					Static: true,
 				},
 			}
 
-			err := bl.searchAndSelectStatic(context.Background(), "nonexistent")
+			err := bl.staticSelect(context.Background(), "nonexistent")
 			if err != nil {
 				t.Fatalf("searchAndSelectStatic failed: %v", err)
 			}
@@ -134,8 +134,8 @@ func TestBookList(t *testing.T) {
 				// Skip repo operations for this test
 				// repo:    nil,
 				opts: BookListOptions{
-					Output:     &buf,
-					StaticMode: true,
+					Output: &buf,
+					Static: true,
 				},
 			}
 
@@ -193,12 +193,12 @@ func TestBookList(t *testing.T) {
 				service: service,
 				repo:    nil,
 				opts: BookListOptions{
-					Output:     &buf,
-					StaticMode: true,
+					Output: &buf,
+					Static: true,
 				},
 			}
 
-			err := bl.interactiveSearchStatic(context.Background())
+			err := bl.staticSearch(context.Background())
 			if err != nil {
 				t.Fatalf("InteractiveSearch failed: %v", err)
 			}
