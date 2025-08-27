@@ -6,12 +6,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 
+	"github.com/charmbracelet/glamour"
 	"github.com/stormlightlabs/noteleaf/internal/models"
 	"github.com/stormlightlabs/noteleaf/internal/repo"
 	"github.com/stormlightlabs/noteleaf/internal/store"
+	"github.com/stormlightlabs/noteleaf/internal/ui"
 	"github.com/stormlightlabs/noteleaf/internal/utils"
 )
 
@@ -54,54 +55,37 @@ func (h *NoteHandler) Close() error {
 	return nil
 }
 
-// Create handles note creation subcommands
-func Create(ctx context.Context, args []string) error {
-	handler, err := NewNoteHandler()
-	if err != nil {
-		return err
-	}
-	defer handler.Close()
-
-	if len(args) == 0 {
-		return handler.createInteractive(ctx)
+// Create handles note creation with optional title, content, and file path
+func (h *NoteHandler) Create(ctx context.Context, title string, content string, filePath string, interactive bool) error {
+	if interactive || (title == "" && content == "" && filePath == "") {
+		return h.createInteractive(ctx)
 	}
 
-	if len(args) == 1 && isFile(args[0]) {
-		return handler.createFromFile(ctx, args[0])
+	if filePath != "" {
+		return h.createFromFile(ctx, filePath)
 	}
 
-	title := args[0]
-	content := ""
-	if len(args) > 1 {
-		content = strings.Join(args[1:], " ")
-	}
-
-	return handler.createFromArgs(ctx, title, content)
-}
-
-// New is an alias for Create
-func New(ctx context.Context, args []string) error {
-	return Create(ctx, args)
+	return h.createFromArgs(ctx, title, content)
 }
 
 // Edit handles note editing by ID
-func Edit(ctx context.Context, args []string) error {
-	if len(args) != 1 {
-		return fmt.Errorf("edit requires exactly one argument: note ID")
-	}
+func (h *NoteHandler) Edit(ctx context.Context, noteID int64) error {
+	return h.editNote(ctx, noteID)
+}
 
-	id, err := strconv.ParseInt(args[0], 10, 64)
-	if err != nil {
-		return fmt.Errorf("invalid note ID: %s", args[0])
-	}
+// View displays a note with formatted markdown content
+func (h *NoteHandler) View(ctx context.Context, noteID int64) error {
+	return h.viewNote(ctx, noteID)
+}
 
-	handler, err := NewNoteHandler()
-	if err != nil {
-		return err
-	}
-	defer handler.Close()
+// List opens either an interactive TUI browser for navigating and viewing notes or a static list
+func (h *NoteHandler) List(ctx context.Context, static, showArchived bool, tags []string) error {
+	return h.listNotes(ctx, showArchived, tags, static)
+}
 
-	return handler.editNote(ctx, id)
+// Delete permanently removes a note and its metadata
+func (h *NoteHandler) Delete(ctx context.Context, noteID int64) error {
+	return h.deleteNote(ctx, noteID)
 }
 
 func (h *NoteHandler) createInteractive(ctx context.Context) error {
@@ -371,14 +355,95 @@ func (h *NoteHandler) formatNoteForEdit(note *models.Note) string {
 	return content.String()
 }
 
-func isFile(arg string) bool {
-	if filepath.Ext(arg) != "" {
-		return true
+func (h *NoteHandler) viewNote(ctx context.Context, id int64) error {
+	note, err := h.repos.Notes.Get(ctx, id)
+	if err != nil {
+		return fmt.Errorf("failed to get note: %w", err)
 	}
 
-	if info, err := os.Stat(arg); err == nil && !info.IsDir() {
-		return true
+	renderer, err := glamour.NewTermRenderer(
+		glamour.WithAutoStyle(),
+		glamour.WithWordWrap(80),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create markdown renderer: %w", err)
 	}
 
-	return strings.Contains(arg, "/") || strings.Contains(arg, "\\")
+	content := h.formatNoteForView(note)
+	rendered, err := renderer.Render(content)
+	if err != nil {
+		return fmt.Errorf("failed to render markdown: %w", err)
+	}
+
+	fmt.Print(rendered)
+	return nil
+}
+
+func (h *NoteHandler) formatNoteForView(note *models.Note) string {
+	var content strings.Builder
+
+	content.WriteString("# " + note.Title + "\n\n")
+
+	if len(note.Tags) > 0 {
+		content.WriteString("**Tags:** ")
+		for i, tag := range note.Tags {
+			if i > 0 {
+				content.WriteString(", ")
+			}
+			content.WriteString("`" + tag + "`")
+		}
+		content.WriteString("\n\n")
+	}
+
+	content.WriteString("**Created:** " + note.Created.Format("2006-01-02 15:04") + "\n")
+	content.WriteString("**Modified:** " + note.Modified.Format("2006-01-02 15:04") + "\n\n")
+	content.WriteString("---\n\n")
+
+	noteContent := strings.TrimSpace(note.Content)
+	if !strings.HasPrefix(noteContent, "# ") {
+		content.WriteString(noteContent)
+	} else {
+		lines := strings.Split(noteContent, "\n")
+		if len(lines) > 1 {
+			content.WriteString(strings.Join(lines[1:], "\n"))
+		}
+	}
+
+	return content.String()
+}
+
+func (h *NoteHandler) listNotes(ctx context.Context, showArchived bool, tags []string, static bool) error {
+	opts := ui.NoteListOptions{
+		Output:       os.Stdout,
+		Input:        os.Stdin,
+		Static:       static,
+		ShowArchived: showArchived,
+		Tags:         tags,
+	}
+
+	noteList := ui.NewNoteList(h.repos.Notes, opts)
+	return noteList.Browse(ctx)
+}
+
+func (h *NoteHandler) deleteNote(ctx context.Context, id int64) error {
+	note, err := h.repos.Notes.Get(ctx, id)
+	if err != nil {
+		return fmt.Errorf("failed to find note: %w", err)
+	}
+
+	if note.FilePath != "" {
+		if err := os.Remove(note.FilePath); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("failed to remove note file %s: %w", note.FilePath, err)
+		}
+	}
+
+	if err := h.repos.Notes.Delete(ctx, id); err != nil {
+		return fmt.Errorf("failed to delete note from database: %w", err)
+	}
+
+	fmt.Printf("Note deleted (ID: %d): %s\n", note.ID, note.Title)
+	if note.FilePath != "" {
+		fmt.Printf("File removed: %s\n", note.FilePath)
+	}
+	return nil
 }

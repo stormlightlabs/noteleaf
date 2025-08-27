@@ -2,7 +2,10 @@ package main
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
+
+	"github.com/charmbracelet/log"
 
 	"github.com/spf13/cobra"
 	"github.com/stormlightlabs/noteleaf/internal/handlers"
@@ -12,15 +15,16 @@ import (
 func rootCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "noteleaf",
-		Long:  ui.Colossal.ColoredInViewport(),
+		Long:  ui.Georgia.ColoredInViewport(),
 		Short: "A TaskWarrior-inspired CLI with notes, media queues and reading lists",
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
-				cmd.Help()
-			} else {
-				output := strings.Join(args, " ")
-				fmt.Println(output)
+				return cmd.Help()
 			}
+
+			output := strings.Join(args, " ")
+			fmt.Println(output)
+			return nil
 		},
 	}
 }
@@ -274,12 +278,119 @@ func noteCmd() *cobra.Command {
 		Short: "Manage notes",
 	}
 
-	root.AddCommand(&cobra.Command{
+	handler, err := handlers.NewNoteHandler()
+	if err != nil {
+		log.Fatalf("failed to instantiate note handler: %v", err)
+	}
+
+	createCmd := &cobra.Command{
 		Use:     "create [title] [content...]",
 		Short:   "Create a new note",
 		Aliases: []string{"new"},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return handlers.Create(cmd.Context(), args)
+			interactive, _ := cmd.Flags().GetBool("interactive")
+			filePath, _ := cmd.Flags().GetString("file")
+
+			var title, content string
+			if len(args) > 0 {
+				title = args[0]
+			}
+			if len(args) > 1 {
+				content = strings.Join(args[1:], " ")
+			}
+
+			if err != nil {
+				return err
+			}
+			defer handler.Close()
+			return handler.Create(cmd.Context(), title, content, filePath, interactive)
+		},
+	}
+	createCmd.Flags().BoolP("interactive", "i", false, "Open interactive editor")
+	createCmd.Flags().StringP("file", "f", "", "Create note from markdown file")
+	root.AddCommand(createCmd)
+
+	listCmd := &cobra.Command{
+		Use:     "list [--archived] [--tags=tag1,tag2]",
+		Short:   "Opens interactive TUI browser for navigating and viewing notes",
+		Aliases: []string{"ls"},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			archived, _ := cmd.Flags().GetBool("archived")
+			tagsStr, _ := cmd.Flags().GetString("tags")
+
+			var tags []string
+			if tagsStr != "" {
+				tags = strings.Split(tagsStr, ",")
+				for i := range tags {
+					tags[i] = strings.TrimSpace(tags[i])
+				}
+			}
+
+			handler, err := handlers.NewNoteHandler()
+			if err != nil {
+				return err
+			}
+			defer handler.Close()
+			return handler.List(cmd.Context(), false, archived, tags)
+		},
+	}
+	listCmd.Flags().BoolP("archived", "a", false, "Show archived notes")
+	listCmd.Flags().String("tags", "", "Filter by tags (comma-separated)")
+	root.AddCommand(listCmd)
+
+	root.AddCommand(&cobra.Command{
+		Use:     "read [note-id]",
+		Short:   "Display formatted note content with syntax highlighting",
+		Aliases: []string{"view"},
+		Args:    cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			noteID, err := strconv.ParseInt(args[0], 10, 64)
+			if err != nil {
+				return fmt.Errorf("invalid note ID: %s", args[0])
+			}
+			handler, err := handlers.NewNoteHandler()
+			if err != nil {
+				return err
+			}
+			defer handler.Close()
+			return handler.View(cmd.Context(), noteID)
+		},
+	})
+
+	root.AddCommand(&cobra.Command{
+		Use:   "edit [note-id]",
+		Short: "Edit note in configured editor",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			noteID, err := strconv.ParseInt(args[0], 10, 64)
+			if err != nil {
+				return fmt.Errorf("invalid note ID: %s", args[0])
+			}
+			handler, err := handlers.NewNoteHandler()
+			if err != nil {
+				return err
+			}
+			defer handler.Close()
+			return handler.Edit(cmd.Context(), noteID)
+		},
+	})
+
+	root.AddCommand(&cobra.Command{
+		Use:     "remove [note-id]",
+		Short:   "Permanently removes the note file and metadata",
+		Aliases: []string{"rm", "delete", "del"},
+		Args:    cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			noteID, err := strconv.ParseInt(args[0], 10, 64)
+			if err != nil {
+				return fmt.Errorf("invalid note ID: %s", args[0])
+			}
+			handler, err := handlers.NewNoteHandler()
+			if err != nil {
+				return err
+			}
+			defer handler.Close()
+			return handler.Delete(cmd.Context(), noteID)
 		},
 	})
 
