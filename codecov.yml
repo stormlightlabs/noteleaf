@@ -20,4 +20,4 @@ ignore:
   - "**/*_test.go"
   - "**/testdata/**"
   - "**/vendor/**"
-  - "cmd/cli/*.go"
+  - "cmd/*.go"
