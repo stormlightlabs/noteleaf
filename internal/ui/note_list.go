@@ -1,4 +1,3 @@
-// FIXME: this module is missing test coverage
 package ui
 
 import (
