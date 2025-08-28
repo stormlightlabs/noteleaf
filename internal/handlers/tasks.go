@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"github.com/stormlightlabs/noteleaf/internal/models"
 	"github.com/stormlightlabs/noteleaf/internal/repo"
 	"github.com/stormlightlabs/noteleaf/internal/store"
+	"github.com/stormlightlabs/noteleaf/internal/ui"
 )
 
 // TaskHandler handles all task-related commands
@@ -63,7 +65,7 @@ func (h *TaskHandler) createTask(ctx context.Context, args []string) error {
 	}
 
 	description := strings.Join(args, " ")
-	
+
 	task := &models.Task{
 		UUID:        uuid.New().String(),
 		Description: description,
@@ -80,39 +82,29 @@ func (h *TaskHandler) createTask(ctx context.Context, args []string) error {
 }
 
 // ListTasks lists all tasks with optional filtering
-func ListTasks(ctx context.Context, args []string) error {
+func ListTasks(ctx context.Context, static, showAll bool, status, priority, project string) error {
 	handler, err := NewTaskHandler()
 	if err != nil {
 		return fmt.Errorf("failed to initialize task handler: %w", err)
 	}
 	defer handler.Close()
 
-	return handler.listTasks(ctx, args)
-}
-
-func (h *TaskHandler) listTasks(ctx context.Context, args []string) error {
-	opts := repo.TaskListOptions{}
-	
-	// Parse arguments for filtering
-	for i, arg := range args {
-		switch {
-		case arg == "--status" && i+1 < len(args):
-			opts.Status = args[i+1]
-		case arg == "--priority" && i+1 < len(args):
-			opts.Priority = args[i+1]
-		case arg == "--project" && i+1 < len(args):
-			opts.Project = args[i+1]
-		case arg == "--search" && i+1 < len(args):
-			opts.Search = args[i+1]
-		case arg == "--limit" && i+1 < len(args):
-			if limit, err := strconv.Atoi(args[i+1]); err == nil {
-				opts.Limit = limit
-			}
-		}
+	if static {
+		return handler.listTasksStatic(ctx, showAll, status, priority, project)
 	}
 
-	// Default to showing pending tasks only
-	if opts.Status == "" {
+	return handler.listTasksInteractive(ctx, showAll, status, priority, project)
+}
+
+func (h *TaskHandler) listTasksStatic(ctx context.Context, showAll bool, status, priority, project string) error {
+	opts := repo.TaskListOptions{
+		Status:   status,
+		Priority: priority,
+		Project:  project,
+	}
+
+	// Default to showing pending tasks only unless --all is specified
+	if !showAll && opts.Status == "" {
 		opts.Status = "pending"
 	}
 
@@ -132,6 +124,18 @@ func (h *TaskHandler) listTasks(ctx context.Context, args []string) error {
 	}
 
 	return nil
+}
+
+func (h *TaskHandler) listTasksInteractive(ctx context.Context, showAll bool, status, priority, project string) error {
+	taskList := ui.NewTaskList(h.repos.Tasks, ui.TaskListOptions{
+		ShowAll:  showAll,
+		Status:   status,
+		Priority: priority,
+		Project:  project,
+		Static:   false,
+	})
+
+	return taskList.Browse(ctx)
 }
 
 // UpdateTask updates an existing task
@@ -190,7 +194,7 @@ func (h *TaskHandler) updateTask(ctx context.Context, args []string) error {
 			i++
 		case strings.HasPrefix(arg, "--add-tag="):
 			tag := strings.TrimPrefix(arg, "--add-tag=")
-			if !contains(task.Tags, tag) {
+			if !slices.Contains(task.Tags, tag) {
 				task.Tags = append(task.Tags, tag)
 			}
 		case strings.HasPrefix(arg, "--remove-tag="):
@@ -229,20 +233,18 @@ func (h *TaskHandler) deleteTask(ctx context.Context, args []string) error {
 	var err error
 
 	if id, parseErr := strconv.ParseInt(taskID, 10, 64); parseErr == nil {
-		// Get task first to show what's being deleted
 		task, err = h.repos.Tasks.Get(ctx, id)
 		if err != nil {
 			return fmt.Errorf("failed to find task: %w", err)
 		}
-		
+
 		err = h.repos.Tasks.Delete(ctx, id)
 	} else {
-		// Get by UUID first
 		task, err = h.repos.Tasks.GetByUUID(ctx, taskID)
 		if err != nil {
 			return fmt.Errorf("failed to find task: %w", err)
 		}
-		
+
 		err = h.repos.Tasks.Delete(ctx, task.ID)
 	}
 
@@ -336,30 +338,29 @@ func (h *TaskHandler) doneTask(ctx context.Context, args []string) error {
 	return nil
 }
 
-// Helper functions
 func (h *TaskHandler) printTask(task *models.Task) {
 	fmt.Printf("[%d] %s", task.ID, task.Description)
-	
+
 	if task.Status != "pending" {
 		fmt.Printf(" (%s)", task.Status)
 	}
-	
+
 	if task.Priority != "" {
 		fmt.Printf(" [%s]", task.Priority)
 	}
-	
+
 	if task.Project != "" {
 		fmt.Printf(" +%s", task.Project)
 	}
-	
+
 	if len(task.Tags) > 0 {
 		fmt.Printf(" @%s", strings.Join(task.Tags, " @"))
 	}
-	
+
 	if task.Due != nil {
 		fmt.Printf(" (due: %s)", task.Due.Format("2006-01-02"))
 	}
-	
+
 	fmt.Println()
 }
 
@@ -368,49 +369,40 @@ func (h *TaskHandler) printTaskDetail(task *models.Task) {
 	fmt.Printf("UUID: %s\n", task.UUID)
 	fmt.Printf("Description: %s\n", task.Description)
 	fmt.Printf("Status: %s\n", task.Status)
-	
+
 	if task.Priority != "" {
 		fmt.Printf("Priority: %s\n", task.Priority)
 	}
-	
+
 	if task.Project != "" {
 		fmt.Printf("Project: %s\n", task.Project)
 	}
-	
+
 	if len(task.Tags) > 0 {
 		fmt.Printf("Tags: %s\n", strings.Join(task.Tags, ", "))
 	}
-	
+
 	if task.Due != nil {
 		fmt.Printf("Due: %s\n", task.Due.Format("2006-01-02 15:04"))
 	}
-	
+
 	fmt.Printf("Created: %s\n", task.Entry.Format("2006-01-02 15:04"))
 	fmt.Printf("Modified: %s\n", task.Modified.Format("2006-01-02 15:04"))
-	
+
 	if task.Start != nil {
 		fmt.Printf("Started: %s\n", task.Start.Format("2006-01-02 15:04"))
 	}
-	
+
 	if task.End != nil {
 		fmt.Printf("Completed: %s\n", task.End.Format("2006-01-02 15:04"))
 	}
-	
+
 	if len(task.Annotations) > 0 {
 		fmt.Printf("Annotations:\n")
 		for _, annotation := range task.Annotations {
 			fmt.Printf("  - %s\n", annotation)
 		}
 	}
-}
-
-func contains(slice []string, item string) bool {
-	for _, s := range slice {
-		if s == item {
-			return true
-		}
-	}
-	return false
 }
 
 func removeString(slice []string, item string) []string {

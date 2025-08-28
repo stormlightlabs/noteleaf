@@ -13,7 +13,7 @@ import (
 )
 
 func rootCmd() *cobra.Command {
-	return &cobra.Command{
+	root := &cobra.Command{
 		Use:   "noteleaf",
 		Long:  ui.Georgia.ColoredInViewport(),
 		Short: "A TaskWarrior-inspired CLI with notes, media queues and reading lists",
@@ -27,12 +27,21 @@ func rootCmd() *cobra.Command {
 			return nil
 		},
 	}
+
+	root.SetHelpCommand(&cobra.Command{Hidden: true})
+	cobra.EnableCommandSorting = false
+
+	root.AddGroup(&cobra.Group{ID: "core", Title: "Core Commands:"})
+	root.AddGroup(&cobra.Group{ID: "management", Title: "Management Commands:"})
+
+	return root
 }
 
 func todoCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use:   "todo",
-		Short: "task management",
+		Use:     "todo",
+		Aliases: []string{"task"},
+		Short:   "task management",
 	}
 
 	root.AddCommand(&cobra.Command{
@@ -45,14 +54,32 @@ func todoCmd() *cobra.Command {
 		},
 	})
 
-	root.AddCommand(&cobra.Command{
+	listCmd := &cobra.Command{
 		Use:     "list",
 		Short:   "List tasks",
 		Aliases: []string{"ls"},
+		Long: `List tasks with optional filtering and display modes.
+
+By default, shows tasks in an interactive TaskWarrior-like interface.
+Use --static to show a simple text list instead.
+Use --all to show all tasks, otherwise only pending tasks are shown.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return handlers.ListTasks(cmd.Context(), args)
+			static, _ := cmd.Flags().GetBool("static")
+			showAll, _ := cmd.Flags().GetBool("all")
+			status, _ := cmd.Flags().GetString("status")
+			priority, _ := cmd.Flags().GetString("priority")
+			project, _ := cmd.Flags().GetString("project")
+			
+			return handlers.ListTasks(cmd.Context(), static, showAll, status, priority, project)
 		},
-	})
+	}
+	listCmd.Flags().BoolP("interactive", "i", false, "Force interactive mode (default)")
+	listCmd.Flags().Bool("static", false, "Use static text output instead of interactive")
+	listCmd.Flags().BoolP("all", "a", false, "Show all tasks (default: pending only)")
+	listCmd.Flags().String("status", "", "Filter by status")
+	listCmd.Flags().String("priority", "", "Filter by priority")
+	listCmd.Flags().String("project", "", "Filter by project")
+	root.AddCommand(listCmd)
 
 	root.AddCommand(&cobra.Command{
 		Use:   "view [task-id]",
@@ -124,7 +151,20 @@ func todoCmd() *cobra.Command {
 	return root
 }
 
-func movieCmd() *cobra.Command {
+func mediaCmd() *cobra.Command {
+	root := &cobra.Command{
+		Use:   "media",
+		Short: "Manage media queues (books, movies, TV shows)",
+	}
+
+	root.AddCommand(bookMediaCmd())
+	root.AddCommand(movieMediaCmd())
+	root.AddCommand(tvMediaCmd())
+
+	return root
+}
+
+func movieMediaCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:   "movie",
 		Short: "Manage movie watch queue",
@@ -152,10 +192,34 @@ func movieCmd() *cobra.Command {
 		},
 	})
 
+	root.AddCommand(&cobra.Command{
+		Use:     "watched [id]",
+		Short:   "Mark movie as watched",
+		Aliases: []string{"seen"},
+		Args:    cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			fmt.Printf("Marking movie %s as watched\n", args[0])
+			// TODO: Implement movie watched status
+			return nil
+		},
+	})
+
+	root.AddCommand(&cobra.Command{
+		Use:     "remove [id]",
+		Short:   "Remove movie from queue",
+		Aliases: []string{"rm"},
+		Args:    cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			fmt.Printf("Removing movie %s from queue\n", args[0])
+			// TODO: Implement movie removal
+			return nil
+		},
+	})
+
 	return root
 }
 
-func tvCmd() *cobra.Command {
+func tvMediaCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:   "tv",
 		Short: "Manage TV show watch queue",
@@ -183,10 +247,34 @@ func tvCmd() *cobra.Command {
 		},
 	})
 
+	root.AddCommand(&cobra.Command{
+		Use:     "watched [id]",
+		Short:   "Mark TV show/episodes as watched",
+		Aliases: []string{"seen"},
+		Args:    cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			fmt.Printf("Marking TV show %s as watched\n", args[0])
+			// TODO: Implement TV show watched status
+			return nil
+		},
+	})
+
+	root.AddCommand(&cobra.Command{
+		Use:     "remove [id]",
+		Short:   "Remove TV show from queue",
+		Aliases: []string{"rm"},
+		Args:    cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			fmt.Printf("Removing TV show %s from queue\n", args[0])
+			// TODO: Implement TV show removal
+			return nil
+		},
+	})
+
 	return root
 }
 
-func bookCmd() *cobra.Command {
+func bookMediaCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:   "book",
 		Short: "Manage reading list",
@@ -418,13 +506,32 @@ func resetCmd() *cobra.Command {
 }
 
 func setupCmd() *cobra.Command {
-	return &cobra.Command{
+	handler, err := handlers.NewSeedHandler()
+	if err != nil {
+		log.Fatalf("failed to instantiate seed handler: %v", err)
+	}
+
+	root := &cobra.Command{
 		Use:   "setup",
-		Short: "Initialize the application database and configuration",
+		Short: "Initialize and manage application setup",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return handlers.Setup(cmd.Context(), args)
 		},
 	}
+
+	seedCmd := &cobra.Command{
+		Use:   "seed",
+		Short: "Populate database with test data",
+		Long:  "Add sample tasks, books, and notes to the database for testing and demonstration purposes",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			force, _ := cmd.Flags().GetBool("force")
+			return handler.Seed(cmd.Context(), force)
+		},
+	}
+	seedCmd.Flags().BoolP("force", "f", false, "Clear existing data and re-seed")
+
+	root.AddCommand(seedCmd)
+	return root
 }
 
 func confCmd() *cobra.Command {

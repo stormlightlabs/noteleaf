@@ -51,23 +51,28 @@ func main() {
 	defer app.Close()
 
 	root := rootCmd()
-	commands := []func() *cobra.Command{
-		setupCmd, resetCmd, statusCmd, todoCmd,
-		movieCmd, noteCmd, tvCmd, bookCmd, confCmd,
-	}
+	core := []func() *cobra.Command{todoCmd, mediaCmd, noteCmd}
+	mgmt := []func() *cobra.Command{statusCmd, confCmd, setupCmd, resetCmd}
 
-	for _, cmdFunc := range commands {
+	for _, cmdFunc := range core {
 		cmd := cmdFunc()
+		cmd.GroupID = "core"
 		root.AddCommand(cmd)
 	}
 
-	options := []fang.Option{
+	for _, cmdFunc := range mgmt {
+		cmd := cmdFunc()
+		cmd.GroupID = "management"
+		root.AddCommand(cmd)
+	}
+
+	opts := []fang.Option{
 		fang.WithVersion("0.1.0"),
 		fang.WithoutCompletions(),
 		fang.WithColorSchemeFunc(ui.NoteleafColorScheme),
 	}
 
-	if err := fang.Execute(context.Background(), root, options...); err != nil {
+	if err := fang.Execute(context.Background(), root, opts...); err != nil {
 		os.Exit(1)
 	}
 }

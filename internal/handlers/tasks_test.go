@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -180,57 +181,38 @@ func TestTaskHandler(t *testing.T) {
 			t.Fatalf("Failed to create task2: %v", err)
 		}
 
-		t.Run("lists pending tasks by default", func(t *testing.T) {
-			args := []string{}
-
-			err := ListTasks(ctx, args)
+		t.Run("lists pending tasks by default (static mode)", func(t *testing.T) {
+			err := ListTasks(ctx, true, false, "", "", "")
 			if err != nil {
 				t.Errorf("ListTasks failed: %v", err)
 			}
 		})
 
-		t.Run("filters by status", func(t *testing.T) {
-			args := []string{"--status", "completed"}
-
-			err := ListTasks(ctx, args)
+		t.Run("filters by status (static mode)", func(t *testing.T) {
+			err := ListTasks(ctx, true, false, "completed", "", "")
 			if err != nil {
 				t.Errorf("ListTasks with status filter failed: %v", err)
 			}
 		})
 
-		t.Run("filters by priority", func(t *testing.T) {
-			args := []string{"--priority", "A"}
-
-			err := ListTasks(ctx, args)
+		t.Run("filters by priority (static mode)", func(t *testing.T) {
+			err := ListTasks(ctx, true, false, "", "A", "")
 			if err != nil {
 				t.Errorf("ListTasks with priority filter failed: %v", err)
 			}
 		})
 
-		t.Run("filters by project", func(t *testing.T) {
-			args := []string{"--project", "work"}
-
-			err := ListTasks(ctx, args)
+		t.Run("filters by project (static mode)", func(t *testing.T) {
+			err := ListTasks(ctx, true, false, "", "", "work")
 			if err != nil {
 				t.Errorf("ListTasks with project filter failed: %v", err)
 			}
 		})
 
-		t.Run("searches tasks", func(t *testing.T) {
-			args := []string{"--search", "Task"}
-
-			err := ListTasks(ctx, args)
+		t.Run("show all tasks (static mode)", func(t *testing.T) {
+			err := ListTasks(ctx, true, true, "", "", "")
 			if err != nil {
-				t.Errorf("ListTasks with search failed: %v", err)
-			}
-		})
-
-		t.Run("limits results", func(t *testing.T) {
-			args := []string{"--limit", "1"}
-
-			err := ListTasks(ctx, args)
-			if err != nil {
-				t.Errorf("ListTasks with limit failed: %v", err)
+				t.Errorf("ListTasks with show all failed: %v", err)
 			}
 		})
 	})
@@ -683,17 +665,6 @@ func TestTaskHandler(t *testing.T) {
 	})
 
 	t.Run("Helper", func(t *testing.T) {
-		t.Run("contains function", func(t *testing.T) {
-			slice := []string{"a", "b", "c"}
-
-			if !contains(slice, "b") {
-				t.Error("Expected contains to return true for existing item")
-			}
-
-			if contains(slice, "d") {
-				t.Error("Expected contains to return false for non-existing item")
-			}
-		})
 
 		t.Run("removeString function", func(t *testing.T) {
 			slice := []string{"a", "b", "c", "b"}
@@ -703,11 +674,11 @@ func TestTaskHandler(t *testing.T) {
 				t.Errorf("Expected 2 items after removing 'b', got %d", len(result))
 			}
 
-			if contains(result, "b") {
+			if slices.Contains(result, "b") {
 				t.Error("Expected 'b' to be removed from slice")
 			}
 
-			if !contains(result, "a") || !contains(result, "c") {
+			if !slices.Contains(result, "a") || !slices.Contains(result, "c") {
 				t.Error("Expected 'a' and 'c' to remain in slice")
 			}
 		})
