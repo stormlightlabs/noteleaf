@@ -1,3 +1,14 @@
+/*
+TODO: Implement movie addition
+TODO: Implement movie listing
+TODO: Implement movie watched status
+TODO: Implement movie removal
+TODO: Implement TV show addition
+TODO: Implement TV show listing
+TODO: Implement TV show watched status
+TODO: Implement TV show removal
+TODO: Implement config management
+*/
 package main
 
 import (
@@ -44,15 +55,30 @@ func todoCmd() *cobra.Command {
 		Short:   "task management",
 	}
 
-	root.AddCommand(&cobra.Command{
+	addCmd := &cobra.Command{
 		Use:     "add [description]",
 		Short:   "Add a new task",
 		Aliases: []string{"create", "new"},
 		Args:    cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return handlers.CreateTask(cmd.Context(), args)
+			priority, _ := cmd.Flags().GetString("priority")
+			project, _ := cmd.Flags().GetString("project")
+			due, _ := cmd.Flags().GetString("due")
+			tags, _ := cmd.Flags().GetStringSlice("tags")
+
+			handler, err := handlers.NewTaskHandler()
+			if err != nil {
+				return err
+			}
+			defer handler.Close()
+			return handler.Create(cmd.Context(), args, priority, project, due, tags)
 		},
-	})
+	}
+	addCmd.Flags().StringP("priority", "p", "", "Set task priority")
+	addCmd.Flags().String("project", "", "Set task project")
+	addCmd.Flags().StringP("due", "d", "", "Set due date (YYYY-MM-DD)")
+	addCmd.Flags().StringSliceP("tags", "t", []string{}, "Add tags to task")
+	root.AddCommand(addCmd)
 
 	listCmd := &cobra.Command{
 		Use:     "list",
@@ -70,7 +96,12 @@ Use --all to show all tasks, otherwise only pending tasks are shown.`,
 			priority, _ := cmd.Flags().GetString("priority")
 			project, _ := cmd.Flags().GetString("project")
 
-			return handlers.ListTasks(cmd.Context(), static, showAll, status, priority, project)
+			handler, err := handlers.NewTaskHandler()
+			if err != nil {
+				return err
+			}
+			defer handler.Close()
+			return handler.List(cmd.Context(), static, showAll, status, priority, project)
 		},
 	}
 	listCmd.Flags().BoolP("interactive", "i", false, "Force interactive mode (default)")
@@ -81,21 +112,39 @@ Use --all to show all tasks, otherwise only pending tasks are shown.`,
 	listCmd.Flags().String("project", "", "Filter by project")
 	root.AddCommand(listCmd)
 
-	root.AddCommand(&cobra.Command{
+	viewCmd := &cobra.Command{
 		Use:   "view [task-id]",
 		Short: "View task by ID",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return handlers.ViewTask(cmd.Context(), args)
+			format, _ := cmd.Flags().GetString("format")
+			jsonOutput, _ := cmd.Flags().GetBool("json")
+			noMetadata, _ := cmd.Flags().GetBool("no-metadata")
+
+			handler, err := handlers.NewTaskHandler()
+			if err != nil {
+				return err
+			}
+			defer handler.Close()
+			return handler.View(cmd.Context(), args, format, jsonOutput, noMetadata)
 		},
-	})
+	}
+	viewCmd.Flags().String("format", "detailed", "Output format (detailed, brief)")
+	viewCmd.Flags().Bool("json", false, "Output as JSON")
+	viewCmd.Flags().Bool("no-metadata", false, "Hide creation/modification timestamps")
+	root.AddCommand(viewCmd)
 
 	root.AddCommand(&cobra.Command{
 		Use:   "update [task-id] [options...]",
 		Short: "Update task properties",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return handlers.UpdateTask(cmd.Context(), args)
+			handler, err := handlers.NewTaskHandler()
+			if err != nil {
+				return err
+			}
+			defer handler.Close()
+			return handler.Update(cmd.Context(), args)
 		},
 	})
 
@@ -104,7 +153,12 @@ Use --all to show all tasks, otherwise only pending tasks are shown.`,
 		Short: "Delete a task",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return handlers.DeleteTask(cmd.Context(), args)
+			handler, err := handlers.NewTaskHandler()
+			if err != nil {
+				return err
+			}
+			defer handler.Close()
+			return handler.Delete(cmd.Context(), args)
 		},
 	})
 
@@ -114,7 +168,12 @@ Use --all to show all tasks, otherwise only pending tasks are shown.`,
 		Aliases: []string{"proj"},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			static, _ := cmd.Flags().GetBool("static")
-			return handlers.ListProjects(cmd.Context(), static)
+			handler, err := handlers.NewTaskHandler()
+			if err != nil {
+				return err
+			}
+			defer handler.Close()
+			return handler.ListProjects(cmd.Context(), static)
 		},
 	}
 	projectsCmd.Flags().Bool("static", false, "Use static text output instead of interactive")
@@ -126,7 +185,12 @@ Use --all to show all tasks, otherwise only pending tasks are shown.`,
 		Aliases: []string{"t"},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			static, _ := cmd.Flags().GetBool("static")
-			return handlers.ListTags(cmd.Context(), static)
+			handler, err := handlers.NewTaskHandler()
+			if err != nil {
+				return err
+			}
+			defer handler.Close()
+			return handler.ListTags(cmd.Context(), static)
 		},
 	}
 	tagsCmd.Flags().Bool("static", false, "Use static text output instead of interactive")
@@ -148,7 +212,12 @@ Use --all to show all tasks, otherwise only pending tasks are shown.`,
 		Aliases: []string{"complete"},
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return handlers.DoneTask(cmd.Context(), args)
+			handler, err := handlers.NewTaskHandler()
+			if err != nil {
+				return err
+			}
+			defer handler.Close()
+			return handler.Done(cmd.Context(), args)
 		},
 	})
 
@@ -181,7 +250,6 @@ func movieMediaCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			title := args[0]
 			fmt.Printf("Adding movie: %s\n", title)
-			// TODO: Implement movie addition
 			return nil
 		},
 	})
@@ -191,7 +259,6 @@ func movieMediaCmd() *cobra.Command {
 		Short: "List movies in queue",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Println("Listing movies...")
-			// TODO: Implement movie listing
 			return nil
 		},
 	})
@@ -203,7 +270,6 @@ func movieMediaCmd() *cobra.Command {
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Printf("Marking movie %s as watched\n", args[0])
-			// TODO: Implement movie watched status
 			return nil
 		},
 	})
@@ -215,7 +281,6 @@ func movieMediaCmd() *cobra.Command {
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Printf("Removing movie %s from queue\n", args[0])
-			// TODO: Implement movie removal
 			return nil
 		},
 	})
@@ -236,7 +301,6 @@ func tvMediaCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			title := args[0]
 			fmt.Printf("Adding TV show: %s\n", title)
-			// TODO: Implement TV show addition
 			return nil
 		},
 	})
@@ -246,7 +310,6 @@ func tvMediaCmd() *cobra.Command {
 		Short: "List TV shows in queue",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Println("Listing TV shows...")
-			// TODO: Implement TV show listing
 			return nil
 		},
 	})
@@ -258,7 +321,6 @@ func tvMediaCmd() *cobra.Command {
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Printf("Marking TV show %s as watched\n", args[0])
-			// TODO: Implement TV show watched status
 			return nil
 		},
 	})
@@ -270,7 +332,6 @@ func tvMediaCmd() *cobra.Command {
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Printf("Removing TV show %s from queue\n", args[0])
-			// TODO: Implement TV show removal
 			return nil
 		},
 	})
@@ -546,7 +607,6 @@ func confCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			key, value := args[0], args[1]
 			fmt.Printf("Setting config %s = %s\n", key, value)
-			// TODO: Implement config management
 			return nil
 		},
 	}

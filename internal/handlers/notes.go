@@ -68,26 +68,6 @@ func (h *NoteHandler) Create(ctx context.Context, title string, content string, 
 	return h.createFromArgs(ctx, title, content)
 }
 
-// Edit handles note editing by ID
-func (h *NoteHandler) Edit(ctx context.Context, noteID int64) error {
-	return h.editNote(ctx, noteID)
-}
-
-// View displays a note with formatted markdown content
-func (h *NoteHandler) View(ctx context.Context, noteID int64) error {
-	return h.viewNote(ctx, noteID)
-}
-
-// List opens either an interactive TUI browser for navigating and viewing notes or a static list
-func (h *NoteHandler) List(ctx context.Context, static, showArchived bool, tags []string) error {
-	return h.listNotes(ctx, showArchived, tags, static)
-}
-
-// Delete permanently removes a note and its metadata
-func (h *NoteHandler) Delete(ctx context.Context, noteID int64) error {
-	return h.deleteNote(ctx, noteID)
-}
-
 func (h *NoteHandler) createInteractive(ctx context.Context) error {
 	logger := utils.GetLogger()
 
@@ -213,14 +193,15 @@ func (h *NoteHandler) createFromArgs(ctx context.Context, title, content string)
 		var response string
 		fmt.Scanln(&response)
 		if strings.ToLower(response) == "y" || strings.ToLower(response) == "yes" {
-			return h.editNote(ctx, id)
+			return h.Edit(ctx, id)
 		}
 	}
 
 	return nil
 }
 
-func (h *NoteHandler) editNote(ctx context.Context, id int64) error {
+// Edit handles note editing by ID
+func (h *NoteHandler) Edit(ctx context.Context, id int64) error {
 	note, err := h.repos.Notes.Get(ctx, id)
 	if err != nil {
 		return fmt.Errorf("failed to get note: %w", err)
@@ -355,7 +336,8 @@ func (h *NoteHandler) formatNoteForEdit(note *models.Note) string {
 	return content.String()
 }
 
-func (h *NoteHandler) viewNote(ctx context.Context, id int64) error {
+// View displays a note with formatted markdown content
+func (h *NoteHandler) View(ctx context.Context, id int64) error {
 	note, err := h.repos.Notes.Get(ctx, id)
 	if err != nil {
 		return fmt.Errorf("failed to get note: %w", err)
@@ -376,6 +358,44 @@ func (h *NoteHandler) viewNote(ctx context.Context, id int64) error {
 	}
 
 	fmt.Print(rendered)
+	return nil
+}
+
+// List opens either an interactive TUI browser for navigating and viewing notes or a static list
+func (h *NoteHandler) List(ctx context.Context, static, showArchived bool, tags []string) error {
+	opts := ui.NoteListOptions{
+		Output:       os.Stdout,
+		Input:        os.Stdin,
+		Static:       static,
+		ShowArchived: showArchived,
+		Tags:         tags,
+	}
+
+	noteList := ui.NewNoteList(h.repos.Notes, opts)
+	return noteList.Browse(ctx)
+}
+
+// Delete permanently removes a note and its metadata
+func (h *NoteHandler) Delete(ctx context.Context, id int64) error {
+	note, err := h.repos.Notes.Get(ctx, id)
+	if err != nil {
+		return fmt.Errorf("failed to find note: %w", err)
+	}
+
+	if note.FilePath != "" {
+		if err := os.Remove(note.FilePath); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("failed to remove note file %s: %w", note.FilePath, err)
+		}
+	}
+
+	if err := h.repos.Notes.Delete(ctx, id); err != nil {
+		return fmt.Errorf("failed to delete note from database: %w", err)
+	}
+
+	fmt.Printf("Note deleted (ID: %d): %s\n", note.ID, note.Title)
+	if note.FilePath != "" {
+		fmt.Printf("File removed: %s\n", note.FilePath)
+	}
 	return nil
 }
 
@@ -410,40 +430,4 @@ func (h *NoteHandler) formatNoteForView(note *models.Note) string {
 	}
 
 	return content.String()
-}
-
-func (h *NoteHandler) listNotes(ctx context.Context, showArchived bool, tags []string, static bool) error {
-	opts := ui.NoteListOptions{
-		Output:       os.Stdout,
-		Input:        os.Stdin,
-		Static:       static,
-		ShowArchived: showArchived,
-		Tags:         tags,
-	}
-
-	noteList := ui.NewNoteList(h.repos.Notes, opts)
-	return noteList.Browse(ctx)
-}
-
-func (h *NoteHandler) deleteNote(ctx context.Context, id int64) error {
-	note, err := h.repos.Notes.Get(ctx, id)
-	if err != nil {
-		return fmt.Errorf("failed to find note: %w", err)
-	}
-
-	if note.FilePath != "" {
-		if err := os.Remove(note.FilePath); err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("failed to remove note file %s: %w", note.FilePath, err)
-		}
-	}
-
-	if err := h.repos.Notes.Delete(ctx, id); err != nil {
-		return fmt.Errorf("failed to delete note from database: %w", err)
-	}
-
-	fmt.Printf("Note deleted (ID: %d): %s\n", note.ID, note.Title)
-	if note.FilePath != "" {
-		fmt.Printf("File removed: %s\n", note.FilePath)
-	}
-	return nil
 }

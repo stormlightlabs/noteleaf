@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strconv"
@@ -13,6 +14,8 @@ import (
 	"github.com/stormlightlabs/noteleaf/internal/repo"
 	"github.com/stormlightlabs/noteleaf/internal/store"
 	"github.com/stormlightlabs/noteleaf/internal/ui"
+	"golang.org/x/text/feature/plural"
+	"golang.org/x/text/language"
 )
 
 // TaskHandler handles all task-related commands
@@ -48,28 +51,29 @@ func (h *TaskHandler) Close() error {
 	return h.db.Close()
 }
 
-// CreateTask creates a new task
-func CreateTask(ctx context.Context, args []string) error {
-	handler, err := NewTaskHandler()
-	if err != nil {
-		return fmt.Errorf("failed to initialize task handler: %w", err)
-	}
-	defer handler.Close()
-
-	return handler.createTask(ctx, args)
-}
-
-func (h *TaskHandler) createTask(ctx context.Context, args []string) error {
-	if len(args) < 1 {
+// Create creates a new task
+func (h *TaskHandler) Create(ctx context.Context, desc []string, priority, project, due string, tags []string) error {
+	if len(desc) < 1 {
 		return fmt.Errorf("task description required")
 	}
 
-	description := strings.Join(args, " ")
+	description := strings.Join(desc, " ")
 
 	task := &models.Task{
 		UUID:        uuid.New().String(),
 		Description: description,
 		Status:      "pending",
+		Priority:    priority,
+		Project:     project,
+		Tags:        tags,
+	}
+
+	if due != "" {
+		if dueTime, err := time.Parse("2006-01-02", due); err == nil {
+			task.Due = &dueTime
+		} else {
+			return fmt.Errorf("invalid due date format, use YYYY-MM-DD: %w", err)
+		}
 	}
 
 	id, err := h.repos.Tasks.Create(ctx, task)
@@ -78,22 +82,30 @@ func (h *TaskHandler) createTask(ctx context.Context, args []string) error {
 	}
 
 	fmt.Printf("Task created (ID: %d, UUID: %s): %s\n", id, task.UUID, task.Description)
+
+	if priority != "" {
+		fmt.Printf("Priority: %s\n", priority)
+	}
+	if project != "" {
+		fmt.Printf("Project: %s\n", project)
+	}
+	if len(tags) > 0 {
+		fmt.Printf("Tags: %s\n", strings.Join(tags, ", "))
+	}
+	if task.Due != nil {
+		fmt.Printf("Due: %s\n", task.Due.Format("2006-01-02"))
+	}
+
 	return nil
 }
 
-// ListTasks lists all tasks with optional filtering
-func ListTasks(ctx context.Context, static, showAll bool, status, priority, project string) error {
-	handler, err := NewTaskHandler()
-	if err != nil {
-		return fmt.Errorf("failed to initialize task handler: %w", err)
-	}
-	defer handler.Close()
-
+// List lists all tasks with optional filtering
+func (h *TaskHandler) List(ctx context.Context, static, showAll bool, status, priority, project string) error {
 	if static {
-		return handler.listTasksStatic(ctx, showAll, status, priority, project)
+		return h.listTasksStatic(ctx, showAll, status, priority, project)
 	}
 
-	return handler.listTasksInteractive(ctx, showAll, status, priority, project)
+	return h.listTasksInteractive(ctx, showAll, status, priority, project)
 }
 
 func (h *TaskHandler) listTasksStatic(ctx context.Context, showAll bool, status, priority, project string) error {
@@ -137,18 +149,7 @@ func (h *TaskHandler) listTasksInteractive(ctx context.Context, showAll bool, st
 	return taskList.Browse(ctx)
 }
 
-// UpdateTask updates an existing task
-func UpdateTask(ctx context.Context, args []string) error {
-	handler, err := NewTaskHandler()
-	if err != nil {
-		return fmt.Errorf("failed to initialize task handler: %w", err)
-	}
-	defer handler.Close()
-
-	return handler.updateTask(ctx, args)
-}
-
-func (h *TaskHandler) updateTask(ctx context.Context, args []string) error {
+func (h *TaskHandler) Update(ctx context.Context, args []string) error {
 	if len(args) < 1 {
 		return fmt.Errorf("task ID required")
 	}
@@ -207,18 +208,8 @@ func (h *TaskHandler) updateTask(ctx context.Context, args []string) error {
 	return nil
 }
 
-// DeleteTask deletes a task
-func DeleteTask(ctx context.Context, args []string) error {
-	handler, err := NewTaskHandler()
-	if err != nil {
-		return fmt.Errorf("failed to initialize task handler: %w", err)
-	}
-	defer handler.Close()
-
-	return handler.deleteTask(ctx, args)
-}
-
-func (h *TaskHandler) deleteTask(ctx context.Context, args []string) error {
+// Delete deletes a task
+func (h *TaskHandler) Delete(ctx context.Context, args []string) error {
 	if len(args) < 1 {
 		return fmt.Errorf("task ID required")
 	}
@@ -251,18 +242,8 @@ func (h *TaskHandler) deleteTask(ctx context.Context, args []string) error {
 	return nil
 }
 
-// ViewTask displays a single task
-func ViewTask(ctx context.Context, args []string) error {
-	handler, err := NewTaskHandler()
-	if err != nil {
-		return fmt.Errorf("failed to initialize task handler: %w", err)
-	}
-	defer handler.Close()
-
-	return handler.viewTask(ctx, args)
-}
-
-func (h *TaskHandler) viewTask(ctx context.Context, args []string) error {
+// View displays a single task
+func (h *TaskHandler) View(ctx context.Context, args []string, format string, jsonOutput, noMetadata bool) error {
 	if len(args) < 1 {
 		return fmt.Errorf("task ID required")
 	}
@@ -281,22 +262,20 @@ func (h *TaskHandler) viewTask(ctx context.Context, args []string) error {
 		return fmt.Errorf("failed to find task: %w", err)
 	}
 
-	h.printTaskDetail(task)
+	if jsonOutput {
+		return h.printTaskJSON(task)
+	}
+
+	if format == "brief" {
+		h.printTask(task)
+	} else {
+		h.printTaskDetail(task, noMetadata)
+	}
 	return nil
 }
 
-// DoneTask marks a task as completed
-func DoneTask(ctx context.Context, args []string) error {
-	handler, err := NewTaskHandler()
-	if err != nil {
-		return fmt.Errorf("failed to initialize task handler: %w", err)
-	}
-	defer handler.Close()
-
-	return handler.doneTask(ctx, args)
-}
-
-func (h *TaskHandler) doneTask(ctx context.Context, args []string) error {
+// Done marks a task as completed
+func (h *TaskHandler) Done(ctx context.Context, args []string) error {
 	if len(args) < 1 {
 		return fmt.Errorf("task ID required")
 	}
@@ -334,18 +313,12 @@ func (h *TaskHandler) doneTask(ctx context.Context, args []string) error {
 }
 
 // ListProjects lists all projects with their task counts
-func ListProjects(ctx context.Context, static bool) error {
-	handler, err := NewTaskHandler()
-	if err != nil {
-		return fmt.Errorf("failed to initialize task handler: %w", err)
-	}
-	defer handler.Close()
-
+func (h *TaskHandler) ListProjects(ctx context.Context, static bool) error {
 	if static {
-		return handler.listProjectsStatic(ctx)
+		return h.listProjectsStatic(ctx)
 	}
 
-	return handler.listProjectsInteractive(ctx)
+	return h.listProjectsInteractive(ctx)
 }
 
 func (h *TaskHandler) listProjectsStatic(ctx context.Context) error {
@@ -387,18 +360,12 @@ func (h *TaskHandler) listProjectsInteractive(ctx context.Context) error {
 }
 
 // ListTags lists all tags with their task counts
-func ListTags(ctx context.Context, static bool) error {
-	handler, err := NewTaskHandler()
-	if err != nil {
-		return fmt.Errorf("failed to initialize task handler: %w", err)
-	}
-	defer handler.Close()
-
+func (h *TaskHandler) ListTags(ctx context.Context, static bool) error {
 	if static {
-		return handler.listTagsStatic(ctx)
+		return h.listTagsStatic(ctx)
 	}
 
-	return handler.listTagsInteractive(ctx)
+	return h.listTagsInteractive(ctx)
 }
 
 func (h *TaskHandler) listTagsStatic(ctx context.Context) error {
@@ -465,7 +432,7 @@ func (h *TaskHandler) printTask(task *models.Task) {
 	fmt.Println()
 }
 
-func (h *TaskHandler) printTaskDetail(task *models.Task) {
+func (h *TaskHandler) printTaskDetail(task *models.Task, noMetadata bool) {
 	fmt.Printf("Task ID: %d\n", task.ID)
 	fmt.Printf("UUID: %s\n", task.UUID)
 	fmt.Printf("Description: %s\n", task.Description)
@@ -487,15 +454,17 @@ func (h *TaskHandler) printTaskDetail(task *models.Task) {
 		fmt.Printf("Due: %s\n", task.Due.Format("2006-01-02 15:04"))
 	}
 
-	fmt.Printf("Created: %s\n", task.Entry.Format("2006-01-02 15:04"))
-	fmt.Printf("Modified: %s\n", task.Modified.Format("2006-01-02 15:04"))
+	if !noMetadata {
+		fmt.Printf("Created: %s\n", task.Entry.Format("2006-01-02 15:04"))
+		fmt.Printf("Modified: %s\n", task.Modified.Format("2006-01-02 15:04"))
 
-	if task.Start != nil {
-		fmt.Printf("Started: %s\n", task.Start.Format("2006-01-02 15:04"))
-	}
+		if task.Start != nil {
+			fmt.Printf("Started: %s\n", task.Start.Format("2006-01-02 15:04"))
+		}
 
-	if task.End != nil {
-		fmt.Printf("Completed: %s\n", task.End.Format("2006-01-02 15:04"))
+		if task.End != nil {
+			fmt.Printf("Completed: %s\n", task.End.Format("2006-01-02 15:04"))
+		}
 	}
 
 	if len(task.Annotations) > 0 {
@@ -504,6 +473,15 @@ func (h *TaskHandler) printTaskDetail(task *models.Task) {
 			fmt.Printf("  - %s\n", annotation)
 		}
 	}
+}
+
+func (h *TaskHandler) printTaskJSON(task *models.Task) error {
+	jsonData, err := json.MarshalIndent(task, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal task to JSON: %w", err)
+	}
+	fmt.Println(string(jsonData))
+	return nil
 }
 
 func removeString(slice []string, item string) []string {
@@ -517,8 +495,11 @@ func removeString(slice []string, item string) []string {
 }
 
 func pluralize(count int) string {
-	if count == 1 {
+	rule := plural.Cardinal.MatchPlural(language.English, count, 0, 0, 0, 0)
+	switch rule {
+	case plural.One:
 		return ""
+	default:
+		return "s"
 	}
-	return "s"
 }

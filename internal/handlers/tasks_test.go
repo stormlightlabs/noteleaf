@@ -93,20 +93,20 @@ func TestTaskHandler(t *testing.T) {
 		_, cleanup := setupTaskTest(t)
 		defer cleanup()
 
+		handler, err := NewTaskHandler()
+		if err != nil {
+			t.Fatalf("Failed to create handler: %v", err)
+		}
+		defer handler.Close()
+
 		t.Run("creates task successfully", func(t *testing.T) {
 			ctx := context.Background()
 			args := []string{"Buy groceries", "and", "cook dinner"}
 
-			err := CreateTask(ctx, args)
+			err := handler.Create(ctx, args, "", "", "", []string{})
 			if err != nil {
 				t.Errorf("CreateTask failed: %v", err)
 			}
-
-			handler, err := NewTaskHandler()
-			if err != nil {
-				t.Fatalf("Failed to create handler: %v", err)
-			}
-			defer handler.Close()
 
 			tasks, err := handler.repos.Tasks.GetPending(ctx)
 			if err != nil {
@@ -136,13 +136,89 @@ func TestTaskHandler(t *testing.T) {
 			ctx := context.Background()
 			args := []string{}
 
-			err := CreateTask(ctx, args)
+			err := handler.Create(ctx, args, "", "", "", []string{})
 			if err == nil {
 				t.Error("Expected error for empty description")
 			}
 
 			if !strings.Contains(err.Error(), "task description required") {
 				t.Errorf("Expected error about required description, got: %v", err)
+			}
+		})
+
+		t.Run("creates task with flags", func(t *testing.T) {
+			ctx := context.Background()
+			args := []string{"Task", "with", "flags"}
+			priority := "A"
+			project := "test-project" 
+			due := "2024-12-31"
+			tags := []string{"urgent", "work"}
+
+			err := handler.Create(ctx, args, priority, project, due, tags)
+			if err != nil {
+				t.Errorf("CreateTask with flags failed: %v", err)
+			}
+
+			tasks, err := handler.repos.Tasks.GetPending(ctx)
+			if err != nil {
+				t.Fatalf("Failed to get pending tasks: %v", err)
+			}
+
+			// Should have 2 tasks now (previous test created one)
+			if len(tasks) < 1 {
+				t.Errorf("Expected at least 1 task, got %d", len(tasks))
+			}
+
+			// Find the task we just created
+			var task *models.Task
+			for _, t := range tasks {
+				if t.Description == "Task with flags" {
+					task = t
+					break
+				}
+			}
+
+			if task == nil {
+				t.Fatal("Could not find created task")
+			}
+
+			if task.Priority != priority {
+				t.Errorf("Expected priority '%s', got '%s'", priority, task.Priority)
+			}
+
+			if task.Project != project {
+				t.Errorf("Expected project '%s', got '%s'", project, task.Project)
+			}
+
+			if task.Due == nil {
+				t.Error("Expected due date to be set")
+			} else if task.Due.Format("2006-01-02") != due {
+				t.Errorf("Expected due date '%s', got '%s'", due, task.Due.Format("2006-01-02"))
+			}
+
+			if len(task.Tags) != len(tags) {
+				t.Errorf("Expected %d tags, got %d", len(tags), len(task.Tags))
+			} else {
+				for i, tag := range tags {
+					if task.Tags[i] != tag {
+						t.Errorf("Expected tag '%s' at index %d, got '%s'", tag, i, task.Tags[i])
+					}
+				}
+			}
+		})
+
+		t.Run("fails with invalid due date format", func(t *testing.T) {
+			ctx := context.Background()
+			args := []string{"Task", "with", "invalid", "date"}
+			invalidDue := "invalid-date"
+
+			err := handler.Create(ctx, args, "", "", invalidDue, []string{})
+			if err == nil {
+				t.Error("Expected error for invalid due date format")
+			}
+
+			if !strings.Contains(err.Error(), "invalid due date format") {
+				t.Errorf("Expected error about invalid date format, got: %v", err)
 			}
 		})
 	})
@@ -182,35 +258,35 @@ func TestTaskHandler(t *testing.T) {
 		}
 
 		t.Run("lists pending tasks by default (static mode)", func(t *testing.T) {
-			err := ListTasks(ctx, true, false, "", "", "")
+			err := handler.List(ctx, true, false, "", "", "")
 			if err != nil {
 				t.Errorf("ListTasks failed: %v", err)
 			}
 		})
 
 		t.Run("filters by status (static mode)", func(t *testing.T) {
-			err := ListTasks(ctx, true, false, "completed", "", "")
+			err := handler.List(ctx, true, false, "completed", "", "")
 			if err != nil {
 				t.Errorf("ListTasks with status filter failed: %v", err)
 			}
 		})
 
 		t.Run("filters by priority (static mode)", func(t *testing.T) {
-			err := ListTasks(ctx, true, false, "", "A", "")
+			err := handler.List(ctx, true, false, "", "A", "")
 			if err != nil {
 				t.Errorf("ListTasks with priority filter failed: %v", err)
 			}
 		})
 
 		t.Run("filters by project (static mode)", func(t *testing.T) {
-			err := ListTasks(ctx, true, false, "", "", "work")
+			err := handler.List(ctx, true, false, "", "", "work")
 			if err != nil {
 				t.Errorf("ListTasks with project filter failed: %v", err)
 			}
 		})
 
 		t.Run("show all tasks (static mode)", func(t *testing.T) {
-			err := ListTasks(ctx, true, true, "", "", "")
+			err := handler.List(ctx, true, true, "", "", "")
 			if err != nil {
 				t.Errorf("ListTasks with show all failed: %v", err)
 			}
@@ -223,7 +299,6 @@ func TestTaskHandler(t *testing.T) {
 
 		ctx := context.Background()
 
-		// Create test task
 		handler, err := NewTaskHandler()
 		if err != nil {
 			t.Fatalf("Failed to create handler: %v", err)
@@ -243,7 +318,7 @@ func TestTaskHandler(t *testing.T) {
 		t.Run("updates task by ID", func(t *testing.T) {
 			args := []string{strconv.FormatInt(id, 10), "--description", "Updated description"}
 
-			err := UpdateTask(ctx, args)
+			err := handler.Update(ctx, args)
 			if err != nil {
 				t.Errorf("UpdateTask failed: %v", err)
 			}
@@ -261,7 +336,7 @@ func TestTaskHandler(t *testing.T) {
 		t.Run("updates task by UUID", func(t *testing.T) {
 			args := []string{task.UUID, "--status", "completed"}
 
-			err := UpdateTask(ctx, args)
+			err := handler.Update(ctx, args)
 			if err != nil {
 				t.Errorf("UpdateTask by UUID failed: %v", err)
 			}
@@ -285,7 +360,7 @@ func TestTaskHandler(t *testing.T) {
 				"--due", "2024-12-31",
 			}
 
-			err := UpdateTask(ctx, args)
+			err := handler.Update(ctx, args)
 			if err != nil {
 				t.Errorf("UpdateTask with multiple fields failed: %v", err)
 			}
@@ -317,7 +392,7 @@ func TestTaskHandler(t *testing.T) {
 				"--add-tag=urgent",
 			}
 
-			err := UpdateTask(ctx, args)
+			err := handler.Update(ctx, args)
 			if err != nil {
 				t.Errorf("UpdateTask with add tags failed: %v", err)
 			}
@@ -336,7 +411,7 @@ func TestTaskHandler(t *testing.T) {
 				"--remove-tag=urgent",
 			}
 
-			err = UpdateTask(ctx, args)
+			err = handler.Update(ctx, args)
 			if err != nil {
 				t.Errorf("UpdateTask with remove tag failed: %v", err)
 			}
@@ -358,7 +433,7 @@ func TestTaskHandler(t *testing.T) {
 		t.Run("fails with missing task ID", func(t *testing.T) {
 			args := []string{}
 
-			err := UpdateTask(ctx, args)
+			err := handler.Update(ctx, args)
 			if err == nil {
 				t.Error("Expected error for missing task ID")
 			}
@@ -371,7 +446,7 @@ func TestTaskHandler(t *testing.T) {
 		t.Run("fails with invalid task ID", func(t *testing.T) {
 			args := []string{"99999", "--description", "test"}
 
-			err := UpdateTask(ctx, args)
+			err := handler.Update(ctx, args)
 			if err == nil {
 				t.Error("Expected error for invalid task ID")
 			}
@@ -407,7 +482,7 @@ func TestTaskHandler(t *testing.T) {
 		t.Run("deletes task by ID", func(t *testing.T) {
 			args := []string{strconv.FormatInt(id, 10)}
 
-			err := DeleteTask(ctx, args)
+			err := handler.Delete(ctx, args)
 			if err != nil {
 				t.Errorf("DeleteTask failed: %v", err)
 			}
@@ -431,7 +506,7 @@ func TestTaskHandler(t *testing.T) {
 
 			args := []string{task2.UUID}
 
-			err = DeleteTask(ctx, args)
+			err = handler.Delete(ctx, args)
 			if err != nil {
 				t.Errorf("DeleteTask by UUID failed: %v", err)
 			}
@@ -445,7 +520,7 @@ func TestTaskHandler(t *testing.T) {
 		t.Run("fails with missing task ID", func(t *testing.T) {
 			args := []string{}
 
-			err := DeleteTask(ctx, args)
+			err := handler.Delete(ctx, args)
 			if err == nil {
 				t.Error("Expected error for missing task ID")
 			}
@@ -458,7 +533,7 @@ func TestTaskHandler(t *testing.T) {
 		t.Run("fails with invalid task ID", func(t *testing.T) {
 			args := []string{"99999"}
 
-			err := DeleteTask(ctx, args)
+			err := handler.Delete(ctx, args)
 			if err == nil {
 				t.Error("Expected error for invalid task ID")
 			}
@@ -500,7 +575,7 @@ func TestTaskHandler(t *testing.T) {
 		t.Run("views task by ID", func(t *testing.T) {
 			args := []string{strconv.FormatInt(id, 10)}
 
-			err := ViewTask(ctx, args)
+			err := handler.View(ctx, args, "detailed", false, false)
 			if err != nil {
 				t.Errorf("ViewTask failed: %v", err)
 			}
@@ -509,7 +584,7 @@ func TestTaskHandler(t *testing.T) {
 		t.Run("views task by UUID", func(t *testing.T) {
 			args := []string{task.UUID}
 
-			err := ViewTask(ctx, args)
+			err := handler.View(ctx, args, "detailed", false, false)
 			if err != nil {
 				t.Errorf("ViewTask by UUID failed: %v", err)
 			}
@@ -518,7 +593,7 @@ func TestTaskHandler(t *testing.T) {
 		t.Run("fails with missing task ID", func(t *testing.T) {
 			args := []string{}
 
-			err := ViewTask(ctx, args)
+			err := handler.View(ctx, args, "detailed", false, false)
 			if err == nil {
 				t.Error("Expected error for missing task ID")
 			}
@@ -531,13 +606,37 @@ func TestTaskHandler(t *testing.T) {
 		t.Run("fails with invalid task ID", func(t *testing.T) {
 			args := []string{"99999"}
 
-			err := ViewTask(ctx, args)
+			err := handler.View(ctx, args, "detailed", false, false)
 			if err == nil {
 				t.Error("Expected error for invalid task ID")
 			}
 
 			if !strings.Contains(err.Error(), "failed to find task") {
 				t.Errorf("Expected error about task not found, got: %v", err)
+			}
+		})
+
+		t.Run("uses brief format", func(t *testing.T) {
+			args := []string{strconv.FormatInt(id, 10)}
+			err := handler.View(ctx, args, "brief", false, false)
+			if err != nil {
+				t.Errorf("ViewTask with brief format failed: %v", err)
+			}
+		})
+
+		t.Run("hides metadata", func(t *testing.T) {
+			args := []string{strconv.FormatInt(id, 10)}
+			err := handler.View(ctx, args, "detailed", false, true)
+			if err != nil {
+				t.Errorf("ViewTask with no-metadata failed: %v", err)
+			}
+		})
+
+		t.Run("outputs JSON", func(t *testing.T) {
+			args := []string{strconv.FormatInt(id, 10)}
+			err := handler.View(ctx, args, "detailed", true, false)
+			if err != nil {
+				t.Errorf("ViewTask with JSON output failed: %v", err)
 			}
 		})
 	})
@@ -567,7 +666,7 @@ func TestTaskHandler(t *testing.T) {
 		t.Run("marks task as done by ID", func(t *testing.T) {
 			args := []string{strconv.FormatInt(id, 10)}
 
-			err := DoneTask(ctx, args)
+			err := handler.Done(ctx, args)
 			if err != nil {
 				t.Errorf("DoneTask failed: %v", err)
 			}
@@ -599,7 +698,7 @@ func TestTaskHandler(t *testing.T) {
 
 			args := []string{strconv.FormatInt(id2, 10)}
 
-			err = DoneTask(ctx, args)
+			err = handler.Done(ctx, args)
 			if err != nil {
 				t.Errorf("DoneTask on completed task failed: %v", err)
 			}
@@ -618,7 +717,7 @@ func TestTaskHandler(t *testing.T) {
 
 			args := []string{task3.UUID}
 
-			err = DoneTask(ctx, args)
+			err = handler.Done(ctx, args)
 			if err != nil {
 				t.Errorf("DoneTask by UUID failed: %v", err)
 			}
@@ -640,7 +739,7 @@ func TestTaskHandler(t *testing.T) {
 		t.Run("fails with missing task ID", func(t *testing.T) {
 			args := []string{}
 
-			err := DoneTask(ctx, args)
+			err := handler.Done(ctx, args)
 			if err == nil {
 				t.Error("Expected error for missing task ID")
 			}
@@ -653,7 +752,7 @@ func TestTaskHandler(t *testing.T) {
 		t.Run("fails with invalid task ID", func(t *testing.T) {
 			args := []string{"99999"}
 
-			err := DoneTask(ctx, args)
+			err := handler.Done(ctx, args)
 			if err == nil {
 				t.Error("Expected error for invalid task ID")
 			}
@@ -726,7 +825,7 @@ func TestTaskHandler(t *testing.T) {
 				}
 			}()
 
-			handler.printTaskDetail(task)
+			handler.printTaskDetail(task, false)
 		})
 	})
 
@@ -757,7 +856,7 @@ func TestTaskHandler(t *testing.T) {
 		}
 
 		t.Run("lists projects successfully", func(t *testing.T) {
-			err := ListProjects(ctx, true)
+			err := handler.ListProjects(ctx, true)
 			if err != nil {
 				t.Errorf("ListProjects failed: %v", err)
 			}
@@ -767,7 +866,7 @@ func TestTaskHandler(t *testing.T) {
 			_, cleanup2 := setupTaskTest(t)
 			defer cleanup2()
 
-			err := ListProjects(ctx, true)
+			err := handler.ListProjects(ctx, true)
 			if err != nil {
 				t.Errorf("ListProjects with no projects failed: %v", err)
 			}
@@ -801,7 +900,7 @@ func TestTaskHandler(t *testing.T) {
 		}
 
 		t.Run("lists tags successfully", func(t *testing.T) {
-			err := ListTags(ctx, true)
+			err := handler.ListTags(ctx, true)
 			if err != nil {
 				t.Errorf("ListTags failed: %v", err)
 			}
@@ -811,7 +910,7 @@ func TestTaskHandler(t *testing.T) {
 			_, cleanup2 := setupTaskTest(t)
 			defer cleanup2()
 
-			err := ListTags(ctx, true)
+			err := handler.ListTags(ctx, true)
 			if err != nil {
 				t.Errorf("ListTags with no tags failed: %v", err)
 			}
