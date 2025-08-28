@@ -7,11 +7,72 @@ import (
 	"os"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/help"
+	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/stormlightlabs/noteleaf/internal/models"
 	"github.com/stormlightlabs/noteleaf/internal/repo"
+	"github.com/stormlightlabs/noteleaf/internal/utils"
 )
+
+var (
+	TitleColorStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color(Guac.Hex())).Bold(true)
+	SelectedColorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(Salt.Hex())).Bold(true)
+	HeaderColorStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color(Malibu.Hex())).Bold(true)
+	StatusColorStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color(Julep.Hex()))
+)
+
+// Key bindings for task list navigation
+type keyMap struct {
+	Up        key.Binding
+	Down      key.Binding
+	Enter     key.Binding
+	View      key.Binding
+	Refresh   key.Binding
+	ToggleAll key.Binding
+	MarkDone  key.Binding
+	Quit      key.Binding
+	Back      key.Binding
+	Help      key.Binding
+	Numbers   []key.Binding
+}
+
+func (k keyMap) ShortHelp() []key.Binding {
+	return []key.Binding{k.Up, k.Down, k.Enter, k.MarkDone, k.Help, k.Quit}
+}
+
+func (k keyMap) FullHelp() [][]key.Binding {
+	return [][]key.Binding{
+		{k.Up, k.Down, k.Enter, k.View},
+		{k.MarkDone, k.Refresh, k.ToggleAll},
+		{k.Help, k.Quit, k.Back},
+	}
+}
+
+var keys = keyMap{
+	Up:        key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("↑/k", "move up")),
+	Down:      key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("↓/j", "move down")),
+	Enter:     key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "view task")),
+	View:      key.NewBinding(key.WithKeys("v"), key.WithHelp("v", "view task")),
+	Refresh:   key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "refresh")),
+	ToggleAll: key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "toggle all/pending")),
+	MarkDone:  key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "mark done")),
+	Quit:      key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
+	Back:      key.NewBinding(key.WithKeys("esc", "backspace"), key.WithHelp("esc", "back")),
+	Help:      key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
+	Numbers: []key.Binding{
+		key.NewBinding(key.WithKeys("1"), key.WithHelp("1", "jump to task 1")),
+		key.NewBinding(key.WithKeys("2"), key.WithHelp("2", "jump to task 2")),
+		key.NewBinding(key.WithKeys("3"), key.WithHelp("3", "jump to task 3")),
+		key.NewBinding(key.WithKeys("4"), key.WithHelp("4", "jump to task 4")),
+		key.NewBinding(key.WithKeys("5"), key.WithHelp("5", "jump to task 5")),
+		key.NewBinding(key.WithKeys("6"), key.WithHelp("6", "jump to task 6")),
+		key.NewBinding(key.WithKeys("7"), key.WithHelp("7", "jump to task 7")),
+		key.NewBinding(key.WithKeys("8"), key.WithHelp("8", "jump to task 8")),
+		key.NewBinding(key.WithKeys("9"), key.WithHelp("9", "jump to task 9")),
+	},
+}
 
 // TaskRepository interface for dependency injection in tests
 type TaskRepository interface {
@@ -50,6 +111,12 @@ func NewTaskList(repo TaskRepository, opts TaskListOptions) *TaskList {
 	return &TaskList{repo: repo, opts: opts}
 }
 
+type (
+	tasksLoadedMsg []*models.Task
+	taskViewMsg    string
+	errorTaskMsg   error
+)
+
 type taskListModel struct {
 	tasks       []*models.Task
 	selected    int
@@ -59,12 +126,10 @@ type taskListModel struct {
 	repo        TaskRepository
 	opts        TaskListOptions
 	showAll     bool
-	// filter      string
+	keys        keyMap
+	help        help.Model
+	showingHelp bool
 }
-
-type tasksLoadedMsg []*models.Task
-type taskViewMsg string
-type errorTaskMsg error
 
 func (m taskListModel) Init() tea.Cmd {
 	return m.loadTasks()
@@ -73,43 +138,61 @@ func (m taskListModel) Init() tea.Cmd {
 func (m taskListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		if m.viewing {
-			switch msg.String() {
-			case "q", "esc", "backspace":
-				m.viewing = false
-				m.viewContent = ""
+		if m.showingHelp {
+			switch {
+			case key.Matches(msg, m.keys.Back) || key.Matches(msg, m.keys.Quit) || key.Matches(msg, m.keys.Help):
+				m.showingHelp = false
 				return m, nil
 			}
 			return m, nil
 		}
 
-		switch msg.String() {
-		case "ctrl+c", "q":
+		if m.viewing {
+			switch {
+			case key.Matches(msg, m.keys.Back) || key.Matches(msg, m.keys.Quit):
+				m.viewing = false
+				m.viewContent = ""
+				return m, nil
+			case key.Matches(msg, m.keys.Help):
+				m.showingHelp = true
+				return m, nil
+			}
+			return m, nil
+		}
+
+		switch {
+		case key.Matches(msg, m.keys.Quit):
 			return m, tea.Quit
-		case "up", "k":
+		case key.Matches(msg, m.keys.Up):
 			if m.selected > 0 {
 				m.selected--
 			}
-		case "down", "j":
+		case key.Matches(msg, m.keys.Down):
 			if m.selected < len(m.tasks)-1 {
 				m.selected++
 			}
-		case "enter", "v":
+		case key.Matches(msg, m.keys.Enter) || key.Matches(msg, m.keys.View):
 			if len(m.tasks) > 0 && m.selected < len(m.tasks) {
 				return m, m.viewTask(m.tasks[m.selected])
 			}
-		case "r":
+		case key.Matches(msg, m.keys.Refresh):
 			return m, m.loadTasks()
-		case "a":
+		case key.Matches(msg, m.keys.ToggleAll):
 			m.showAll = !m.showAll
 			return m, m.loadTasks()
-		case "d":
+		case key.Matches(msg, m.keys.MarkDone):
 			if len(m.tasks) > 0 && m.selected < len(m.tasks) {
 				return m, m.markDone(m.tasks[m.selected])
 			}
-		case "1", "2", "3", "4", "5", "6", "7", "8", "9":
-			if idx := int(msg.String()[0] - '1'); idx < len(m.tasks) {
-				m.selected = idx
+		case key.Matches(msg, m.keys.Help):
+			m.showingHelp = true
+			return m, nil
+		default:
+			for i, numKey := range m.keys.Numbers {
+				if key.Matches(msg, numKey) && i < len(m.tasks) {
+					m.selected = i
+					break
+				}
 			}
 		}
 	case tasksLoadedMsg:
@@ -129,23 +212,20 @@ func (m taskListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m taskListModel) View() string {
 	var s strings.Builder
 
-	style := lipgloss.NewStyle().Foreground(lipgloss.Color("86"))
-	titleStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("205")).Bold(true)
-	selectedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("212")).Bold(true)
-	headerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("39")).Bold(true)
-	priorityHighStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Bold(true)
-	priorityMediumStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("208"))
-	priorityLowStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
-	statusStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("28"))
+	style := lipgloss.NewStyle().Foreground(lipgloss.Color(Squid.Hex()))
+
+	if m.showingHelp {
+		return m.help.View(m.keys)
+	}
 
 	if m.viewing {
 		s.WriteString(m.viewContent)
 		s.WriteString("\n\n")
-		s.WriteString(style.Render("Press q/esc/backspace to return to list"))
+		s.WriteString(style.Render("Press q/esc/backspace to return to list, ? for help"))
 		return s.String()
 	}
 
-	s.WriteString(titleStyle.Render("Tasks"))
+	s.WriteString(TitleColorStyle.Render("Tasks"))
 	if m.showAll {
 		s.WriteString(" (showing all)")
 	} else {
@@ -165,10 +245,10 @@ func (m taskListModel) View() string {
 		return s.String()
 	}
 
-	headerLine := fmt.Sprintf("%-3s %-4s %-40s %-10s %-10s %-15s", "", "ID", "Description", "Status", "Priority", "Project")
-	s.WriteString(headerStyle.Render(headerLine))
+	headerLine := fmt.Sprintf("   %-4s %-40s %-10s %-10s %-15s", "ID", "Description", "Status", "Priority", "Project")
+	s.WriteString(HeaderColorStyle.Render(headerLine))
 	s.WriteString("\n")
-	s.WriteString(headerStyle.Render(strings.Repeat("─", 80)))
+	s.WriteString(HeaderColorStyle.Render(strings.Repeat("─", 80)))
 	s.WriteString("\n")
 
 	for i, task := range m.tasks {
@@ -203,30 +283,32 @@ func (m taskListModel) View() string {
 			project = project[:10] + "..."
 		}
 
-		line := fmt.Sprintf("%s%-4d %-40s %-10s %-10s %-15s",
-			prefix, task.ID, description, status, priority, project)
+		priority = utils.Titlecase(priority)
+		padded := fmt.Sprintf("%-10s", priority)
+		var colored string
+		switch strings.ToLower(task.Priority) {
+		case "high", "urgent":
+			colored = PriorityHigh.Render(padded)
+		case "medium":
+			colored = PriorityMedium.Render(padded)
+		case "low":
+			colored = PriorityLow.Render(padded)
+		default:
+			colored = padded
+		}
+
+		line := fmt.Sprintf("%s%-4d %-40s %-10s %s %-15s", prefix, task.ID, description, status, colored, project)
 
 		if i == m.selected {
-			s.WriteString(selectedStyle.Render(line))
+			s.WriteString(SelectedColorStyle.Render(line))
 		} else {
-			// Color based on priority
-			switch strings.ToLower(task.Priority) {
-			case "high", "urgent":
-				s.WriteString(priorityHighStyle.Render(line))
-			case "medium":
-				s.WriteString(priorityMediumStyle.Render(line))
-			case "low":
-				s.WriteString(priorityLowStyle.Render(line))
-			default:
-				if task.Status == "completed" {
-					s.WriteString(statusStyle.Render(line))
-				} else {
-					s.WriteString(style.Render(line))
-				}
+			if task.Status == "completed" {
+				s.WriteString(StatusColorStyle.Render(line))
+			} else {
+				s.WriteString(style.Render(line))
 			}
 		}
 
-		// Add tags if any
 		if len(task.Tags) > 0 && i == m.selected {
 			s.WriteString(" @" + strings.Join(task.Tags, " @"))
 		}
@@ -235,9 +317,7 @@ func (m taskListModel) View() string {
 	}
 
 	s.WriteString("\n")
-	s.WriteString(style.Render("Controls: ↑/↓/k/j to navigate, Enter/v to view, d to mark done, a to toggle all/pending"))
-	s.WriteString("\n")
-	s.WriteString(style.Render("r to refresh, q to quit, 1-9 to jump to task"))
+	s.WriteString(m.help.View(m.keys))
 
 	return s.String()
 }
@@ -245,15 +325,12 @@ func (m taskListModel) View() string {
 func (m taskListModel) loadTasks() tea.Cmd {
 	return func() tea.Msg {
 		opts := repo.TaskListOptions{}
+		showAll := m.showAll || m.opts.ShowAll
 
-		// Set status filter
-		if m.showAll || m.opts.ShowAll {
-			// Show all tasks - no status filter
-		} else {
+		if !showAll {
 			opts.Status = "pending"
 		}
 
-		// Apply other filters from options
 		if m.opts.Status != "" {
 			opts.Status = m.opts.Status
 		}
@@ -280,7 +357,6 @@ func (m taskListModel) loadTasks() tea.Cmd {
 func (m taskListModel) viewTask(task *models.Task) tea.Cmd {
 	return func() tea.Msg {
 		var content strings.Builder
-
 		content.WriteString(fmt.Sprintf("# Task %d\n\n", task.ID))
 		content.WriteString(fmt.Sprintf("**UUID:** %s\n", task.UUID))
 		content.WriteString(fmt.Sprintf("**Description:** %s\n", task.Description))
@@ -336,7 +412,6 @@ func (m taskListModel) markDone(task *models.Task) tea.Cmd {
 			return errorTaskMsg(fmt.Errorf("failed to mark task done: %w", err))
 		}
 
-		// Reload tasks after marking done
 		return m.loadTasks()()
 	}
 }
@@ -351,6 +426,8 @@ func (tl *TaskList) Browse(ctx context.Context) error {
 		repo:    tl.repo,
 		opts:    tl.opts,
 		showAll: tl.opts.ShowAll,
+		keys:    keys,
+		help:    help.New(),
 	}
 
 	program := tea.NewProgram(model, tea.WithInput(tl.opts.Input), tea.WithOutput(tl.opts.Output))
@@ -362,9 +439,7 @@ func (tl *TaskList) Browse(ctx context.Context) error {
 func (tl *TaskList) staticList(ctx context.Context) error {
 	opts := repo.TaskListOptions{}
 
-	if tl.opts.ShowAll {
-		// Show all tasks - no status filter
-	} else {
+	if !tl.opts.ShowAll {
 		opts.Status = "pending"
 	}
 

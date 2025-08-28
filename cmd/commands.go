@@ -69,7 +69,7 @@ Use --all to show all tasks, otherwise only pending tasks are shown.`,
 			status, _ := cmd.Flags().GetString("status")
 			priority, _ := cmd.Flags().GetString("priority")
 			project, _ := cmd.Flags().GetString("project")
-			
+
 			return handlers.ListTasks(cmd.Context(), static, showAll, status, priority, project)
 		},
 	}
@@ -113,8 +113,7 @@ Use --all to show all tasks, otherwise only pending tasks are shown.`,
 		Short:   "List projects",
 		Aliases: []string{"proj"},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Println("Listing projects...")
-			return nil
+			return handlers.ListProjects(cmd.Context(), args)
 		},
 	})
 
@@ -123,8 +122,7 @@ Use --all to show all tasks, otherwise only pending tasks are shown.`,
 		Short:   "List tags",
 		Aliases: []string{"t"},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Println("Listing tags...")
-			return nil
+			return handlers.ListTags(cmd.Context(), args)
 		},
 	})
 

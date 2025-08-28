@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/log"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 // Logger is the global application logger
@@ -44,4 +46,8 @@ func GetLogger() *log.Logger {
 		Logger = NewLogger("info", "text")
 	}
 	return Logger
+}
+
+func Titlecase(s string) string {
+	return cases.Title(language.Und, cases.NoLower).String(s)
 }

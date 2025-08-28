@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/bubbles/help"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/stormlightlabs/noteleaf/internal/models"
 	"github.com/stormlightlabs/noteleaf/internal/repo"
@@ -348,6 +349,8 @@ func TestTaskListModel(t *testing.T) {
 
 	t.Run("load tasks command", func(t *testing.T) {
 		model := taskListModel{
+			keys: keys,
+			help: help.New(),
 			repo: repo,
 			opts: TaskListOptions{ShowAll: false},
 		}
@@ -373,6 +376,7 @@ func TestTaskListModel(t *testing.T) {
 
 	t.Run("load all tasks", func(t *testing.T) {
 		model := taskListModel{
+			keys:    keys,
 			repo:    repo,
 			opts:    TaskListOptions{ShowAll: true},
 			showAll: true,
@@ -394,6 +398,8 @@ func TestTaskListModel(t *testing.T) {
 
 	t.Run("view task command", func(t *testing.T) {
 		model := taskListModel{
+			keys: keys,
+			help: help.New(),
 			repo: repo,
 			opts: TaskListOptions{},
 		}
@@ -427,6 +433,8 @@ func TestTaskListModel(t *testing.T) {
 
 	t.Run("mark done command", func(t *testing.T) {
 		model := taskListModel{
+			keys: keys,
+			help: help.New(),
 			repo: repo,
 			opts: TaskListOptions{},
 		}
@@ -438,12 +446,10 @@ func TestTaskListModel(t *testing.T) {
 		}
 
 		msg := cmd()
-		// Should return a loadTasks command after marking done
 		switch msg := msg.(type) {
 		case tasksLoadedMsg:
 			// Success - tasks reloaded
 		case errorTaskMsg:
-			// Check if it's the expected error for already completed task
 			err := error(msg)
 			if !strings.Contains(err.Error(), "completed") {
 				t.Fatalf("Unexpected error: %v", err)
@@ -455,11 +461,13 @@ func TestTaskListModel(t *testing.T) {
 
 	t.Run("mark done already completed task", func(t *testing.T) {
 		model := taskListModel{
+			keys: keys,
+			help: help.New(),
 			repo: repo,
 			opts: TaskListOptions{},
 		}
 
-		task := createMockTasks()[2] // Already completed task
+		task := createMockTasks()[2]
 		cmd := model.markDone(task)
 		msg := cmd()
 
@@ -480,6 +488,7 @@ func TestTaskListModelKeyHandling(t *testing.T) {
 
 	t.Run("quit commands", func(t *testing.T) {
 		model := taskListModel{
+			keys:  keys,
 			repo:  repo,
 			tasks: createMockTasks()[:2], // First 2 tasks
 			opts:  TaskListOptions{},
@@ -497,13 +506,13 @@ func TestTaskListModelKeyHandling(t *testing.T) {
 
 	t.Run("navigation keys", func(t *testing.T) {
 		model := taskListModel{
+			keys:     keys,
 			repo:     repo,
 			tasks:    createMockTasks()[:3], // First 3 tasks
 			selected: 1,                     // Start in middle
 			opts:     TaskListOptions{},
 		}
 
-		// Test up navigation
 		upKeys := []string{"up", "k"}
 		for _, key := range upKeys {
 			testModel := model
@@ -515,7 +524,6 @@ func TestTaskListModelKeyHandling(t *testing.T) {
 			}
 		}
 
-		// Test down navigation
 		downKeys := []string{"down", "j"}
 		for _, key := range downKeys {
 			testModel := model
@@ -530,6 +538,7 @@ func TestTaskListModelKeyHandling(t *testing.T) {
 
 	t.Run("view task keys", func(t *testing.T) {
 		model := taskListModel{
+			keys:     keys,
 			repo:     repo,
 			tasks:    createMockTasks()[:2],
 			selected: 0,
@@ -548,6 +557,7 @@ func TestTaskListModelKeyHandling(t *testing.T) {
 
 	t.Run("number shortcuts", func(t *testing.T) {
 		model := taskListModel{
+			keys:  keys,
 			repo:  repo,
 			tasks: createMockTasks()[:4],
 			opts:  TaskListOptions{},
@@ -568,6 +578,7 @@ func TestTaskListModelKeyHandling(t *testing.T) {
 
 	t.Run("toggle all/pending", func(t *testing.T) {
 		model := taskListModel{
+			keys:    keys,
 			repo:    repo,
 			tasks:   createMockTasks()[:2],
 			showAll: false,
@@ -587,6 +598,7 @@ func TestTaskListModelKeyHandling(t *testing.T) {
 
 	t.Run("mark done key", func(t *testing.T) {
 		model := taskListModel{
+			keys:     keys,
 			repo:     repo,
 			tasks:    createMockTasks()[:2],
 			selected: 0,
@@ -601,6 +613,7 @@ func TestTaskListModelKeyHandling(t *testing.T) {
 
 	t.Run("refresh key", func(t *testing.T) {
 		model := taskListModel{
+			keys:  keys,
 			repo:  repo,
 			tasks: createMockTasks()[:2],
 			opts:  TaskListOptions{},
@@ -614,6 +627,7 @@ func TestTaskListModelKeyHandling(t *testing.T) {
 
 	t.Run("viewing mode navigation", func(t *testing.T) {
 		model := taskListModel{
+			keys:        keys,
 			repo:        repo,
 			tasks:       createMockTasks()[:2],
 			viewing:     true,
@@ -642,6 +656,7 @@ func TestTaskListModelView(t *testing.T) {
 
 	t.Run("viewing mode", func(t *testing.T) {
 		model := taskListModel{
+			keys:        keys,
 			repo:        repo,
 			viewing:     true,
 			viewContent: "# Task Details\nTest content here",
@@ -659,6 +674,8 @@ func TestTaskListModelView(t *testing.T) {
 
 	t.Run("error state", func(t *testing.T) {
 		model := taskListModel{
+			keys: keys,
+			help: help.New(),
 			repo: repo,
 			err:  errors.New("test error"),
 			opts: TaskListOptions{},
@@ -672,6 +689,7 @@ func TestTaskListModelView(t *testing.T) {
 
 	t.Run("no tasks", func(t *testing.T) {
 		model := taskListModel{
+			keys:  keys,
 			repo:  repo,
 			tasks: []*models.Task{},
 			opts:  TaskListOptions{},
@@ -689,6 +707,7 @@ func TestTaskListModelView(t *testing.T) {
 	t.Run("with tasks", func(t *testing.T) {
 		tasks := createMockTasks()[:2] // First 2 tasks
 		model := taskListModel{
+			keys:     keys,
 			repo:     repo,
 			tasks:    tasks,
 			selected: 0,
@@ -706,13 +725,14 @@ func TestTaskListModelView(t *testing.T) {
 		if !strings.Contains(view, "Plan vacation itinerary") {
 			t.Error("Second task not displayed")
 		}
-		if !strings.Contains(view, "Controls:") {
-			t.Error("Control instructions not displayed")
+		if !strings.Contains(view, "help") {
+			t.Error("Help instructions not displayed")
 		}
 	})
 
 	t.Run("show all mode", func(t *testing.T) {
 		model := taskListModel{
+			keys:    keys,
 			repo:    repo,
 			tasks:   createMockTasks(),
 			showAll: true,
@@ -728,6 +748,8 @@ func TestTaskListModelView(t *testing.T) {
 	t.Run("selected task highlighting", func(t *testing.T) {
 		tasks := createMockTasks()[:2]
 		model := taskListModel{
+
+			keys:     keys,
 			repo:     repo,
 			tasks:    tasks,
 			selected: 0,
@@ -735,7 +757,6 @@ func TestTaskListModelView(t *testing.T) {
 		}
 
 		view := model.View()
-		// The selected task should have a ">" prefix
 		if !strings.Contains(view, " > 1   ") {
 			t.Error("Selected task not highlighted with '>' prefix")
 		}
@@ -747,6 +768,8 @@ func TestTaskListModelUpdate(t *testing.T) {
 
 	t.Run("tasks loaded message", func(t *testing.T) {
 		model := taskListModel{
+			keys: keys,
+			help: help.New(),
 			repo: repo,
 			opts: TaskListOptions{},
 		}
@@ -766,6 +789,8 @@ func TestTaskListModelUpdate(t *testing.T) {
 
 	t.Run("task view message", func(t *testing.T) {
 		model := taskListModel{
+			keys: keys,
+			help: help.New(),
 			repo: repo,
 			opts: TaskListOptions{},
 		}
@@ -785,6 +810,8 @@ func TestTaskListModelUpdate(t *testing.T) {
 
 	t.Run("error message", func(t *testing.T) {
 		model := taskListModel{
+			keys: keys,
+			help: help.New(),
 			repo: repo,
 			opts: TaskListOptions{},
 		}
@@ -804,13 +831,13 @@ func TestTaskListModelUpdate(t *testing.T) {
 
 	t.Run("selected index bounds", func(t *testing.T) {
 		model := taskListModel{
+			keys:     keys,
 			repo:     repo,
 			tasks:    createMockTasks()[:2],
-			selected: 5, // Out of bounds
+			selected: 5,
 			opts:     TaskListOptions{},
 		}
 
-		// Load fewer tasks
 		newTasks := createMockTasks()[:1]
 		newModel, _ := model.Update(tasksLoadedMsg(newTasks))
 
@@ -818,7 +845,7 @@ func TestTaskListModelUpdate(t *testing.T) {
 			if m.selected >= len(m.tasks) {
 				t.Error("Selected index should be adjusted to bounds")
 			}
-			if m.selected != 0 { // Should be adjusted to last valid index
+			if m.selected != 0 {
 				t.Errorf("Expected selected to be 0, got %d", m.selected)
 			}
 		}
@@ -832,6 +859,8 @@ func TestTaskListRepositoryError(t *testing.T) {
 		}
 
 		model := taskListModel{
+			keys: keys,
+			help: help.New(),
 			repo: repo,
 			opts: TaskListOptions{},
 		}
@@ -857,6 +886,8 @@ func TestTaskListRepositoryError(t *testing.T) {
 		}
 
 		model := taskListModel{
+			keys: keys,
+			help: help.New(),
 			repo: repo,
 			opts: TaskListOptions{},
 		}

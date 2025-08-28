@@ -665,7 +665,6 @@ func TestTaskHandler(t *testing.T) {
 	})
 
 	t.Run("Helper", func(t *testing.T) {
-
 		t.Run("removeString function", func(t *testing.T) {
 			slice := []string{"a", "b", "c", "b"}
 			result := removeString(slice, "b")
@@ -728,6 +727,120 @@ func TestTaskHandler(t *testing.T) {
 			}()
 
 			handler.printTaskDetail(task)
+		})
+	})
+
+	t.Run("ListProjects", func(t *testing.T) {
+		_, cleanup := setupTaskTest(t)
+		defer cleanup()
+
+		ctx := context.Background()
+
+		handler, err := NewTaskHandler()
+		if err != nil {
+			t.Fatalf("Failed to create handler: %v", err)
+		}
+		defer handler.Close()
+
+		tasks := []*models.Task{
+			{UUID: uuid.New().String(), Description: "Task 1", Status: "pending", Project: "web-app"},
+			{UUID: uuid.New().String(), Description: "Task 2", Status: "completed", Project: "web-app"},
+			{UUID: uuid.New().String(), Description: "Task 3", Status: "pending", Project: "mobile-app"},
+			{UUID: uuid.New().String(), Description: "Task 4", Status: "pending", Project: ""},
+		}
+
+		for _, task := range tasks {
+			_, err := handler.repos.Tasks.Create(ctx, task)
+			if err != nil {
+				t.Fatalf("Failed to create task: %v", err)
+			}
+		}
+
+		t.Run("lists projects successfully", func(t *testing.T) {
+			err := ListProjects(ctx, []string{})
+			if err != nil {
+				t.Errorf("ListProjects failed: %v", err)
+			}
+		})
+
+		t.Run("returns no projects when none exist", func(t *testing.T) {
+			_, cleanup2 := setupTaskTest(t)
+			defer cleanup2()
+
+			err := ListProjects(ctx, []string{})
+			if err != nil {
+				t.Errorf("ListProjects with no projects failed: %v", err)
+			}
+		})
+	})
+
+	t.Run("ListTags", func(t *testing.T) {
+		_, cleanup := setupTaskTest(t)
+		defer cleanup()
+
+		ctx := context.Background()
+
+		handler, err := NewTaskHandler()
+		if err != nil {
+			t.Fatalf("Failed to create handler: %v", err)
+		}
+		defer handler.Close()
+
+		tasks := []*models.Task{
+			{UUID: uuid.New().String(), Description: "Task 1", Status: "pending", Tags: []string{"frontend", "urgent"}},
+			{UUID: uuid.New().String(), Description: "Task 2", Status: "completed", Tags: []string{"backend", "database"}},
+			{UUID: uuid.New().String(), Description: "Task 3", Status: "pending", Tags: []string{"frontend", "ios"}},
+			{UUID: uuid.New().String(), Description: "Task 4", Status: "pending", Tags: []string{}},
+		}
+
+		for _, task := range tasks {
+			_, err := handler.repos.Tasks.Create(ctx, task)
+			if err != nil {
+				t.Fatalf("Failed to create task: %v", err)
+			}
+		}
+
+		t.Run("lists tags successfully", func(t *testing.T) {
+			err := ListTags(ctx, []string{})
+			if err != nil {
+				t.Errorf("ListTags failed: %v", err)
+			}
+		})
+
+		t.Run("returns no tags when none exist", func(t *testing.T) {
+			_, cleanup2 := setupTaskTest(t)
+			defer cleanup2()
+
+			err := ListTags(ctx, []string{})
+			if err != nil {
+				t.Errorf("ListTags with no tags failed: %v", err)
+			}
+		})
+	})
+
+	t.Run("Pluralize", func(t *testing.T) {
+		t.Run("returns empty string for singular", func(t *testing.T) {
+			result := pluralize(1)
+			if result != "" {
+				t.Errorf("Expected empty string for 1, got '%s'", result)
+			}
+		})
+
+		t.Run("returns 's' for plural", func(t *testing.T) {
+			result := pluralize(0)
+			if result != "s" {
+				t.Errorf("Expected 's' for 0, got '%s'", result)
+			}
+
+			result = pluralize(2)
+			if result != "s" {
+				t.Errorf("Expected 's' for 2, got '%s'", result)
+			}
+
+			result = pluralize(10)
+			if result != "s" {
+				t.Errorf("Expected 's' for 10, got '%s'", result)
+			}
 		})
 	})
 }

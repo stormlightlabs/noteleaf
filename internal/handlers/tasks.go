@@ -154,16 +154,13 @@ func (h *TaskHandler) updateTask(ctx context.Context, args []string) error {
 		return fmt.Errorf("task ID required")
 	}
 
-	// Parse task ID (could be numeric ID or UUID)
 	taskID := args[0]
 	var task *models.Task
 	var err error
 
-	if id, parseErr := strconv.ParseInt(taskID, 10, 64); parseErr == nil {
-		// Numeric ID
+	if id, err_ := strconv.ParseInt(taskID, 10, 64); err_ == nil {
 		task, err = h.repos.Tasks.Get(ctx, id)
 	} else {
-		// Assume UUID
 		task, err = h.repos.Tasks.GetByUUID(ctx, taskID)
 	}
 
@@ -171,7 +168,6 @@ func (h *TaskHandler) updateTask(ctx context.Context, args []string) error {
 		return fmt.Errorf("failed to find task: %w", err)
 	}
 
-	// Parse update arguments
 	for i := 1; i < len(args); i++ {
 		arg := args[i]
 		switch {
@@ -338,6 +334,38 @@ func (h *TaskHandler) doneTask(ctx context.Context, args []string) error {
 	return nil
 }
 
+// ListProjects lists all projects with their task counts
+func ListProjects(ctx context.Context, args []string) error {
+	handler, err := NewTaskHandler()
+	if err != nil {
+		return fmt.Errorf("failed to initialize task handler: %w", err)
+	}
+	defer handler.Close()
+
+	return handler.listProjects(ctx)
+}
+
+func (h *TaskHandler) listProjects(ctx context.Context) error {
+	projectList := ui.NewProjectList(h.repos.Tasks, ui.ProjectListOptions{})
+	return projectList.Browse(ctx)
+}
+
+// ListTags lists all tags with their task counts
+func ListTags(ctx context.Context, args []string) error {
+	handler, err := NewTaskHandler()
+	if err != nil {
+		return fmt.Errorf("failed to initialize task handler: %w", err)
+	}
+	defer handler.Close()
+
+	return handler.listTags(ctx)
+}
+
+func (h *TaskHandler) listTags(ctx context.Context) error {
+	tagList := ui.NewTagList(h.repos.Tasks, ui.TagListOptions{})
+	return tagList.Browse(ctx)
+}
+
 func (h *TaskHandler) printTask(task *models.Task) {
 	fmt.Printf("[%d] %s", task.ID, task.Description)
 
@@ -413,4 +441,11 @@ func removeString(slice []string, item string) []string {
 		}
 	}
 	return result
+}
+
+func pluralize(count int) string {
+	if count == 1 {
+		return ""
+	}
+	return "s"
 }

@@ -212,3 +212,76 @@ func TestLoggerIntegration(t *testing.T) {
 		}
 	})
 }
+
+func TestTitlecase(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "single word lowercase",
+			input:    "hello",
+			expected: "Hello",
+		},
+		{
+			name:     "single word uppercase",
+			input:    "HELLO",
+			expected: "HELLO",
+		},
+		{
+			name:     "multiple words",
+			input:    "hello world",
+			expected: "Hello World",
+		},
+		{
+			name:     "mixed case",
+			input:    "hELLo WoRLD",
+			expected: "HELLo WoRLD",
+		},
+		{
+			name:     "with punctuation",
+			input:    "hello, world!",
+			expected: "Hello, World!",
+		},
+		{
+			name:     "empty string",
+			input:    "",
+			expected: "",
+		},
+		{
+			name:     "with numbers",
+			input:    "hello 123 world",
+			expected: "Hello 123 World",
+		},
+		{
+			name:     "with special characters",
+			input:    "hello-world_test",
+			expected: "Hello-World_test",
+		},
+		{
+			name:     "already title case",
+			input:    "Hello World",
+			expected: "Hello World",
+		},
+		{
+			name:     "single character",
+			input:    "a",
+			expected: "A",
+		},
+		{
+			name:     "apostrophes",
+			input:    "it's a beautiful day",
+			expected: "It's A Beautiful Day",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := Titlecase(tt.input)
+			if result != tt.expected {
+				t.Errorf("Titlecase(%q) = %q, expected %q", tt.input, result, tt.expected)
+			}
+		})
+	}
+}

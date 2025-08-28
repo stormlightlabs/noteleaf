@@ -10,6 +10,32 @@ import (
 	"github.com/stormlightlabs/noteleaf/internal/models"
 )
 
+// TaskListOptions defines options for listing tasks
+type TaskListOptions struct {
+	Status    string
+	Priority  string
+	Project   string
+	DueAfter  time.Time
+	DueBefore time.Time
+	Search    string
+	SortBy    string
+	SortOrder string
+	Limit     int
+	Offset    int
+}
+
+// ProjectSummary represents a project with its task count
+type ProjectSummary struct {
+	Name      string `json:"name"`
+	TaskCount int    `json:"task_count"`
+}
+
+// TagSummary represents a tag with its task count
+type TagSummary struct {
+	Name      string `json:"name"`
+	TaskCount int    `json:"task_count"`
+}
+
 // TaskRepository provides database operations for tasks
 type TaskRepository struct {
 	db *sql.DB
@@ -222,10 +248,8 @@ func (r *TaskRepository) buildListArgs(opts TaskListOptions) []any {
 		args = append(args, opts.DueBefore)
 	}
 
-	// Search args
 	if opts.Search != "" {
 		searchPattern := "%" + opts.Search + "%"
-		// Add search pattern for each search field
 		args = append(args, searchPattern, searchPattern, searchPattern)
 	}
 
@@ -235,9 +259,8 @@ func (r *TaskRepository) buildListArgs(opts TaskListOptions) []any {
 func (r *TaskRepository) scanTaskRow(rows *sql.Rows, task *models.Task) error {
 	var tags, annotations sql.NullString
 
-	err := rows.Scan(&task.ID, &task.UUID, &task.Description, &task.Status, &task.Priority,
-		&task.Project, &tags, &task.Due, &task.Entry, &task.Modified, &task.End, &task.Start, &annotations)
-	if err != nil {
+	if err := rows.Scan(&task.ID, &task.UUID, &task.Description, &task.Status, &task.Priority,
+		&task.Project, &tags, &task.Due, &task.Entry, &task.Modified, &task.End, &task.Start, &annotations); err != nil {
 		return fmt.Errorf("failed to scan task row: %w", err)
 	}
 
@@ -322,10 +345,9 @@ func (r *TaskRepository) GetByUUID(ctx context.Context, uuid string) (*models.Ta
 	task := &models.Task{}
 	var tags, annotations sql.NullString
 
-	err := r.db.QueryRowContext(ctx, query, uuid).Scan(
+	if err := r.db.QueryRowContext(ctx, query, uuid).Scan(
 		&task.ID, &task.UUID, &task.Description, &task.Status, &task.Priority, &task.Project,
-		&tags, &task.Due, &task.Entry, &task.Modified, &task.End, &task.Start, &annotations)
-	if err != nil {
+		&tags, &task.Due, &task.Entry, &task.Modified, &task.End, &task.Start, &annotations); err != nil {
 		return nil, fmt.Errorf("failed to get task by UUID: %w", err)
 	}
 
@@ -359,16 +381,82 @@ func (r *TaskRepository) GetByProject(ctx context.Context, project string) ([]*m
 	return r.List(ctx, TaskListOptions{Project: project})
 }
 
-// TaskListOptions defines options for listing tasks
-type TaskListOptions struct {
-	Status    string
-	Priority  string
-	Project   string
-	DueAfter  time.Time
-	DueBefore time.Time
-	Search    string
-	SortBy    string
-	SortOrder string
-	Limit     int
-	Offset    int
+// GetProjects retrieves all unique project names with their task counts
+func (r *TaskRepository) GetProjects(ctx context.Context) ([]ProjectSummary, error) {
+	query := `
+		SELECT project, COUNT(*) as task_count
+		FROM tasks
+		WHERE project != '' AND project IS NOT NULL
+		GROUP BY project
+		ORDER BY project`
+
+	rows, err := r.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get projects: %w", err)
+	}
+	defer rows.Close()
+
+	var projects []ProjectSummary
+	for rows.Next() {
+		var project ProjectSummary
+		if err := rows.Scan(&project.Name, &project.TaskCount); err != nil {
+			return nil, fmt.Errorf("failed to scan project row: %w", err)
+		}
+		projects = append(projects, project)
+	}
+
+	return projects, rows.Err()
+}
+
+// GetTags retrieves all unique tags with their task counts
+func (r *TaskRepository) GetTags(ctx context.Context) ([]TagSummary, error) {
+	query := `
+		SELECT DISTINCT json_each.value as tag, COUNT(tasks.id) as task_count
+		FROM tasks, json_each(tasks.tags)
+		WHERE tasks.tags != '' AND tasks.tags IS NOT NULL
+		GROUP BY tag
+		ORDER BY tag`
+
+	rows, err := r.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get tags: %w", err)
+	}
+	defer rows.Close()
+
+	var tags []TagSummary
+	for rows.Next() {
+		var tag TagSummary
+		if err := rows.Scan(&tag.Name, &tag.TaskCount); err != nil {
+			return nil, fmt.Errorf("failed to scan tag row: %w", err)
+		}
+		tags = append(tags, tag)
+	}
+
+	return tags, rows.Err()
+}
+
+// GetTasksByTag retrieves all tasks with a specific tag
+func (r *TaskRepository) GetTasksByTag(ctx context.Context, tag string) ([]*models.Task, error) {
+	query := `
+		SELECT tasks.id, tasks.uuid, tasks.description, tasks.status, tasks.priority, tasks.project, tasks.tags, tasks.due, tasks.entry, tasks.modified, tasks.end, tasks.start, tasks.annotations
+		FROM tasks, json_each(tasks.tags)
+		WHERE tasks.tags != '' AND tasks.tags IS NOT NULL AND json_each.value = ?
+		ORDER BY tasks.modified DESC`
+
+	rows, err := r.db.QueryContext(ctx, query, tag)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get tasks by tag: %w", err)
+	}
+	defer rows.Close()
+
+	var tasks []*models.Task
+	for rows.Next() {
+		task := &models.Task{}
+		if err := r.scanTaskRow(rows, task); err != nil {
+			return nil, err
+		}
+		tasks = append(tasks, task)
+	}
+
+	return tasks, rows.Err()
 }

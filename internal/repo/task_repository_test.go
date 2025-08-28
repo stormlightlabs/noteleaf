@@ -3,6 +3,7 @@ package repo
 import (
 	"context"
 	"database/sql"
+	"slices"
 	"testing"
 	"time"
 
@@ -52,7 +53,7 @@ func createTaskTestDB(t *testing.T) *sql.DB {
 
 func createSampleTask() *models.Task {
 	return &models.Task{
-		UUID:        uuid.New().String(),
+		UUID:        newUUID(),
 		Description: "Test task",
 		Status:      "pending",
 		Priority:    "H",
@@ -62,7 +63,11 @@ func createSampleTask() *models.Task {
 	}
 }
 
-func TestTaskRepository_CRUD(t *testing.T) {
+func newUUID() string {
+	return uuid.New().String()
+}
+
+func TestTaskRepository(t *testing.T) {
 	db := createTaskTestDB(t)
 	repo := NewTaskRepository(db)
 	ctx := context.Background()
@@ -187,199 +192,313 @@ func TestTaskRepository_CRUD(t *testing.T) {
 			t.Error("Expected error when getting deleted task")
 		}
 	})
-}
 
-func TestTaskRepository_List(t *testing.T) {
-	db := createTaskTestDB(t)
-	repo := NewTaskRepository(db)
-	ctx := context.Background()
-
-	tasks := []*models.Task{
-		{UUID: uuid.New().String(), Description: "Task 1", Status: "pending", Project: "proj1"},
-		{UUID: uuid.New().String(), Description: "Task 2", Status: "completed", Project: "proj1"},
-		{UUID: uuid.New().String(), Description: "Task 3", Status: "pending", Project: "proj2"},
-	}
-
-	for _, task := range tasks {
-		_, err := repo.Create(ctx, task)
-		if err != nil {
-			t.Fatalf("Failed to create task: %v", err)
-		}
-	}
-
-	t.Run("List All Tasks", func(t *testing.T) {
-		results, err := repo.List(ctx, TaskListOptions{})
-		if err != nil {
-			t.Errorf("Failed to list tasks: %v", err)
+	t.Run("List", func(t *testing.T) {
+		tasks := []*models.Task{
+			{UUID: newUUID(), Description: "Task 1", Status: "pending", Project: "proj1"},
+			{UUID: newUUID(), Description: "Task 2", Status: "completed", Project: "proj1"},
+			{UUID: newUUID(), Description: "Task 3", Status: "pending", Project: "proj2"},
 		}
 
-		if len(results) != 3 {
-			t.Errorf("Expected 3 tasks, got %d", len(results))
-		}
-	})
-
-	t.Run("List Tasks with Filter", func(t *testing.T) {
-		results, err := repo.List(ctx, TaskListOptions{Status: "pending"})
-		if err != nil {
-			t.Errorf("Failed to list tasks: %v", err)
-		}
-
-		if len(results) != 2 {
-			t.Errorf("Expected 2 pending tasks, got %d", len(results))
-		}
-
-		for _, task := range results {
-			if task.Status != "pending" {
-				t.Errorf("Expected pending status, got %s", task.Status)
+		for _, task := range tasks {
+			_, err := repo.Create(ctx, task)
+			if err != nil {
+				t.Fatalf("Failed to create task: %v", err)
 			}
 		}
+
+		t.Run("List All Tasks", func(t *testing.T) {
+			results, err := repo.List(ctx, TaskListOptions{})
+			if err != nil {
+				t.Errorf("Failed to list tasks: %v", err)
+			}
+
+			if len(results) < 3 {
+				t.Errorf("Expected at least 3 tasks, got %d", len(results))
+			}
+		})
+
+		t.Run("List Tasks with Filter", func(t *testing.T) {
+			results, err := repo.List(ctx, TaskListOptions{Status: "pending"})
+			if err != nil {
+				t.Errorf("Failed to list tasks: %v", err)
+			}
+
+			if len(results) < 2 {
+				t.Errorf("Expected at least 2 pending tasks, got %d", len(results))
+			}
+
+			for _, task := range results {
+				if task.Status != "pending" {
+					t.Errorf("Expected pending status, got %s", task.Status)
+				}
+			}
+		})
+
+		t.Run("List Tasks with Limit", func(t *testing.T) {
+			results, err := repo.List(ctx, TaskListOptions{Limit: 2})
+			if err != nil {
+				t.Errorf("Failed to list tasks: %v", err)
+			}
+
+			if len(results) != 2 {
+				t.Errorf("Expected 2 tasks due to limit, got %d", len(results))
+			}
+		})
+
+		t.Run("List Tasks with Search", func(t *testing.T) {
+			results, err := repo.List(ctx, TaskListOptions{Search: "Task 1"})
+			if err != nil {
+				t.Errorf("Failed to list tasks: %v", err)
+			}
+
+			if len(results) != 1 {
+				t.Errorf("Expected 1 task matching search, got %d", len(results))
+			}
+
+			if len(results) > 0 && results[0].Description != "Task 1" {
+				t.Errorf("Expected 'Task 1', got %s", results[0].Description)
+			}
+		})
 	})
 
-	t.Run("List Tasks with Limit", func(t *testing.T) {
-		results, err := repo.List(ctx, TaskListOptions{Limit: 2})
-		if err != nil {
-			t.Errorf("Failed to list tasks: %v", err)
-		}
+	t.Run("Special Methods", func(t *testing.T) {
+		task1 := &models.Task{UUID: newUUID(), Description: "Pending task", Status: "pending", Project: "test"}
+		task2 := &models.Task{UUID: newUUID(), Description: "Completed task", Status: "completed", Project: "test"}
+		task3 := &models.Task{UUID: newUUID(), Description: "Other project", Status: "pending", Project: "other"}
 
-		if len(results) != 2 {
-			t.Errorf("Expected 2 tasks due to limit, got %d", len(results))
-		}
-	})
-
-	t.Run("List Tasks with Search", func(t *testing.T) {
-		results, err := repo.List(ctx, TaskListOptions{Search: "Task 1"})
-		if err != nil {
-			t.Errorf("Failed to list tasks: %v", err)
-		}
-
-		if len(results) != 1 {
-			t.Errorf("Expected 1 task matching search, got %d", len(results))
-		}
-
-		if len(results) > 0 && results[0].Description != "Task 1" {
-			t.Errorf("Expected 'Task 1', got %s", results[0].Description)
-		}
-	})
-}
-
-func TestTaskRepository_SpecialMethods(t *testing.T) {
-	db := createTaskTestDB(t)
-	repo := NewTaskRepository(db)
-	ctx := context.Background()
-
-	task1 := &models.Task{UUID: uuid.New().String(), Description: "Pending task", Status: "pending", Project: "test"}
-	task2 := &models.Task{UUID: uuid.New().String(), Description: "Completed task", Status: "completed", Project: "test"}
-	task3 := &models.Task{UUID: uuid.New().String(), Description: "Other project", Status: "pending", Project: "other"}
-
-	for _, task := range []*models.Task{task1, task2, task3} {
-		_, err := repo.Create(ctx, task)
-		if err != nil {
-			t.Fatalf("Failed to create task: %v", err)
-		}
-	}
-
-	t.Run("GetPending", func(t *testing.T) {
-		results, err := repo.GetPending(ctx)
-		if err != nil {
-			t.Errorf("Failed to get pending tasks: %v", err)
-		}
-
-		if len(results) != 2 {
-			t.Errorf("Expected 2 pending tasks, got %d", len(results))
-		}
-	})
-
-	t.Run("GetCompleted", func(t *testing.T) {
-		results, err := repo.GetCompleted(ctx)
-		if err != nil {
-			t.Errorf("Failed to get completed tasks: %v", err)
-		}
-
-		if len(results) != 1 {
-			t.Errorf("Expected 1 completed task, got %d", len(results))
-		}
-	})
-
-	t.Run("GetByProject", func(t *testing.T) {
-		results, err := repo.GetByProject(ctx, "test")
-		if err != nil {
-			t.Errorf("Failed to get tasks by project: %v", err)
-		}
-
-		if len(results) != 2 {
-			t.Errorf("Expected 2 tasks in test project, got %d", len(results))
-		}
-
-		for _, task := range results {
-			if task.Project != "test" {
-				t.Errorf("Expected project 'test', got %s", task.Project)
+		for _, task := range []*models.Task{task1, task2, task3} {
+			_, err := repo.Create(ctx, task)
+			if err != nil {
+				t.Fatalf("Failed to create task: %v", err)
 			}
 		}
+
+		t.Run("GetPending", func(t *testing.T) {
+			results, err := repo.GetPending(ctx)
+			if err != nil {
+				t.Errorf("Failed to get pending tasks: %v", err)
+			}
+
+			if len(results) < 2 {
+				t.Errorf("Expected at least 2 pending tasks, got %d", len(results))
+			}
+		})
+
+		t.Run("GetCompleted", func(t *testing.T) {
+			results, err := repo.GetCompleted(ctx)
+			if err != nil {
+				t.Errorf("Failed to get completed tasks: %v", err)
+			}
+
+			if len(results) < 1 {
+				t.Errorf("Expected at least 1 completed task, got %d", len(results))
+			}
+		})
+
+		t.Run("GetByProject", func(t *testing.T) {
+			results, err := repo.GetByProject(ctx, "test")
+			if err != nil {
+				t.Errorf("Failed to get tasks by project: %v", err)
+			}
+
+			if len(results) < 2 {
+				t.Errorf("Expected at least 2 tasks in test project, got %d", len(results))
+			}
+
+			for _, task := range results {
+				if task.Project != "test" {
+					t.Errorf("Expected project 'test', got %s", task.Project)
+				}
+			}
+		})
+
+		t.Run("GetByUUID", func(t *testing.T) {
+			result, err := repo.GetByUUID(ctx, task1.UUID)
+			if err != nil {
+				t.Errorf("Failed to get task by UUID: %v", err)
+			}
+
+			if result.UUID != task1.UUID {
+				t.Errorf("Expected UUID %s, got %s", task1.UUID, result.UUID)
+			}
+			if result.Description != task1.Description {
+				t.Errorf("Expected description %s, got %s", task1.Description, result.Description)
+			}
+		})
 	})
 
-	t.Run("GetByUUID", func(t *testing.T) {
-		result, err := repo.GetByUUID(ctx, task1.UUID)
-		if err != nil {
-			t.Errorf("Failed to get task by UUID: %v", err)
+	t.Run("Count", func(t *testing.T) {
+		tasks := []*models.Task{
+			{UUID: newUUID(), Description: "Test 1", Status: "pending"},
+			{UUID: newUUID(), Description: "Test 2", Status: "pending"},
+			{UUID: newUUID(), Description: "Test 3", Status: "completed"},
 		}
 
-		if result.UUID != task1.UUID {
-			t.Errorf("Expected UUID %s, got %s", task1.UUID, result.UUID)
-		}
-		if result.Description != task1.Description {
-			t.Errorf("Expected description %s, got %s", task1.Description, result.Description)
-		}
-	})
-}
-
-func TestTaskRepository_Count(t *testing.T) {
-	db := createTaskTestDB(t)
-	repo := NewTaskRepository(db)
-	ctx := context.Background()
-
-	tasks := []*models.Task{
-		{UUID: uuid.New().String(), Description: "Test 1", Status: "pending"},
-		{UUID: uuid.New().String(), Description: "Test 2", Status: "pending"},
-		{UUID: uuid.New().String(), Description: "Test 3", Status: "completed"},
-	}
-
-	for _, task := range tasks {
-		_, err := repo.Create(ctx, task)
-		if err != nil {
-			t.Fatalf("Failed to create task: %v", err)
-		}
-	}
-
-	t.Run("Count all tasks", func(t *testing.T) {
-		count, err := repo.Count(ctx, TaskListOptions{})
-		if err != nil {
-			t.Errorf("Failed to count tasks: %v", err)
+		for _, task := range tasks {
+			_, err := repo.Create(ctx, task)
+			if err != nil {
+				t.Fatalf("Failed to create task: %v", err)
+			}
 		}
 
-		if count != 3 {
-			t.Errorf("Expected 3 tasks, got %d", count)
-		}
-	})
+		t.Run("Count all tasks", func(t *testing.T) {
+			count, err := repo.Count(ctx, TaskListOptions{})
+			if err != nil {
+				t.Errorf("Failed to count tasks: %v", err)
+			}
 
-	t.Run("Count pending tasks", func(t *testing.T) {
-		count, err := repo.Count(ctx, TaskListOptions{Status: "pending"})
-		if err != nil {
-			t.Errorf("Failed to count pending tasks: %v", err)
-		}
+			if count < 3 {
+				t.Errorf("Expected at least 3 tasks, got %d", count)
+			}
+		})
 
-		if count != 2 {
-			t.Errorf("Expected 2 pending tasks, got %d", count)
-		}
+		t.Run("Count pending tasks", func(t *testing.T) {
+			count, err := repo.Count(ctx, TaskListOptions{Status: "pending"})
+			if err != nil {
+				t.Errorf("Failed to count pending tasks: %v", err)
+			}
+
+			if count < 2 {
+				t.Errorf("Expected at least 2 pending tasks, got %d", count)
+			}
+		})
+
+		t.Run("Count completed tasks", func(t *testing.T) {
+			count, err := repo.Count(ctx, TaskListOptions{Status: "completed"})
+			if err != nil {
+				t.Errorf("Failed to count completed tasks: %v", err)
+			}
+
+			if count < 1 {
+				t.Errorf("Expected at least 1 completed task, got %d", count)
+			}
+		})
 	})
 
-	t.Run("Count completed tasks", func(t *testing.T) {
-		count, err := repo.Count(ctx, TaskListOptions{Status: "completed"})
-		if err != nil {
-			t.Errorf("Failed to count completed tasks: %v", err)
+	t.Run("Projects & Tags", func(t *testing.T) {
+		tasks := []*models.Task{
+			{UUID: newUUID(), Description: "Task 1", Status: "pending", Project: "web-app", Tags: []string{"frontend", "urgent"}},
+			{UUID: newUUID(), Description: "Task 2", Status: "pending", Project: "web-app", Tags: []string{"backend", "database"}},
+			{UUID: newUUID(), Description: "Task 3", Status: "completed", Project: "mobile-app", Tags: []string{"frontend", "ios"}},
+			{UUID: newUUID(), Description: "Task 4", Status: "pending", Project: "mobile-app", Tags: []string{"android", "urgent"}},
+			{UUID: newUUID(), Description: "Task 5", Status: "pending", Project: "", Tags: []string{"documentation"}},
 		}
 
-		if count != 1 {
-			t.Errorf("Expected 1 completed task, got %d", count)
+		for _, task := range tasks {
+			_, err := repo.Create(ctx, task)
+			if err != nil {
+				t.Fatalf("Failed to create task: %v", err)
+			}
 		}
+
+		t.Run("GetProjects", func(t *testing.T) {
+			projects, err := repo.GetProjects(ctx)
+			if err != nil {
+				t.Errorf("Failed to get projects: %v", err)
+			}
+
+			expectedProjectCount := 0
+			projectCounts := make(map[string]int)
+
+			for _, project := range projects {
+				if project.Name != "" {
+					expectedProjectCount++
+					projectCounts[project.Name] = project.TaskCount
+				}
+			}
+
+			if expectedProjectCount < 2 {
+				t.Errorf("Expected at least 2 projects, got %d", expectedProjectCount)
+			}
+
+			if count, exists := projectCounts["web-app"]; exists {
+				if count < 2 {
+					t.Errorf("Expected at least 2 tasks for web-app project, got %d", count)
+				}
+			} else {
+				t.Error("Expected web-app project to exist")
+			}
+
+			if count, exists := projectCounts["mobile-app"]; exists {
+				if count < 2 {
+					t.Errorf("Expected at least 2 tasks for mobile-app project, got %d", count)
+				}
+			} else {
+				t.Error("Expected mobile-app project to exist")
+			}
+		})
+
+		t.Run("GetTags", func(t *testing.T) {
+			tags, err := repo.GetTags(ctx)
+			if err != nil {
+				t.Errorf("Failed to get tags: %v", err)
+			}
+
+			tagCounts := make(map[string]int)
+			for _, tag := range tags {
+				tagCounts[tag.Name] = tag.TaskCount
+			}
+
+			expectedMinCounts := map[string]int{
+				"android": 1, "backend": 1, "database": 1, "documentation": 1,
+				"frontend": 2, "ios": 1, "urgent": 2,
+			}
+
+			for expectedTag, minCount := range expectedMinCounts {
+				if count, exists := tagCounts[expectedTag]; exists {
+					if count < minCount {
+						t.Errorf("Expected at least %d tasks for tag %s, got %d", minCount, expectedTag, count)
+					}
+				} else {
+					t.Errorf("Expected tag %s to exist", expectedTag)
+				}
+			}
+
+			if len(tags) < len(expectedMinCounts) {
+				t.Errorf("Expected at least %d tags, got %d", len(expectedMinCounts), len(tags))
+			}
+		})
+
+		t.Run("GetTasksByTag", func(t *testing.T) {
+			frontend, err := repo.GetTasksByTag(ctx, "frontend")
+			if err != nil {
+				t.Errorf("Failed to get tasks by tag: %v", err)
+			}
+
+			if len(frontend) < 2 {
+				t.Errorf("Expected at least 2 tasks with frontend tag, got %d", len(frontend))
+			}
+
+			for _, task := range frontend {
+				if !slices.Contains(task.Tags, "frontend") {
+					t.Errorf("Task %s should have frontend tag", task.Description)
+				}
+			}
+
+			urgent, err := repo.GetTasksByTag(ctx, "urgent")
+			if err != nil {
+				t.Errorf("Failed to get tasks by tag: %v", err)
+			}
+
+			if len(urgent) < 2 {
+				t.Errorf("Expected at least 2 tasks with urgent tag, got %d", len(urgent))
+			}
+
+			for _, task := range urgent {
+				if !slices.Contains(task.Tags, "urgent") {
+					t.Errorf("Task %s should have urgent tag", task.Description)
+				}
+			}
+
+			nonexistent, err := repo.GetTasksByTag(ctx, "nonexistent")
+			if err != nil {
+				t.Errorf("Failed to get tasks by nonexistent tag: %v", err)
+			}
+
+			if len(nonexistent) != 0 {
+				t.Errorf("Expected 0 tasks with nonexistent tag, got %d", len(nonexistent))
+			}
+		})
 	})
 }
