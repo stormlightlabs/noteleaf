@@ -310,7 +310,6 @@ func TestUI(t *testing.T) {
 			withColor(t, func(r *lipgloss.Renderer) {
 				logo := Colossal
 				viewport := logo.ColoredInViewport(r)
-				t.Logf("viewport output:\n%s", viewport)
 
 				if viewport == "" {
 					t.Fatal("viewport is empty")

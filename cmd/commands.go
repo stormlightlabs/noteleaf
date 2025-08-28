@@ -108,23 +108,29 @@ Use --all to show all tasks, otherwise only pending tasks are shown.`,
 		},
 	})
 
-	root.AddCommand(&cobra.Command{
+	projectsCmd := &cobra.Command{
 		Use:     "projects",
 		Short:   "List projects",
 		Aliases: []string{"proj"},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return handlers.ListProjects(cmd.Context(), args)
+			static, _ := cmd.Flags().GetBool("static")
+			return handlers.ListProjects(cmd.Context(), static)
 		},
-	})
+	}
+	projectsCmd.Flags().Bool("static", false, "Use static text output instead of interactive")
+	root.AddCommand(projectsCmd)
 
-	root.AddCommand(&cobra.Command{
+	tagsCmd := &cobra.Command{
 		Use:     "tags",
 		Short:   "List tags",
 		Aliases: []string{"t"},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return handlers.ListTags(cmd.Context(), args)
+			static, _ := cmd.Flags().GetBool("static")
+			return handlers.ListTags(cmd.Context(), static)
 		},
-	})
+	}
+	tagsCmd.Flags().Bool("static", false, "Use static text output instead of interactive")
+	root.AddCommand(tagsCmd)
 
 	root.AddCommand(&cobra.Command{
 		Use:     "contexts",

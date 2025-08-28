@@ -227,7 +227,6 @@ func TestTaskListStaticMode(t *testing.T) {
 		if !strings.Contains(output, "Plan vacation itinerary") {
 			t.Error("Second task not displayed")
 		}
-		// Should not show completed task by default
 		if strings.Contains(output, "Fix authentication bug") {
 			t.Error("Completed task should not be shown by default")
 		}

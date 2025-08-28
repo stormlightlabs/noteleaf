@@ -757,7 +757,7 @@ func TestTaskHandler(t *testing.T) {
 		}
 
 		t.Run("lists projects successfully", func(t *testing.T) {
-			err := ListProjects(ctx, []string{})
+			err := ListProjects(ctx, true)
 			if err != nil {
 				t.Errorf("ListProjects failed: %v", err)
 			}
@@ -767,7 +767,7 @@ func TestTaskHandler(t *testing.T) {
 			_, cleanup2 := setupTaskTest(t)
 			defer cleanup2()
 
-			err := ListProjects(ctx, []string{})
+			err := ListProjects(ctx, true)
 			if err != nil {
 				t.Errorf("ListProjects with no projects failed: %v", err)
 			}
@@ -801,7 +801,7 @@ func TestTaskHandler(t *testing.T) {
 		}
 
 		t.Run("lists tags successfully", func(t *testing.T) {
-			err := ListTags(ctx, []string{})
+			err := ListTags(ctx, true)
 			if err != nil {
 				t.Errorf("ListTags failed: %v", err)
 			}
@@ -811,7 +811,7 @@ func TestTaskHandler(t *testing.T) {
 			_, cleanup2 := setupTaskTest(t)
 			defer cleanup2()
 
-			err := ListTags(ctx, []string{})
+			err := ListTags(ctx, true)
 			if err != nil {
 				t.Errorf("ListTags with no tags failed: %v", err)
 			}

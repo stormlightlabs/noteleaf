@@ -103,7 +103,6 @@ func (h *TaskHandler) listTasksStatic(ctx context.Context, showAll bool, status,
 		Project:  project,
 	}
 
-	// Default to showing pending tasks only unless --all is specified
 	if !showAll && opts.Status == "" {
 		opts.Status = "pending"
 	}
@@ -335,33 +334,107 @@ func (h *TaskHandler) doneTask(ctx context.Context, args []string) error {
 }
 
 // ListProjects lists all projects with their task counts
-func ListProjects(ctx context.Context, args []string) error {
+func ListProjects(ctx context.Context, static bool) error {
 	handler, err := NewTaskHandler()
 	if err != nil {
 		return fmt.Errorf("failed to initialize task handler: %w", err)
 	}
 	defer handler.Close()
 
-	return handler.listProjects(ctx)
+	if static {
+		return handler.listProjectsStatic(ctx)
+	}
+
+	return handler.listProjectsInteractive(ctx)
 }
 
-func (h *TaskHandler) listProjects(ctx context.Context) error {
+func (h *TaskHandler) listProjectsStatic(ctx context.Context) error {
+	tasks, err := h.repos.Tasks.List(ctx, repo.TaskListOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to list tasks for projects: %w", err)
+	}
+
+	projectCounts := make(map[string]int)
+	for _, task := range tasks {
+		if task.Project != "" {
+			projectCounts[task.Project]++
+		}
+	}
+
+	if len(projectCounts) == 0 {
+		fmt.Printf("No projects found\n")
+		return nil
+	}
+
+	projects := make([]string, 0, len(projectCounts))
+	for project := range projectCounts {
+		projects = append(projects, project)
+	}
+	slices.Sort(projects)
+
+	fmt.Printf("Found %d project(s):\n\n", len(projects))
+	for _, project := range projects {
+		count := projectCounts[project]
+		fmt.Printf("%s (%d task%s)\n", project, count, pluralize(count))
+	}
+
+	return nil
+}
+
+func (h *TaskHandler) listProjectsInteractive(ctx context.Context) error {
 	projectList := ui.NewProjectList(h.repos.Tasks, ui.ProjectListOptions{})
 	return projectList.Browse(ctx)
 }
 
 // ListTags lists all tags with their task counts
-func ListTags(ctx context.Context, args []string) error {
+func ListTags(ctx context.Context, static bool) error {
 	handler, err := NewTaskHandler()
 	if err != nil {
 		return fmt.Errorf("failed to initialize task handler: %w", err)
 	}
 	defer handler.Close()
 
-	return handler.listTags(ctx)
+	if static {
+		return handler.listTagsStatic(ctx)
+	}
+
+	return handler.listTagsInteractive(ctx)
 }
 
-func (h *TaskHandler) listTags(ctx context.Context) error {
+func (h *TaskHandler) listTagsStatic(ctx context.Context) error {
+	tasks, err := h.repos.Tasks.List(ctx, repo.TaskListOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to list tasks for tags: %w", err)
+	}
+
+	tagCounts := make(map[string]int)
+	for _, task := range tasks {
+		for _, tag := range task.Tags {
+			tagCounts[tag]++
+		}
+	}
+
+	if len(tagCounts) == 0 {
+		fmt.Printf("No tags found\n")
+		return nil
+	}
+
+	tags := make([]string, 0, len(tagCounts))
+	for tag := range tagCounts {
+		tags = append(tags, tag)
+	}
+	slices.Sort(tags)
+
+	fmt.Printf("Found %d tag(s):\n\n", len(tags))
+	for _, tag := range tags {
+		count := tagCounts[tag]
+		fmt.Printf("%s (%d task%s)\n", tag, count, pluralize(count))
+	}
+
+	return nil
+}
+
+func (h *TaskHandler) listTagsInteractive(ctx context.Context) error {
 	tagList := ui.NewTagList(h.repos.Tasks, ui.TagListOptions{})
 	return tagList.Browse(ctx)
 }
