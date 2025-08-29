@@ -72,6 +72,66 @@ func TestModels(t *testing.T) {
 			}
 		})
 
+		t.Run("New Status Tracking Methods", func(t *testing.T) {
+			testCases := []struct {
+				status       string
+				isTodo       bool
+				isInProgress bool
+				isBlocked    bool
+				isDone       bool
+				isAbandoned  bool
+			}{
+				{StatusTodo, true, false, false, false, false},
+				{StatusInProgress, false, true, false, false, false},
+				{StatusBlocked, false, false, true, false, false},
+				{StatusDone, false, false, false, true, false},
+				{StatusAbandoned, false, false, false, false, true},
+				{"unknown", false, false, false, false, false},
+			}
+
+			for _, tc := range testCases {
+				task := &Task{Status: tc.status}
+
+				if task.IsTodo() != tc.isTodo {
+					t.Errorf("Status %s: expected IsTodo %v, got %v", tc.status, tc.isTodo, task.IsTodo())
+				}
+				if task.IsInProgress() != tc.isInProgress {
+					t.Errorf("Status %s: expected IsInProgress %v, got %v", tc.status, tc.isInProgress, task.IsInProgress())
+				}
+				if task.IsBlocked() != tc.isBlocked {
+					t.Errorf("Status %s: expected IsBlocked %v, got %v", tc.status, tc.isBlocked, task.IsBlocked())
+				}
+				if task.IsDone() != tc.isDone {
+					t.Errorf("Status %s: expected IsDone %v, got %v", tc.status, tc.isDone, task.IsDone())
+				}
+				if task.IsAbandoned() != tc.isAbandoned {
+					t.Errorf("Status %s: expected IsAbandoned %v, got %v", tc.status, tc.isAbandoned, task.IsAbandoned())
+				}
+			}
+		})
+
+		t.Run("Status Validation", func(t *testing.T) {
+			validStatuses := []string{
+				StatusTodo, StatusInProgress, StatusBlocked, StatusDone, StatusAbandoned,
+				StatusPending, StatusCompleted, StatusDeleted,
+			}
+
+			for _, status := range validStatuses {
+				task := &Task{Status: status}
+				if !task.IsValidStatus() {
+					t.Errorf("Status %s should be valid", status)
+				}
+			}
+
+			invalidStatuses := []string{"unknown", "invalid", ""}
+			for _, status := range invalidStatuses {
+				task := &Task{Status: status}
+				if task.IsValidStatus() {
+					t.Errorf("Status %s should be invalid", status)
+				}
+			}
+		})
+
 		t.Run("Priority Methods", func(t *testing.T) {
 			task := &Task{}
 
@@ -83,6 +143,112 @@ func TestModels(t *testing.T) {
 			if !task.HasPriority() {
 				t.Error("Task with priority should return true for HasPriority")
 			}
+		})
+
+		t.Run("Priority System", func(t *testing.T) {
+			t.Run("Text-based Priority Validation", func(t *testing.T) {
+				validTextPriorities := []string{
+					PriorityHigh, PriorityMedium, PriorityLow,
+				}
+
+				for _, priority := range validTextPriorities {
+					task := &Task{Priority: priority}
+					if !task.IsValidPriority() {
+						t.Errorf("Priority %s should be valid", priority)
+					}
+				}
+			})
+
+			t.Run("Numeric Priority Validation", func(t *testing.T) {
+				validNumericPriorities := []string{"1", "2", "3", "4", "5"}
+
+				for _, priority := range validNumericPriorities {
+					task := &Task{Priority: priority}
+					if !task.IsValidPriority() {
+						t.Errorf("Numeric priority %s should be valid", priority)
+					}
+				}
+
+				invalidNumericPriorities := []string{"0", "6", "10", "-1"}
+				for _, priority := range invalidNumericPriorities {
+					task := &Task{Priority: priority}
+					if task.IsValidPriority() {
+						t.Errorf("Numeric priority %s should be invalid", priority)
+					}
+				}
+			})
+
+			t.Run("Legacy A-Z Priority Validation", func(t *testing.T) {
+				validLegacyPriorities := []string{"A", "B", "C", "D", "Z"}
+
+				for _, priority := range validLegacyPriorities {
+					task := &Task{Priority: priority}
+					if !task.IsValidPriority() {
+						t.Errorf("Legacy priority %s should be valid", priority)
+					}
+				}
+
+				invalidLegacyPriorities := []string{"AA", "a", "1A", ""}
+				for _, priority := range invalidLegacyPriorities {
+					task := &Task{Priority: priority}
+					if priority != "" && task.IsValidPriority() {
+						t.Errorf("Legacy priority %s should be invalid", priority)
+					}
+				}
+			})
+
+			t.Run("Empty Priority Validation", func(t *testing.T) {
+				task := &Task{Priority: ""}
+				if !task.IsValidPriority() {
+					t.Error("Empty priority should be valid")
+				}
+			})
+
+			t.Run("Priority Weight Calculation", func(t *testing.T) {
+				testCases := []struct {
+					priority string
+					weight   int
+				}{
+					{PriorityHigh, 5},
+					{PriorityMedium, 4},
+					{PriorityLow, 3},
+					{"5", 5},
+					{"4", 4},
+					{"3", 3},
+					{"2", 2},
+					{"1", 1},
+					{"A", 26},
+					{"B", 25},
+					{"C", 24},
+					{"Z", 1},
+					{"", 0},
+					{"invalid", 0},
+				}
+
+				for _, tc := range testCases {
+					task := &Task{Priority: tc.priority}
+					weight := task.GetPriorityWeight()
+					if weight != tc.weight {
+						t.Errorf("Priority %s: expected weight %d, got %d", tc.priority, tc.weight, weight)
+					}
+				}
+			})
+
+			t.Run("Priority Weight Ordering", func(t *testing.T) {
+				priorities := []string{PriorityHigh, PriorityMedium, PriorityLow}
+				weights := []int{}
+
+				for _, priority := range priorities {
+					task := &Task{Priority: priority}
+					weights = append(weights, task.GetPriorityWeight())
+				}
+
+				for i := 1; i < len(weights); i++ {
+					if weights[i-1] <= weights[i] {
+						t.Errorf("Priority weights should be in descending order: %v", weights)
+					}
+				}
+			})
 		})
 
 		t.Run("Tags Marshaling", func(t *testing.T) {
@@ -866,18 +1032,16 @@ func TestModels(t *testing.T) {
 					t.Errorf("Model %d: ID not set correctly", i)
 				}
 
-				// Test table name method
 				tableName := model.GetTableName()
 				if tableName == "" {
 					t.Errorf("Model %d: table name should not be empty", i)
 				}
 
-				// Test timestamp methods
 				now := time.Now()
 				model.SetCreatedAt(now)
 				model.SetUpdatedAt(now)
 
-				// Note: We don't test exact equality due to potential precision differences
+				// NOTE: We don't test exact equality due to potential precision differences
 				if model.GetCreatedAt().IsZero() {
 					t.Errorf("Model %d: created at should not be zero", i)
 				}

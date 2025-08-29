@@ -150,7 +150,7 @@ func TestTaskHandler(t *testing.T) {
 			ctx := context.Background()
 			args := []string{"Task", "with", "flags"}
 			priority := "A"
-			project := "test-project" 
+			project := "test-project"
 			due := "2024-12-31"
 			tags := []string{"urgent", "work"}
 
@@ -164,12 +164,10 @@ func TestTaskHandler(t *testing.T) {
 				t.Fatalf("Failed to get pending tasks: %v", err)
 			}
 
-			// Should have 2 tasks now (previous test created one)
 			if len(tasks) < 1 {
 				t.Errorf("Expected at least 1 task, got %d", len(tasks))
 			}
 
-			// Find the task we just created
 			var task *models.Task
 			for _, t := range tasks {
 				if t.Description == "Task with flags" {
@@ -316,9 +314,9 @@ func TestTaskHandler(t *testing.T) {
 		}
 
 		t.Run("updates task by ID", func(t *testing.T) {
-			args := []string{strconv.FormatInt(id, 10), "--description", "Updated description"}
+			taskID := strconv.FormatInt(id, 10)
 
-			err := handler.Update(ctx, args)
+			err := handler.Update(ctx, taskID, "Updated description", "", "", "", "", []string{}, []string{})
 			if err != nil {
 				t.Errorf("UpdateTask failed: %v", err)
 			}
@@ -334,9 +332,9 @@ func TestTaskHandler(t *testing.T) {
 		})
 
 		t.Run("updates task by UUID", func(t *testing.T) {
-			args := []string{task.UUID, "--status", "completed"}
+			taskID := task.UUID
 
-			err := handler.Update(ctx, args)
+			err := handler.Update(ctx, taskID, "", "completed", "", "", "", []string{}, []string{})
 			if err != nil {
 				t.Errorf("UpdateTask by UUID failed: %v", err)
 			}
@@ -352,20 +350,13 @@ func TestTaskHandler(t *testing.T) {
 		})
 
 		t.Run("updates multiple fields", func(t *testing.T) {
-			args := []string{
-				strconv.FormatInt(id, 10),
-				"--description", "Multiple updates",
-				"--priority", "B",
-				"--project", "test",
-				"--due", "2024-12-31",
-			}
+			taskID := strconv.FormatInt(id, 10)
 
-			err := handler.Update(ctx, args)
+			err := handler.Update(ctx, taskID, "Multiple updates", "", "B", "test", "2024-12-31", []string{}, []string{})
 			if err != nil {
 				t.Errorf("UpdateTask with multiple fields failed: %v", err)
 			}
 
-			// Verify all updates
 			updatedTask, err := handler.repos.Tasks.Get(ctx, id)
 			if err != nil {
 				t.Fatalf("Failed to get updated task: %v", err)
@@ -386,13 +377,9 @@ func TestTaskHandler(t *testing.T) {
 		})
 
 		t.Run("adds and removes tags", func(t *testing.T) {
-			args := []string{
-				strconv.FormatInt(id, 10),
-				"--add-tag=work",
-				"--add-tag=urgent",
-			}
+			taskID := strconv.FormatInt(id, 10)
 
-			err := handler.Update(ctx, args)
+			err := handler.Update(ctx, taskID, "", "", "", "", "", []string{"work", "urgent"}, []string{})
 			if err != nil {
 				t.Errorf("UpdateTask with add tags failed: %v", err)
 			}
@@ -406,12 +393,9 @@ func TestTaskHandler(t *testing.T) {
 				t.Errorf("Expected 2 tags, got %d", len(updatedTask.Tags))
 			}
 
-			args = []string{
-				strconv.FormatInt(id, 10),
-				"--remove-tag=urgent",
-			}
+			taskID = strconv.FormatInt(id, 10)
 
-			err = handler.Update(ctx, args)
+			err = handler.Update(ctx, taskID, "", "", "", "", "", []string{}, []string{"urgent"})
 			if err != nil {
 				t.Errorf("UpdateTask with remove tag failed: %v", err)
 			}
@@ -431,22 +415,20 @@ func TestTaskHandler(t *testing.T) {
 		})
 
 		t.Run("fails with missing task ID", func(t *testing.T) {
-			args := []string{}
-
-			err := handler.Update(ctx, args)
+			err := handler.Update(ctx, "", "", "", "", "", "", []string{}, []string{})
 			if err == nil {
 				t.Error("Expected error for missing task ID")
 			}
 
-			if !strings.Contains(err.Error(), "task ID required") {
-				t.Errorf("Expected error about required task ID, got: %v", err)
+			if !strings.Contains(err.Error(), "failed to find task") {
+				t.Errorf("Expected error about task not found, got: %v", err)
 			}
 		})
 
 		t.Run("fails with invalid task ID", func(t *testing.T) {
-			args := []string{"99999", "--description", "test"}
+			taskID := "99999"
 
-			err := handler.Update(ctx, args)
+			err := handler.Update(ctx, taskID, "test", "", "", "", "", []string{}, []string{})
 			if err == nil {
 				t.Error("Expected error for invalid task ID")
 			}

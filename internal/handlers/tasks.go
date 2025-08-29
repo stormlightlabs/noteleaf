@@ -149,12 +149,8 @@ func (h *TaskHandler) listTasksInteractive(ctx context.Context, showAll bool, st
 	return taskList.Browse(ctx)
 }
 
-func (h *TaskHandler) Update(ctx context.Context, args []string) error {
-	if len(args) < 1 {
-		return fmt.Errorf("task ID required")
-	}
-
-	taskID := args[0]
+// Update updates a task using parsed flag values
+func (h *TaskHandler) Update(ctx context.Context, taskID, description, status, priority, project, due string, addTags, removeTags []string) error {
 	var task *models.Task
 	var err error
 
@@ -168,35 +164,34 @@ func (h *TaskHandler) Update(ctx context.Context, args []string) error {
 		return fmt.Errorf("failed to find task: %w", err)
 	}
 
-	for i := 1; i < len(args); i++ {
-		arg := args[i]
-		switch {
-		case arg == "--description" && i+1 < len(args):
-			task.Description = args[i+1]
-			i++
-		case arg == "--status" && i+1 < len(args):
-			task.Status = args[i+1]
-			i++
-		case arg == "--priority" && i+1 < len(args):
-			task.Priority = args[i+1]
-			i++
-		case arg == "--project" && i+1 < len(args):
-			task.Project = args[i+1]
-			i++
-		case arg == "--due" && i+1 < len(args):
-			if dueTime, err := time.Parse("2006-01-02", args[i+1]); err == nil {
-				task.Due = &dueTime
-			}
-			i++
-		case strings.HasPrefix(arg, "--add-tag="):
-			tag := strings.TrimPrefix(arg, "--add-tag=")
-			if !slices.Contains(task.Tags, tag) {
-				task.Tags = append(task.Tags, tag)
-			}
-		case strings.HasPrefix(arg, "--remove-tag="):
-			tag := strings.TrimPrefix(arg, "--remove-tag=")
-			task.Tags = removeString(task.Tags, tag)
+	if description != "" {
+		task.Description = description
+	}
+	if status != "" {
+		task.Status = status
+	}
+	if priority != "" {
+		task.Priority = priority
+	}
+	if project != "" {
+		task.Project = project
+	}
+	if due != "" {
+		if dueTime, err := time.Parse("2006-01-02", due); err == nil {
+			task.Due = &dueTime
+		} else {
+			return fmt.Errorf("invalid due date format, use YYYY-MM-DD: %w", err)
 		}
+	}
+
+	for _, tag := range addTags {
+		if !slices.Contains(task.Tags, tag) {
+			task.Tags = append(task.Tags, tag)
+		}
+	}
+
+	for _, tag := range removeTags {
+		task.Tags = removeString(task.Tags, tag)
 	}
 
 	err = h.repos.Tasks.Update(ctx, task)
@@ -205,6 +200,43 @@ func (h *TaskHandler) Update(ctx context.Context, args []string) error {
 	}
 
 	fmt.Printf("Task updated (ID: %d): %s\n", task.ID, task.Description)
+	return nil
+}
+
+// EditInteractive opens an interactive task editor with status picker and priority toggle
+func (h *TaskHandler) EditInteractive(ctx context.Context, taskID string) error {
+	var task *models.Task
+	var err error
+
+	if id, err_ := strconv.ParseInt(taskID, 10, 64); err_ == nil {
+		task, err = h.repos.Tasks.Get(ctx, id)
+	} else {
+		task, err = h.repos.Tasks.GetByUUID(ctx, taskID)
+	}
+
+	if err != nil {
+		return fmt.Errorf("failed to find task: %w", err)
+	}
+
+	editor := ui.NewTaskEditor(task, h.repos.Tasks, ui.TaskEditOptions{})
+	updated, err := editor.Edit(ctx)
+	if err != nil {
+		if err.Error() == "edit cancelled" {
+			fmt.Println("Task edit cancelled")
+			return nil
+		}
+		return fmt.Errorf("failed to edit task: %w", err)
+	}
+
+	fmt.Printf("Task updated (ID: %d): %s\n", updated.ID, updated.Description)
+	fmt.Printf("Status: %s\n", ui.FormatStatusWithText(updated.Status))
+	if updated.Priority != "" {
+		fmt.Printf("Priority: %s\n", ui.FormatPriorityWithText(updated.Priority))
+	}
+	if updated.Project != "" {
+		fmt.Printf("Project: %s\n", updated.Project)
+	}
+
 	return nil
 }
 

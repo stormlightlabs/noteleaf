@@ -2,7 +2,37 @@ package models
 
 import (
 	"encoding/json"
+	"slices"
 	"time"
+)
+
+type TaskStatus string
+type TaskPriority string
+type TaskWeight int
+
+// TODO: Use [TaskStatus]
+const (
+	StatusTodo       = "todo"
+	StatusInProgress = "in-progress"
+	StatusBlocked    = "blocked"
+	StatusDone       = "done"
+	StatusAbandoned  = "abandoned"
+	StatusPending    = "pending"
+	StatusCompleted  = "completed"
+	StatusDeleted    = "deleted"
+)
+
+// TODO: Use [TaskPriority]
+const (
+	PriorityHigh   = "High"
+	PriorityMedium = "Medium"
+	PriorityLow    = "Low"
+)
+
+// TODO: Use [TaskWeight]
+const (
+	PriorityNumericMin = 1
+	PriorityNumericMax = 5
 )
 
 // Model defines the common interface that all domain models must implement
@@ -169,6 +199,88 @@ func (t *Task) IsDeleted() bool {
 // HasPriority returns true if the task has a priority set
 func (t *Task) HasPriority() bool {
 	return t.Priority != ""
+}
+
+// New status tracking methods
+func (t *Task) IsTodo() bool {
+	return t.Status == StatusTodo
+}
+
+func (t *Task) IsInProgress() bool {
+	return t.Status == StatusInProgress
+}
+
+func (t *Task) IsBlocked() bool {
+	return t.Status == StatusBlocked
+}
+
+func (t *Task) IsDone() bool {
+	return t.Status == StatusDone
+}
+
+func (t *Task) IsAbandoned() bool {
+	return t.Status == StatusAbandoned
+}
+
+// IsValidStatus returns true if the status is one of the defined valid statuses
+func (t *Task) IsValidStatus() bool {
+	validStatuses := []string{
+		StatusTodo, StatusInProgress, StatusBlocked, StatusDone, StatusAbandoned,
+		StatusPending, StatusCompleted, StatusDeleted, // legacy support
+	}
+	return slices.Contains(validStatuses, t.Status)
+}
+
+// IsValidPriority returns true if the priority is valid (text-based or numeric string)
+func (t *Task) IsValidPriority() bool {
+	if t.Priority == "" {
+		return true
+	}
+
+	textPriorities := []string{PriorityHigh, PriorityMedium, PriorityLow}
+	if slices.Contains(textPriorities, t.Priority) {
+		return true
+	}
+
+	if len(t.Priority) == 1 && t.Priority >= "A" && t.Priority <= "Z" {
+		return true
+	}
+
+	switch t.Priority {
+	case "1", "2", "3", "4", "5":
+		return true
+	}
+
+	return false
+}
+
+// GetPriorityWeight returns a numeric weight for sorting priorities
+//
+//	Higher numbers = higher priority
+func (t *Task) GetPriorityWeight() int {
+	switch t.Priority {
+	case PriorityHigh, "5":
+		return 5
+	case PriorityMedium, "4":
+		return 4
+	case PriorityLow, "3":
+		return 3
+	case "2":
+		return 2
+	case "1":
+		return 1
+	case "A":
+		return 26
+	case "B":
+		return 25
+	case "C":
+		return 24
+	default:
+		if len(t.Priority) == 1 && t.Priority >= "A" && t.Priority <= "Z" {
+			return int('Z' - t.Priority[0] + 1)
+		}
+		return 0
+	}
 }
 
 // IsWatched returns true if the movie has been watched

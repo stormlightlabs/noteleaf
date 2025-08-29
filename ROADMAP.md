@@ -17,8 +17,13 @@
     - [x] `projects` - List all project names
 - [x] Tag management system
     - [x] `tags` - List all tag names
-- [ ] Status tracking - todo, in-progress, blocked, done, abandoned
-- [ ] Priority system - High/medium/low or numeric scales
+- [x] Status tracking - todo, in-progress, blocked, done, abandoned
+    - [x] Status indicators in task list view (colored unicode/non-emoji symbols)
+- [x] Priority system - High/medium/low or numeric scales
+    - [x] Priority indicators in task list view (★★★ visual + color coding)
+- [x] Edit View
+    - [x] Interactive status picker in task edit view
+    - [x] Priority system toggle in task edit view (Text/Numeric/Legacy modes)
 - [ ] Due dates & scheduling - Including recurring tasks
 - [ ] Task dependencies - Task A blocks task B relationships
 

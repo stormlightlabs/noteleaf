@@ -134,19 +134,53 @@ Use --all to show all tasks, otherwise only pending tasks are shown.`,
 	viewCmd.Flags().Bool("no-metadata", false, "Hide creation/modification timestamps")
 	root.AddCommand(viewCmd)
 
-	root.AddCommand(&cobra.Command{
-		Use:   "update [task-id] [options...]",
+	updateCmd := &cobra.Command{
+		Use:   "update [task-id]",
 		Short: "Update task properties",
-		Args:  cobra.MinimumNArgs(1),
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			taskID := args[0]
+			description, _ := cmd.Flags().GetString("description")
+			status, _ := cmd.Flags().GetString("status")
+			priority, _ := cmd.Flags().GetString("priority")
+			project, _ := cmd.Flags().GetString("project")
+			due, _ := cmd.Flags().GetString("due")
+			addTags, _ := cmd.Flags().GetStringSlice("add-tag")
+			removeTags, _ := cmd.Flags().GetStringSlice("remove-tag")
+			
 			handler, err := handlers.NewTaskHandler()
 			if err != nil {
 				return err
 			}
 			defer handler.Close()
-			return handler.Update(cmd.Context(), args)
+			return handler.Update(cmd.Context(), taskID, description, status, priority, project, due, addTags, removeTags)
 		},
-	})
+	}
+	updateCmd.Flags().String("description", "", "Update task description")
+	updateCmd.Flags().String("status", "", "Update task status")
+	updateCmd.Flags().StringP("priority", "p", "", "Update task priority")
+	updateCmd.Flags().String("project", "", "Update task project")
+	updateCmd.Flags().StringP("due", "d", "", "Update due date (YYYY-MM-DD)")
+	updateCmd.Flags().StringSlice("add-tag", []string{}, "Add tags to task")
+	updateCmd.Flags().StringSlice("remove-tag", []string{}, "Remove tags from task")
+	root.AddCommand(updateCmd)
+
+	editCmd := &cobra.Command{
+		Use:     "edit [task-id]",
+		Short:   "Edit task interactively with status picker and priority toggle",
+		Aliases: []string{"e"},
+		Args:    cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			taskID := args[0]
+			handler, err := handlers.NewTaskHandler()
+			if err != nil {
+				return err
+			}
+			defer handler.Close()
+			return handler.EditInteractive(cmd.Context(), taskID)
+		},
+	}
+	root.AddCommand(editCmd)
 
 	root.AddCommand(&cobra.Command{
 		Use:   "delete [task-id]",

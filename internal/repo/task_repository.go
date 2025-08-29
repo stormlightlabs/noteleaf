@@ -460,3 +460,134 @@ func (r *TaskRepository) GetTasksByTag(ctx context.Context, tag string) ([]*mode
 
 	return tasks, rows.Err()
 }
+
+// GetTodo retrieves all tasks with todo status
+func (r *TaskRepository) GetTodo(ctx context.Context) ([]*models.Task, error) {
+	return r.List(ctx, TaskListOptions{Status: models.StatusTodo})
+}
+
+// GetInProgress retrieves all tasks with in-progress status
+func (r *TaskRepository) GetInProgress(ctx context.Context) ([]*models.Task, error) {
+	return r.List(ctx, TaskListOptions{Status: models.StatusInProgress})
+}
+
+// GetBlocked retrieves all tasks with blocked status
+func (r *TaskRepository) GetBlocked(ctx context.Context) ([]*models.Task, error) {
+	return r.List(ctx, TaskListOptions{Status: models.StatusBlocked})
+}
+
+// GetDone retrieves all tasks with done status
+func (r *TaskRepository) GetDone(ctx context.Context) ([]*models.Task, error) {
+	return r.List(ctx, TaskListOptions{Status: models.StatusDone})
+}
+
+// GetAbandoned retrieves all tasks with abandoned status
+func (r *TaskRepository) GetAbandoned(ctx context.Context) ([]*models.Task, error) {
+	return r.List(ctx, TaskListOptions{Status: models.StatusAbandoned})
+}
+
+// GetByPriority retrieves all tasks with a specific priority
+//
+//	We need special handling for empty priority by using raw SQL
+func (r *TaskRepository) GetByPriority(ctx context.Context, priority string) ([]*models.Task, error) {
+	if priority == "" {
+		query := `
+			SELECT id, uuid, description, status, priority, project, tags, due, entry, modified, end, start, annotations
+			FROM tasks
+			WHERE priority = '' OR priority IS NULL
+			ORDER BY modified DESC`
+
+		rows, err := r.db.QueryContext(ctx, query)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get tasks by empty priority: %w", err)
+		}
+		defer rows.Close()
+
+		var tasks []*models.Task
+		for rows.Next() {
+			task := &models.Task{}
+			if err := r.scanTaskRow(rows, task); err != nil {
+				return nil, err
+			}
+			tasks = append(tasks, task)
+		}
+
+		return tasks, rows.Err()
+	}
+
+	return r.List(ctx, TaskListOptions{Priority: priority})
+}
+
+// GetHighPriority retrieves all high priority tasks
+func (r *TaskRepository) GetHighPriority(ctx context.Context) ([]*models.Task, error) {
+	return r.List(ctx, TaskListOptions{Priority: models.PriorityHigh})
+}
+
+// GetMediumPriority retrieves all medium priority tasks
+func (r *TaskRepository) GetMediumPriority(ctx context.Context) ([]*models.Task, error) {
+	return r.List(ctx, TaskListOptions{Priority: models.PriorityMedium})
+}
+
+// GetLowPriority retrieves all low priority tasks
+func (r *TaskRepository) GetLowPriority(ctx context.Context) ([]*models.Task, error) {
+	return r.List(ctx, TaskListOptions{Priority: models.PriorityLow})
+}
+
+// GetStatusSummary returns a summary of tasks by status
+func (r *TaskRepository) GetStatusSummary(ctx context.Context) (map[string]int64, error) {
+	query := `
+		SELECT status, COUNT(*) as count
+		FROM tasks
+		GROUP BY status
+		ORDER BY status`
+
+	rows, err := r.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get status summary: %w", err)
+	}
+	defer rows.Close()
+
+	summary := make(map[string]int64)
+	for rows.Next() {
+		var status string
+		var count int64
+		if err := rows.Scan(&status, &count); err != nil {
+			return nil, fmt.Errorf("failed to scan status summary row: %w", err)
+		}
+		summary[status] = count
+	}
+
+	return summary, rows.Err()
+}
+
+// GetPrioritySummary returns a summary of tasks by priority
+func (r *TaskRepository) GetPrioritySummary(ctx context.Context) (map[string]int64, error) {
+	query := `
+		SELECT
+			CASE
+				WHEN priority = '' OR priority IS NULL THEN 'No Priority'
+				ELSE priority
+			END as priority_group,
+			COUNT(*) as count
+		FROM tasks
+		GROUP BY priority_group
+		ORDER BY priority_group`
+
+	rows, err := r.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get priority summary: %w", err)
+	}
+	defer rows.Close()
+
+	summary := make(map[string]int64)
+	for rows.Next() {
+		var priority string
+		var count int64
+		if err := rows.Scan(&priority, &count); err != nil {
+			return nil, fmt.Errorf("failed to scan priority summary row: %w", err)
+		}
+		summary[priority] = count
+	}
+
+	return summary, rows.Err()
+}
