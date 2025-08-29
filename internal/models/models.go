@@ -145,6 +145,18 @@ type Album struct {
 	Modified        time.Time `json:"modified"`
 }
 
+// TimeEntry represents a time tracking entry for a task
+type TimeEntry struct {
+	ID              int64      `json:"id"`
+	TaskID          int64      `json:"task_id"`
+	StartTime       time.Time  `json:"start_time"`
+	EndTime         *time.Time `json:"end_time,omitempty"`
+	DurationSeconds int64      `json:"duration_seconds,omitempty"`
+	Description     string     `json:"description,omitempty"`
+	Created         time.Time  `json:"created"`
+	Modified        time.Time  `json:"modified"`
+}
+
 // MarshalTags converts tags slice to JSON string for database storage
 func (t *Task) MarshalTags() (string, error) {
 	if len(t.Tags) == 0 {
@@ -426,3 +438,32 @@ func (a *Album) GetCreatedAt() time.Time     { return a.Created }
 func (a *Album) SetCreatedAt(time time.Time) { a.Created = time }
 func (a *Album) GetUpdatedAt() time.Time     { return a.Modified }
 func (a *Album) SetUpdatedAt(time time.Time) { a.Modified = time }
+
+// IsActive returns true if the time entry is currently active (not stopped)
+func (te *TimeEntry) IsActive() bool {
+	return te.EndTime == nil
+}
+
+// Stop stops the time entry and calculates duration
+func (te *TimeEntry) Stop() {
+	now := time.Now()
+	te.EndTime = &now
+	te.DurationSeconds = int64(now.Sub(te.StartTime).Seconds())
+	te.Modified = now
+}
+
+// GetDuration returns the duration of the time entry
+func (te *TimeEntry) GetDuration() time.Duration {
+	if te.EndTime != nil {
+		return time.Duration(te.DurationSeconds) * time.Second
+	}
+	return time.Since(te.StartTime)
+}
+
+func (te *TimeEntry) GetID() int64                { return te.ID }
+func (te *TimeEntry) SetID(id int64)              { te.ID = id }
+func (te *TimeEntry) GetTableName() string        { return "time_entries" }
+func (te *TimeEntry) GetCreatedAt() time.Time     { return te.Created }
+func (te *TimeEntry) SetCreatedAt(time time.Time) { te.Created = time }
+func (te *TimeEntry) GetUpdatedAt() time.Time     { return te.Modified }
+func (te *TimeEntry) SetUpdatedAt(time time.Time) { te.Modified = time }

@@ -306,6 +306,163 @@ func (h *TaskHandler) View(ctx context.Context, args []string, format string, js
 	return nil
 }
 
+// Start starts time tracking for a task
+func (h *TaskHandler) Start(ctx context.Context, taskID string, description string) error {
+	var task *models.Task
+	var err error
+
+	if id, err_ := strconv.ParseInt(taskID, 10, 64); err_ == nil {
+		task, err = h.repos.Tasks.Get(ctx, id)
+	} else {
+		task, err = h.repos.Tasks.GetByUUID(ctx, taskID)
+	}
+
+	if err != nil {
+		return fmt.Errorf("failed to find task: %w", err)
+	}
+
+	active, err := h.repos.TimeEntries.GetActiveByTaskID(ctx, task.ID)
+	if err != nil && err.Error() != "sql: no rows in result set" {
+		return fmt.Errorf("failed to check active time entry: %w", err)
+	}
+	if active != nil {
+		duration := time.Since(active.StartTime)
+		fmt.Printf("Task already started %s ago: %s\n", formatDuration(duration), task.Description)
+		return nil
+	}
+
+	_, err = h.repos.TimeEntries.Start(ctx, task.ID, description)
+	if err != nil {
+		return fmt.Errorf("failed to start time tracking: %w", err)
+	}
+
+	fmt.Printf("Started task (ID: %d): %s\n", task.ID, task.Description)
+	if description != "" {
+		fmt.Printf("Note: %s\n", description)
+	}
+
+	return nil
+}
+
+// Stop stops time tracking for a task
+func (h *TaskHandler) Stop(ctx context.Context, taskID string) error {
+	var task *models.Task
+	var err error
+
+	if id, err_ := strconv.ParseInt(taskID, 10, 64); err_ == nil {
+		task, err = h.repos.Tasks.Get(ctx, id)
+	} else {
+		task, err = h.repos.Tasks.GetByUUID(ctx, taskID)
+	}
+
+	if err != nil {
+		return fmt.Errorf("failed to find task: %w", err)
+	}
+
+	entry, err := h.repos.TimeEntries.StopActiveByTaskID(ctx, task.ID)
+	if err != nil {
+		if err.Error() == "no active time entry found for task" {
+			fmt.Printf("No active time tracking for task: %s\n", task.Description)
+			return nil
+		}
+		return fmt.Errorf("failed to stop time tracking: %w", err)
+	}
+
+	fmt.Printf("Stopped task (ID: %d): %s\n", task.ID, task.Description)
+	fmt.Printf("Time tracked: %s\n", formatDuration(entry.GetDuration()))
+
+	return nil
+}
+
+// Timesheet shows time tracking summary
+func (h *TaskHandler) Timesheet(ctx context.Context, days int, taskID string) error {
+	var entries []*models.TimeEntry
+	var err error
+
+	if taskID != "" {
+		var task *models.Task
+		if id, err_ := strconv.ParseInt(taskID, 10, 64); err_ == nil {
+			task, err = h.repos.Tasks.Get(ctx, id)
+		} else {
+			task, err = h.repos.Tasks.GetByUUID(ctx, taskID)
+		}
+
+		if err != nil {
+			return fmt.Errorf("failed to find task: %w", err)
+		}
+
+		entries, err = h.repos.TimeEntries.GetByTaskID(ctx, task.ID)
+		if err != nil {
+			return fmt.Errorf("failed to get time entries: %w", err)
+		}
+
+		fmt.Printf("Timesheet for task: %s\n\n", task.Description)
+	} else {
+		end := time.Now()
+		start := end.AddDate(0, 0, -days)
+
+		entries, err = h.repos.TimeEntries.GetByDateRange(ctx, start, end)
+		if err != nil {
+			return fmt.Errorf("failed to get time entries: %w", err)
+		}
+
+		fmt.Printf("Timesheet for last %d days:\n\n", days)
+	}
+
+	if len(entries) == 0 {
+		fmt.Printf("No time entries found\n")
+		return nil
+	}
+
+	taskTotals := make(map[int64]time.Duration)
+	dayTotals := make(map[string]time.Duration)
+	totalTime := time.Duration(0)
+
+	fmt.Printf("%-20s %-10s %-12s %-40s %s\n", "Date", "Duration", "Status", "Task", "Note")
+	fmt.Printf("%s\n", strings.Repeat("-", 95))
+
+	for _, entry := range entries {
+		task, err := h.repos.Tasks.Get(ctx, entry.TaskID)
+		if err != nil {
+			continue
+		}
+
+		duration := entry.GetDuration()
+		day := entry.StartTime.Format("2006-01-02")
+		status := "completed"
+		if entry.IsActive() {
+			status = "active"
+		}
+
+		taskTotals[entry.TaskID] += duration
+		dayTotals[day] += duration
+		totalTime += duration
+
+		note := entry.Description
+		if len(note) > 35 {
+			note = note[:32] + "..."
+		}
+
+		taskDesc := task.Description
+		if len(taskDesc) > 37 {
+			taskDesc = taskDesc[:34] + "..."
+		}
+
+		fmt.Printf("%-20s %-10s %-12s %-40s %s\n",
+			day,
+			formatDuration(duration),
+			status,
+			fmt.Sprintf("[%d] %s", task.ID, taskDesc),
+			note,
+		)
+	}
+
+	fmt.Printf("%s\n", strings.Repeat("-", 95))
+	fmt.Printf("Total time: %s\n", formatDuration(totalTime))
+
+	return nil
+}
+
 // Done marks a task as completed
 func (h *TaskHandler) Done(ctx context.Context, args []string) error {
 	if len(args) < 1 {
@@ -349,7 +506,6 @@ func (h *TaskHandler) ListProjects(ctx context.Context, static bool) error {
 	if static {
 		return h.listProjectsStatic(ctx)
 	}
-
 	return h.listProjectsInteractive(ctx)
 }
 
@@ -534,4 +690,24 @@ func pluralize(count int) string {
 	default:
 		return "s"
 	}
+}
+
+// formatDuration formats a duration in a human-readable format
+func formatDuration(d time.Duration) string {
+	if d < time.Minute {
+		return fmt.Sprintf("%.0fs", d.Seconds())
+	}
+	if d < time.Hour {
+		return fmt.Sprintf("%.0fm", d.Minutes())
+	}
+	hours := d.Hours()
+	if hours < 24 {
+		return fmt.Sprintf("%.1fh", hours)
+	}
+	days := int(hours / 24)
+	remainingHours := hours - float64(days*24)
+	if remainingHours == 0 {
+		return fmt.Sprintf("%dd", days)
+	}
+	return fmt.Sprintf("%dd %.1fh", days, remainingHours)
 }

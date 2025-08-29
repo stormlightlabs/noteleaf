@@ -28,9 +28,9 @@ func rootCmd() *cobra.Command {
 		Use:   "noteleaf",
 		Long:  ui.Georgia.ColoredInViewport(),
 		Short: "A TaskWarrior-inspired CLI with notes, media queues and reading lists",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(c *cobra.Command, args []string) error {
 			if len(args) == 0 {
-				return cmd.Help()
+				return c.Help()
 			}
 
 			output := strings.Join(args, " ")
@@ -44,238 +44,39 @@ func rootCmd() *cobra.Command {
 
 	root.AddGroup(&cobra.Group{ID: "core", Title: "Core Commands:"})
 	root.AddGroup(&cobra.Group{ID: "management", Title: "Management Commands:"})
-
 	return root
 }
 
 func todoCmd() *cobra.Command {
-	root := &cobra.Command{
-		Use:     "todo",
-		Aliases: []string{"task"},
-		Short:   "task management",
+	root := &cobra.Command{Use: "todo", Aliases: []string{"task"}, Short: "task management"}
+
+	handler, err := handlers.NewTaskHandler()
+	if err != nil {
+		log.Fatalf("failed to create task handler: %v", err)
 	}
 
-	addCmd := &cobra.Command{
-		Use:     "add [description]",
-		Short:   "Add a new task",
-		Aliases: []string{"create", "new"},
-		Args:    cobra.MinimumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			priority, _ := cmd.Flags().GetString("priority")
-			project, _ := cmd.Flags().GetString("project")
-			due, _ := cmd.Flags().GetString("due")
-			tags, _ := cmd.Flags().GetStringSlice("tags")
-
-			handler, err := handlers.NewTaskHandler()
-			if err != nil {
-				return err
-			}
-			defer handler.Close()
-			return handler.Create(cmd.Context(), args, priority, project, due, tags)
-		},
+	for _, init := range []func(*handlers.TaskHandler) *cobra.Command{
+		addTaskCmd, listTaskCmd, viewTaskCmd, updateTaskCmd, editTaskCmd,
+		deleteTaskCmd, taskProjectsCmd, taskTagsCmd, taskContextsCmd,
+		taskCompleteCmd, taskStartCmd, taskStopCmd, timesheetViewCmd,
+	} {
+		cmd := init(handler)
+		root.AddCommand(cmd)
 	}
-	addCmd.Flags().StringP("priority", "p", "", "Set task priority")
-	addCmd.Flags().String("project", "", "Set task project")
-	addCmd.Flags().StringP("due", "d", "", "Set due date (YYYY-MM-DD)")
-	addCmd.Flags().StringSliceP("tags", "t", []string{}, "Add tags to task")
-	root.AddCommand(addCmd)
-
-	listCmd := &cobra.Command{
-		Use:     "list",
-		Short:   "List tasks",
-		Aliases: []string{"ls"},
-		Long: `List tasks with optional filtering and display modes.
-
-By default, shows tasks in an interactive TaskWarrior-like interface.
-Use --static to show a simple text list instead.
-Use --all to show all tasks, otherwise only pending tasks are shown.`,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			static, _ := cmd.Flags().GetBool("static")
-			showAll, _ := cmd.Flags().GetBool("all")
-			status, _ := cmd.Flags().GetString("status")
-			priority, _ := cmd.Flags().GetString("priority")
-			project, _ := cmd.Flags().GetString("project")
-
-			handler, err := handlers.NewTaskHandler()
-			if err != nil {
-				return err
-			}
-			defer handler.Close()
-			return handler.List(cmd.Context(), static, showAll, status, priority, project)
-		},
-	}
-	listCmd.Flags().BoolP("interactive", "i", false, "Force interactive mode (default)")
-	listCmd.Flags().Bool("static", false, "Use static text output instead of interactive")
-	listCmd.Flags().BoolP("all", "a", false, "Show all tasks (default: pending only)")
-	listCmd.Flags().String("status", "", "Filter by status")
-	listCmd.Flags().String("priority", "", "Filter by priority")
-	listCmd.Flags().String("project", "", "Filter by project")
-	root.AddCommand(listCmd)
-
-	viewCmd := &cobra.Command{
-		Use:   "view [task-id]",
-		Short: "View task by ID",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			format, _ := cmd.Flags().GetString("format")
-			jsonOutput, _ := cmd.Flags().GetBool("json")
-			noMetadata, _ := cmd.Flags().GetBool("no-metadata")
-
-			handler, err := handlers.NewTaskHandler()
-			if err != nil {
-				return err
-			}
-			defer handler.Close()
-			return handler.View(cmd.Context(), args, format, jsonOutput, noMetadata)
-		},
-	}
-	viewCmd.Flags().String("format", "detailed", "Output format (detailed, brief)")
-	viewCmd.Flags().Bool("json", false, "Output as JSON")
-	viewCmd.Flags().Bool("no-metadata", false, "Hide creation/modification timestamps")
-	root.AddCommand(viewCmd)
-
-	updateCmd := &cobra.Command{
-		Use:   "update [task-id]",
-		Short: "Update task properties",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			taskID := args[0]
-			description, _ := cmd.Flags().GetString("description")
-			status, _ := cmd.Flags().GetString("status")
-			priority, _ := cmd.Flags().GetString("priority")
-			project, _ := cmd.Flags().GetString("project")
-			due, _ := cmd.Flags().GetString("due")
-			addTags, _ := cmd.Flags().GetStringSlice("add-tag")
-			removeTags, _ := cmd.Flags().GetStringSlice("remove-tag")
-			
-			handler, err := handlers.NewTaskHandler()
-			if err != nil {
-				return err
-			}
-			defer handler.Close()
-			return handler.Update(cmd.Context(), taskID, description, status, priority, project, due, addTags, removeTags)
-		},
-	}
-	updateCmd.Flags().String("description", "", "Update task description")
-	updateCmd.Flags().String("status", "", "Update task status")
-	updateCmd.Flags().StringP("priority", "p", "", "Update task priority")
-	updateCmd.Flags().String("project", "", "Update task project")
-	updateCmd.Flags().StringP("due", "d", "", "Update due date (YYYY-MM-DD)")
-	updateCmd.Flags().StringSlice("add-tag", []string{}, "Add tags to task")
-	updateCmd.Flags().StringSlice("remove-tag", []string{}, "Remove tags from task")
-	root.AddCommand(updateCmd)
-
-	editCmd := &cobra.Command{
-		Use:     "edit [task-id]",
-		Short:   "Edit task interactively with status picker and priority toggle",
-		Aliases: []string{"e"},
-		Args:    cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			taskID := args[0]
-			handler, err := handlers.NewTaskHandler()
-			if err != nil {
-				return err
-			}
-			defer handler.Close()
-			return handler.EditInteractive(cmd.Context(), taskID)
-		},
-	}
-	root.AddCommand(editCmd)
-
-	root.AddCommand(&cobra.Command{
-		Use:   "delete [task-id]",
-		Short: "Delete a task",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			handler, err := handlers.NewTaskHandler()
-			if err != nil {
-				return err
-			}
-			defer handler.Close()
-			return handler.Delete(cmd.Context(), args)
-		},
-	})
-
-	projectsCmd := &cobra.Command{
-		Use:     "projects",
-		Short:   "List projects",
-		Aliases: []string{"proj"},
-		RunE: func(cmd *cobra.Command, args []string) error {
-			static, _ := cmd.Flags().GetBool("static")
-			handler, err := handlers.NewTaskHandler()
-			if err != nil {
-				return err
-			}
-			defer handler.Close()
-			return handler.ListProjects(cmd.Context(), static)
-		},
-	}
-	projectsCmd.Flags().Bool("static", false, "Use static text output instead of interactive")
-	root.AddCommand(projectsCmd)
-
-	tagsCmd := &cobra.Command{
-		Use:     "tags",
-		Short:   "List tags",
-		Aliases: []string{"t"},
-		RunE: func(cmd *cobra.Command, args []string) error {
-			static, _ := cmd.Flags().GetBool("static")
-			handler, err := handlers.NewTaskHandler()
-			if err != nil {
-				return err
-			}
-			defer handler.Close()
-			return handler.ListTags(cmd.Context(), static)
-		},
-	}
-	tagsCmd.Flags().Bool("static", false, "Use static text output instead of interactive")
-	root.AddCommand(tagsCmd)
-
-	root.AddCommand(&cobra.Command{
-		Use:     "contexts",
-		Short:   "List contexts (locations)",
-		Aliases: []string{"loc", "ctx", "locations"},
-		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Println("Listing task contexts...")
-			return nil
-		},
-	})
-
-	root.AddCommand(&cobra.Command{
-		Use:     "done [task-id]",
-		Short:   "Mark task as completed",
-		Aliases: []string{"complete"},
-		Args:    cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			handler, err := handlers.NewTaskHandler()
-			if err != nil {
-				return err
-			}
-			defer handler.Close()
-			return handler.Done(cmd.Context(), args)
-		},
-	})
 
 	return root
 }
 
 func mediaCmd() *cobra.Command {
-	root := &cobra.Command{
-		Use:   "media",
-		Short: "Manage media queues (books, movies, TV shows)",
+	cmd := &cobra.Command{Use: "media", Short: "Manage media queues (books, movies, TV shows)"}
+	for _, init := range []func() *cobra.Command{bookMediaCmd, movieMediaCmd, tvMediaCmd} {
+		cmd.AddCommand(init())
 	}
-
-	root.AddCommand(bookMediaCmd())
-	root.AddCommand(movieMediaCmd())
-	root.AddCommand(tvMediaCmd())
-
-	return root
+	return cmd
 }
 
 func movieMediaCmd() *cobra.Command {
-	root := &cobra.Command{
-		Use:   "movie",
-		Short: "Manage movie watch queue",
-	}
+	root := &cobra.Command{Use: "movie", Short: "Manage movie watch queue"}
 
 	root.AddCommand(&cobra.Command{
 		Use:   "add [title]",
@@ -323,10 +124,7 @@ func movieMediaCmd() *cobra.Command {
 }
 
 func tvMediaCmd() *cobra.Command {
-	root := &cobra.Command{
-		Use:   "tv",
-		Short: "Manage TV show watch queue",
-	}
+	root := &cobra.Command{Use: "tv", Short: "Manage TV show watch queue"}
 
 	root.AddCommand(&cobra.Command{
 		Use:   "add [title]",
@@ -374,12 +172,8 @@ func tvMediaCmd() *cobra.Command {
 }
 
 func bookMediaCmd() *cobra.Command {
-	root := &cobra.Command{
-		Use:   "book",
-		Short: "Manage reading list",
-	}
+	root := &cobra.Command{Use: "book", Short: "Manage reading list"}
 
-	// book add - Search and add book to reading list
 	addCmd := &cobra.Command{
 		Use:   "add [search query...]",
 		Short: "Search and add book to reading list",
@@ -395,7 +189,6 @@ Use the -i flag for an interactive interface with navigation keys.`,
 	addCmd.Flags().BoolP("interactive", "i", false, "Use interactive interface for book selection")
 	root.AddCommand(addCmd)
 
-	// book list - Show reading queue with progress
 	root.AddCommand(&cobra.Command{
 		Use:   "list [--all|--reading|--finished|--queued]",
 		Short: "Show reading queue with progress",
@@ -404,7 +197,6 @@ Use the -i flag for an interactive interface with navigation keys.`,
 		},
 	})
 
-	// book reading - Mark book as currently reading (alias for update status)
 	root.AddCommand(&cobra.Command{
 		Use:   "reading <id>",
 		Short: "Mark book as currently reading",
@@ -414,7 +206,6 @@ Use the -i flag for an interactive interface with navigation keys.`,
 		},
 	})
 
-	// book finished - Mark book as completed
 	root.AddCommand(&cobra.Command{
 		Use:     "finished <id>",
 		Short:   "Mark book as completed",
@@ -425,7 +216,6 @@ Use the -i flag for an interactive interface with navigation keys.`,
 		},
 	})
 
-	// book remove - Remove from reading list
 	root.AddCommand(&cobra.Command{
 		Use:     "remove <id>",
 		Short:   "Remove from reading list",
@@ -436,7 +226,6 @@ Use the -i flag for an interactive interface with navigation keys.`,
 		},
 	})
 
-	// book progress - Update reading progress percentage
 	root.AddCommand(&cobra.Command{
 		Use:   "progress <id> <percentage>",
 		Short: "Update reading progress percentage (0-100)",
@@ -446,7 +235,6 @@ Use the -i flag for an interactive interface with navigation keys.`,
 		},
 	})
 
-	// book update - Update book status
 	root.AddCommand(&cobra.Command{
 		Use:   "update <id> <status>",
 		Short: "Update book status (queued|reading|finished|removed)",
@@ -460,10 +248,7 @@ Use the -i flag for an interactive interface with navigation keys.`,
 }
 
 func noteCmd() *cobra.Command {
-	root := &cobra.Command{
-		Use:   "note",
-		Short: "Manage notes",
-	}
+	root := &cobra.Command{Use: "note", Short: "Manage notes"}
 
 	handler, err := handlers.NewNoteHandler()
 	if err != nil {
@@ -613,8 +398,8 @@ func setupCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:   "setup",
 		Short: "Initialize and manage application setup",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return handlers.Setup(cmd.Context(), args)
+		RunE: func(c *cobra.Command, args []string) error {
+			return handlers.Setup(c.Context(), args)
 		},
 	}
 
@@ -622,9 +407,9 @@ func setupCmd() *cobra.Command {
 		Use:   "seed",
 		Short: "Populate database with test data",
 		Long:  "Add sample tasks, books, and notes to the database for testing and demonstration purposes",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			force, _ := cmd.Flags().GetBool("force")
-			return handler.Seed(cmd.Context(), force)
+		RunE: func(c *cobra.Command, args []string) error {
+			force, _ := c.Flags().GetBool("force")
+			return handler.Seed(c.Context(), force)
 		},
 	}
 	seedCmd.Flags().BoolP("force", "f", false, "Clear existing data and re-seed")
@@ -638,7 +423,7 @@ func confCmd() *cobra.Command {
 		Use:   "config [key] [value]",
 		Short: "Manage configuration",
 		Args:  cobra.ExactArgs(2),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(c *cobra.Command, args []string) error {
 			key, value := args[0], args[1]
 			fmt.Printf("Setting config %s = %s\n", key, value)
 			return nil
