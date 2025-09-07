@@ -20,7 +20,7 @@
 
 ## Media Service Refactor
 
-### Create MovieService that implement APIService
+### Create MovieService that implement APIService (✓)
 
 ```go
 // MovieService implements APIService for Rotten Tomatoes movies
@@ -30,7 +30,7 @@ type MovieService struct {
 }
 ```
 
-### Create TVService that implement APIService
+### Create TVService that implement APIService (✓)
 
 ```go
 // TVService implements APIService for Rotten Tomatoes TV shows
@@ -40,40 +40,35 @@ type TVService struct {
 }
 ```
 
-### Implement APIService
+### Implement APIService (✓)
 
 - `Search(ctx, query, page, limit)` - Use existing SearchRottenTomatoes() and convert results to []*models.Model
 - `Get(ctx, id)` - Use existing FetchMovie() / FetchTVSeries() with Rotten Tomatoes URLs
 - `Check(ctx)` - Simple connectivity test to Rotten Tomatoes
 - `Close()` - Cleanup resources
 
-### Result Conversion
+### Result Conversion (✓)
 
 - Convert services.Media search results to models.Movie / models.TVShow
 - Convert detailed metadata structs to models with proper status defaults
 - Extract key information (title, year, rating, description) into notes field
 
-## Handler Implementation
+## Handler Implementation (✓)
 
 ### Create MovieHandler similar to BookHandler
 
 ```go
 type MovieHandler struct {
     db      *store.Database
-    config*store.Config
+    config  *store.Config
     repos   *repo.Repositories
-    service*services.MovieService
+    service *services.MovieService
 }
 ```
-
-### Implement search
 
 - `SearchAndAddMovie(ctx, args, interactive)` - Mirror book search UX
 - `SearchAndAddTV(ctx, args, interactive)` - Same pattern for TV shows
 - Number-based selection interface identical to books
-
-### Database Integration
-
 - Add movie/TV repositories if not already present
 - Ensure proper CRUD operations for queue management
 

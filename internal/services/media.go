@@ -26,6 +26,84 @@ type Media struct {
 	CertifiedFresh bool
 }
 
+type Person struct {
+	Name   string `json:"name"`
+	SameAs string `json:"sameAs"`
+	Image  string `json:"image"`
+}
+
+type AggregateRating struct {
+	RatingValue string `json:"ratingValue"`
+	RatingCount int    `json:"ratingCount"`
+	ReviewCount int    `json:"reviewCount"`
+}
+
+type Season struct {
+	Name string `json:"name"`
+	URL  string `json:"url"`
+}
+
+type PartOfSeries struct {
+	Name string `json:"name"`
+	URL  string `json:"url"`
+}
+
+type TVSeries struct {
+	Context         string          `json:"@context"`
+	Type            string          `json:"@type"`
+	Name            string          `json:"name"`
+	URL             string          `json:"url"`
+	Description     string          `json:"description"`
+	Image           string          `json:"image"`
+	Genre           []string        `json:"genre"`
+	ContentRating   string          `json:"contentRating"`
+	DateCreated     string          `json:"dateCreated"`
+	NumberOfSeasons int             `json:"numberOfSeasons"`
+	Actors          []Person        `json:"actor"`
+	Producers       []Person        `json:"producer"`
+	AggregateRating AggregateRating `json:"aggregateRating"`
+	Seasons         []Season        `json:"containsSeason"`
+}
+
+type Movie struct {
+	Context         string          `json:"@context"`
+	Type            string          `json:"@type"`
+	Name            string          `json:"name"`
+	URL             string          `json:"url"`
+	Description     string          `json:"description"`
+	Image           string          `json:"image"`
+	Genre           []string        `json:"genre"`
+	ContentRating   string          `json:"contentRating"`
+	DateCreated     string          `json:"dateCreated"`
+	Actors          []Person        `json:"actor"`
+	Directors       []Person        `json:"director"`
+	Producers       []Person        `json:"producer"`
+	AggregateRating AggregateRating `json:"aggregateRating"`
+}
+
+type TVSeason struct {
+	Context         string          `json:"@context"`
+	Type            string          `json:"@type"`
+	Name            string          `json:"name"`
+	URL             string          `json:"url"`
+	Description     string          `json:"description"`
+	Image           string          `json:"image"`
+	SeasonNumber    int             `json:"seasonNumber"`
+	DatePublished   string          `json:"datePublished"`
+	PartOfSeries    PartOfSeries    `json:"partOfSeries"`
+	AggregateRating AggregateRating `json:"aggregateRating"`
+}
+
+type MovieService struct {
+	client  *http.Client
+	limiter *rate.Limiter
+}
+
+type TVService struct {
+	client  *http.Client
+	limiter *rate.Limiter
+}
+
 // ParseSearch parses Rotten Tomatoes search results HTML into Media entries.
 func ParseSearch(r io.Reader) ([]Media, error) {
 	doc, err := goquery.NewDocumentFromReader(r)
@@ -93,74 +171,6 @@ var SearchRottenTomatoes = func(q string) ([]Media, error) {
 		return nil, err
 	}
 	return ParseSearch(strings.NewReader(html))
-}
-
-type Person struct {
-	Name   string `json:"name"`
-	SameAs string `json:"sameAs"`
-	Image  string `json:"image"`
-}
-
-type AggregateRating struct {
-	RatingValue string `json:"ratingValue"`
-	RatingCount int    `json:"ratingCount"`
-	ReviewCount int    `json:"reviewCount"`
-}
-
-type Season struct {
-	Name string `json:"name"`
-	URL  string `json:"url"`
-}
-
-type PartOfSeries struct {
-	Name string `json:"name"`
-	URL  string `json:"url"`
-}
-
-type TVSeries struct {
-	Context         string          `json:"@context"`
-	Type            string          `json:"@type"`
-	Name            string          `json:"name"`
-	URL             string          `json:"url"`
-	Description     string          `json:"description"`
-	Image           string          `json:"image"`
-	Genre           []string        `json:"genre"`
-	ContentRating   string          `json:"contentRating"`
-	DateCreated     string          `json:"dateCreated"`
-	NumberOfSeasons int             `json:"numberOfSeasons"`
-	Actors          []Person        `json:"actor"`
-	Producers       []Person        `json:"producer"`
-	AggregateRating AggregateRating `json:"aggregateRating"`
-	Seasons         []Season        `json:"containsSeason"`
-}
-
-type Movie struct {
-	Context         string          `json:"@context"`
-	Type            string          `json:"@type"`
-	Name            string          `json:"name"`
-	URL             string          `json:"url"`
-	Description     string          `json:"description"`
-	Image           string          `json:"image"`
-	Genre           []string        `json:"genre"`
-	ContentRating   string          `json:"contentRating"`
-	DateCreated     string          `json:"dateCreated"`
-	Actors          []Person        `json:"actor"`
-	Directors       []Person        `json:"director"`
-	Producers       []Person        `json:"producer"`
-	AggregateRating AggregateRating `json:"aggregateRating"`
-}
-
-type TVSeason struct {
-	Context         string          `json:"@context"`
-	Type            string          `json:"@type"`
-	Name            string          `json:"name"`
-	URL             string          `json:"url"`
-	Description     string          `json:"description"`
-	Image           string          `json:"image"`
-	SeasonNumber    int             `json:"seasonNumber"`
-	DatePublished   string          `json:"datePublished"`
-	PartOfSeries    PartOfSeries    `json:"partOfSeries"`
-	AggregateRating AggregateRating `json:"aggregateRating"`
 }
 
 func ExtractTVSeriesMetadata(r io.Reader) (*TVSeries, error) {
@@ -295,11 +305,6 @@ var FetchTVSeason = func(url string) (*TVSeason, error) {
 	return ExtractTVSeasonMetadata(strings.NewReader(html))
 }
 
-type MovieService struct {
-	client  *http.Client
-	limiter *rate.Limiter
-}
-
 // NewMovieService creates a new movie service with rate limiting
 func NewMovieService() *MovieService {
 	return &MovieService{
@@ -389,12 +394,6 @@ func (s *MovieService) Check(ctx context.Context) error {
 // Close cleans up the service resources
 func (s *MovieService) Close() error {
 	return nil
-}
-
-// TVService implements APIService for Rotten Tomatoes TV shows
-type TVService struct {
-	client  *http.Client
-	limiter *rate.Limiter
 }
 
 // NewTVService creates a new TV service with rate limiting

@@ -143,7 +143,8 @@ func (h *TaskHandler) listTasksStatic(ctx context.Context, showAll bool, status,
 	return nil
 }
 
-func (h *TaskHandler) listTasksInteractive(ctx context.Context, showAll bool, status, priority, project, context string) error {
+// TODO: include context field
+func (h *TaskHandler) listTasksInteractive(ctx context.Context, showAll bool, status, priority, project, _ string) error {
 	taskTable := ui.NewTaskListFromTable(h.repos.Tasks, os.Stdout, os.Stdin, false, showAll, status, priority, project)
 	return taskTable.Browse(ctx)
 }
