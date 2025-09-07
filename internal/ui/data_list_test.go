@@ -15,20 +15,17 @@ import (
 )
 
 type MockListItem struct {
-	id          int64
 	title       string
 	description string
 	filterValue string
-	created     time.Time
-	modified    time.Time
 }
 
 func (m MockListItem) GetID() int64 {
-	return m.id
+	return 1 // Mock ID
 }
 
 func (m MockListItem) SetID(id int64) {
-	m.id = id
+	// Mock - no-op
 }
 
 func (m MockListItem) GetTableName() string {
@@ -36,19 +33,19 @@ func (m MockListItem) GetTableName() string {
 }
 
 func (m MockListItem) GetCreatedAt() time.Time {
-	return m.created
+	return time.Time{} // Mock - zero time
 }
 
 func (m MockListItem) SetCreatedAt(t time.Time) {
-	m.created = t
+	// Mock - no-op
 }
 
 func (m MockListItem) GetUpdatedAt() time.Time {
-	return m.modified
+	return time.Time{} // Mock - zero time
 }
 
 func (m MockListItem) SetUpdatedAt(t time.Time) {
-	m.modified = t
+	// Mock - no-op
 }
 
 func (m MockListItem) GetTitle() string {
@@ -64,14 +61,10 @@ func (m MockListItem) GetFilterValue() string {
 }
 
 func NewMockItem(id int64, title, description, filterValue string) MockListItem {
-	now := time.Now()
 	return MockListItem{
-		id:          id,
 		title:       title,
 		description: description,
 		filterValue: filterValue,
-		created:     now,
-		modified:    now,
 	}
 }
 

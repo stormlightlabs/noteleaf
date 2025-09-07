@@ -552,8 +552,8 @@ func (h *TaskHandler) listProjectsStatic(ctx context.Context) error {
 }
 
 func (h *TaskHandler) listProjectsInteractive(ctx context.Context) error {
-	projectList := ui.NewProjectList(h.repos.Tasks, ui.ProjectListOptions{})
-	return projectList.Browse(ctx)
+	projectTable := ui.NewProjectListFromTable(h.repos.Tasks, nil, nil, false)
+	return projectTable.Browse(ctx)
 }
 
 // ListTags lists all tags with their task counts
@@ -645,8 +645,8 @@ func (h *TaskHandler) listTagsStatic(ctx context.Context) error {
 }
 
 func (h *TaskHandler) listTagsInteractive(ctx context.Context) error {
-	tagList := ui.NewTagList(h.repos.Tasks, ui.TagListOptions{})
-	return tagList.Browse(ctx)
+	tagTable := ui.NewTagListFromTable(h.repos.Tasks, nil, nil, false)
+	return tagTable.Browse(ctx)
 }
 
 func (h *TaskHandler) printTask(task *models.Task) {
@@ -755,7 +755,6 @@ func pluralize(count int) string {
 	}
 }
 
-// formatDuration formats a duration in a human-readable format
 func formatDuration(d time.Duration) string {
 	if d < time.Minute {
 		return fmt.Sprintf("%.0fs", d.Seconds())

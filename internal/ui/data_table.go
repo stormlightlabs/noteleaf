@@ -166,7 +166,6 @@ type dataTableModel struct {
 	help        help.Model
 	showingHelp bool
 	totalCount  int
-	currentPage int
 	dataOpts    DataOptions
 }
 

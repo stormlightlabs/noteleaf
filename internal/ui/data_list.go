@@ -154,7 +154,6 @@ type (
 	listViewMsg   string
 	listErrorMsg  error
 	listCountMsg  int
-	searchModeMsg bool
 )
 
 type dataListModel struct {
@@ -172,7 +171,6 @@ type dataListModel struct {
 	help        help.Model
 	showingHelp bool
 	totalCount  int
-	currentPage int
 	listOpts    ListOptions
 }
 

@@ -15,18 +15,15 @@ import (
 )
 
 type MockDataRecord struct {
-	id       int64
-	fields   map[string]any
-	created  time.Time
-	modified time.Time
+	fields map[string]any
 }
 
 func (m MockDataRecord) GetID() int64 {
-	return m.id
+	return 1 // Mock ID
 }
 
 func (m MockDataRecord) SetID(id int64) {
-	m.id = id
+	// Mock - no-op
 }
 
 func (m MockDataRecord) GetTableName() string {
@@ -34,19 +31,19 @@ func (m MockDataRecord) GetTableName() string {
 }
 
 func (m MockDataRecord) GetCreatedAt() time.Time {
-	return m.created
+	return time.Time{} // Mock - zero time
 }
 
 func (m MockDataRecord) SetCreatedAt(t time.Time) {
-	m.created = t
+	// Mock - no-op
 }
 
 func (m MockDataRecord) GetUpdatedAt() time.Time {
-	return m.modified
+	return time.Time{} // Mock - zero time
 }
 
 func (m MockDataRecord) SetUpdatedAt(t time.Time) {
-	m.modified = t
+	// Mock - no-op
 }
 
 func (m MockDataRecord) GetField(name string) any {
@@ -54,12 +51,8 @@ func (m MockDataRecord) GetField(name string) any {
 }
 
 func NewMockRecord(id int64, fields map[string]any) MockDataRecord {
-	now := time.Now()
 	return MockDataRecord{
-		id:       id,
-		fields:   fields,
-		created:  now,
-		modified: now,
+		fields: fields,
 	}
 }
 
@@ -67,7 +60,6 @@ type MockDataSource struct {
 	records    []DataRecord
 	loadError  error
 	countError error
-	loadDelay  bool
 }
 
 func (m *MockDataSource) Load(ctx context.Context, opts DataOptions) ([]DataRecord, error) {
