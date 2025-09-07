@@ -15,6 +15,7 @@ type TaskListOptions struct {
 	Status    string
 	Priority  string
 	Project   string
+	Context   string
 	DueAfter  time.Time
 	DueBefore time.Time
 	Search    string
@@ -32,6 +33,12 @@ type ProjectSummary struct {
 
 // TagSummary represents a tag with its task count
 type TagSummary struct {
+	Name      string `json:"name"`
+	TaskCount int    `json:"task_count"`
+}
+
+// ContextSummary represents a context with its task count
+type ContextSummary struct {
 	Name      string `json:"name"`
 	TaskCount int    `json:"task_count"`
 }
@@ -63,11 +70,11 @@ func (r *TaskRepository) Create(ctx context.Context, task *models.Task) (int64, 
 	}
 
 	query := `
-		INSERT INTO tasks (uuid, description, status, priority, project, tags, due, entry, modified, end, start, annotations)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		INSERT INTO tasks (uuid, description, status, priority, project, context, tags, due, entry, modified, end, start, annotations)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	result, err := r.db.ExecContext(ctx, query,
-		task.UUID, task.Description, task.Status, task.Priority, task.Project,
+		task.UUID, task.Description, task.Status, task.Priority, task.Project, task.Context,
 		tags, task.Due, task.Entry, task.Modified, task.End, task.Start, annotations)
 	if err != nil {
 		return 0, fmt.Errorf("failed to insert task: %w", err)
@@ -85,14 +92,14 @@ func (r *TaskRepository) Create(ctx context.Context, task *models.Task) (int64, 
 // Get retrieves a task by ID
 func (r *TaskRepository) Get(ctx context.Context, id int64) (*models.Task, error) {
 	query := `
-		SELECT id, uuid, description, status, priority, project, tags, due, entry, modified, end, start, annotations
+		SELECT id, uuid, description, status, priority, project, context, tags, due, entry, modified, end, start, annotations
 		FROM tasks WHERE id = ?`
 
 	task := &models.Task{}
 	var tags, annotations sql.NullString
 
 	err := r.db.QueryRowContext(ctx, query, id).Scan(
-		&task.ID, &task.UUID, &task.Description, &task.Status, &task.Priority, &task.Project,
+		&task.ID, &task.UUID, &task.Description, &task.Status, &task.Priority, &task.Project, &task.Context,
 		&tags, &task.Due, &task.Entry, &task.Modified, &task.End, &task.Start, &annotations)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get task: %w", err)
@@ -128,12 +135,12 @@ func (r *TaskRepository) Update(ctx context.Context, task *models.Task) error {
 	}
 
 	query := `
-		UPDATE tasks SET uuid = ?, description = ?, status = ?, priority = ?, project = ?,
+		UPDATE tasks SET uuid = ?, description = ?, status = ?, priority = ?, project = ?, context = ?,
 		tags = ?, due = ?, modified = ?, end = ?, start = ?, annotations = ?
 		WHERE id = ?`
 
 	_, err = r.db.ExecContext(ctx, query,
-		task.UUID, task.Description, task.Status, task.Priority, task.Project,
+		task.UUID, task.Description, task.Status, task.Priority, task.Project, task.Context,
 		tags, task.Due, task.Modified, task.End, task.Start, annotations, task.ID)
 	if err != nil {
 		return fmt.Errorf("failed to update task: %w", err)
@@ -176,7 +183,7 @@ func (r *TaskRepository) List(ctx context.Context, opts TaskListOptions) ([]*mod
 }
 
 func (r *TaskRepository) buildListQuery(opts TaskListOptions) string {
-	query := "SELECT id, uuid, description, status, priority, project, tags, due, entry, modified, end, start, annotations FROM tasks"
+	query := "SELECT id, uuid, description, status, priority, project, context, tags, due, entry, modified, end, start, annotations FROM tasks"
 
 	var conditions []string
 
@@ -189,6 +196,9 @@ func (r *TaskRepository) buildListQuery(opts TaskListOptions) string {
 	if opts.Project != "" {
 		conditions = append(conditions, "project = ?")
 	}
+	if opts.Context != "" {
+		conditions = append(conditions, "context = ?")
+	}
 	if !opts.DueAfter.IsZero() {
 		conditions = append(conditions, "due >= ?")
 	}
@@ -200,6 +210,7 @@ func (r *TaskRepository) buildListQuery(opts TaskListOptions) string {
 		searchConditions := []string{
 			"description LIKE ?",
 			"project LIKE ?",
+			"context LIKE ?",
 			"tags LIKE ?",
 		}
 		conditions = append(conditions, fmt.Sprintf("(%s)", strings.Join(searchConditions, " OR ")))
@@ -241,6 +252,9 @@ func (r *TaskRepository) buildListArgs(opts TaskListOptions) []any {
 	if opts.Project != "" {
 		args = append(args, opts.Project)
 	}
+	if opts.Context != "" {
+		args = append(args, opts.Context)
+	}
 	if !opts.DueAfter.IsZero() {
 		args = append(args, opts.DueAfter)
 	}
@@ -250,7 +264,7 @@ func (r *TaskRepository) buildListArgs(opts TaskListOptions) []any {
 
 	if opts.Search != "" {
 		searchPattern := "%" + opts.Search + "%"
-		args = append(args, searchPattern, searchPattern, searchPattern)
+		args = append(args, searchPattern, searchPattern, searchPattern, searchPattern)
 	}
 
 	return args
@@ -260,7 +274,7 @@ func (r *TaskRepository) scanTaskRow(rows *sql.Rows, task *models.Task) error {
 	var tags, annotations sql.NullString
 
 	if err := rows.Scan(&task.ID, &task.UUID, &task.Description, &task.Status, &task.Priority,
-		&task.Project, &tags, &task.Due, &task.Entry, &task.Modified, &task.End, &task.Start, &annotations); err != nil {
+		&task.Project, &task.Context, &tags, &task.Due, &task.Entry, &task.Modified, &task.End, &task.Start, &annotations); err != nil {
 		return fmt.Errorf("failed to scan task row: %w", err)
 	}
 
@@ -381,6 +395,11 @@ func (r *TaskRepository) GetByProject(ctx context.Context, project string) ([]*m
 	return r.List(ctx, TaskListOptions{Project: project})
 }
 
+// GetByContext retrieves all tasks for a specific context
+func (r *TaskRepository) GetByContext(ctx context.Context, context string) ([]*models.Task, error) {
+	return r.List(ctx, TaskListOptions{Context: context})
+}
+
 // GetProjects retrieves all unique project names with their task counts
 func (r *TaskRepository) GetProjects(ctx context.Context) ([]ProjectSummary, error) {
 	query := `
@@ -435,10 +454,37 @@ func (r *TaskRepository) GetTags(ctx context.Context) ([]TagSummary, error) {
 	return tags, rows.Err()
 }
 
+// GetContexts retrieves all unique context names with their task counts
+func (r *TaskRepository) GetContexts(ctx context.Context) ([]ContextSummary, error) {
+	query := `
+		SELECT context, COUNT(*) as task_count
+		FROM tasks
+		WHERE context != '' AND context IS NOT NULL
+		GROUP BY context
+		ORDER BY context`
+
+	rows, err := r.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get contexts: %w", err)
+	}
+	defer rows.Close()
+
+	var contexts []ContextSummary
+	for rows.Next() {
+		var context ContextSummary
+		if err := rows.Scan(&context.Name, &context.TaskCount); err != nil {
+			return nil, fmt.Errorf("failed to scan context row: %w", err)
+		}
+		contexts = append(contexts, context)
+	}
+
+	return contexts, rows.Err()
+}
+
 // GetTasksByTag retrieves all tasks with a specific tag
 func (r *TaskRepository) GetTasksByTag(ctx context.Context, tag string) ([]*models.Task, error) {
 	query := `
-		SELECT tasks.id, tasks.uuid, tasks.description, tasks.status, tasks.priority, tasks.project, tasks.tags, tasks.due, tasks.entry, tasks.modified, tasks.end, tasks.start, tasks.annotations
+		SELECT tasks.id, tasks.uuid, tasks.description, tasks.status, tasks.priority, tasks.project, tasks.context, tasks.tags, tasks.due, tasks.entry, tasks.modified, tasks.end, tasks.start, tasks.annotations
 		FROM tasks, json_each(tasks.tags)
 		WHERE tasks.tags != '' AND tasks.tags IS NOT NULL AND json_each.value = ?
 		ORDER BY tasks.modified DESC`
@@ -492,7 +538,7 @@ func (r *TaskRepository) GetAbandoned(ctx context.Context) ([]*models.Task, erro
 func (r *TaskRepository) GetByPriority(ctx context.Context, priority string) ([]*models.Task, error) {
 	if priority == "" {
 		query := `
-			SELECT id, uuid, description, status, priority, project, tags, due, entry, modified, end, start, annotations
+			SELECT id, uuid, description, status, priority, project, context, tags, due, entry, modified, end, start, annotations
 			FROM tasks
 			WHERE priority = '' OR priority IS NULL
 			ORDER BY modified DESC`

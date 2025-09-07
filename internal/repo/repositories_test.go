@@ -29,6 +29,7 @@ func createFullTestDB(t *testing.T) *sql.DB {
 			status TEXT DEFAULT 'pending',
 			priority TEXT,
 			project TEXT,
+			context TEXT,
 			tags TEXT,
 			due DATETIME,
 			entry DATETIME DEFAULT CURRENT_TIMESTAMP,

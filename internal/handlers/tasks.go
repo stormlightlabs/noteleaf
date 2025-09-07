@@ -52,7 +52,7 @@ func (h *TaskHandler) Close() error {
 }
 
 // Create creates a new task
-func (h *TaskHandler) Create(ctx context.Context, desc []string, priority, project, due string, tags []string) error {
+func (h *TaskHandler) Create(ctx context.Context, desc []string, priority, project, context, due string, tags []string) error {
 	if len(desc) < 1 {
 		return fmt.Errorf("task description required")
 	}
@@ -65,6 +65,7 @@ func (h *TaskHandler) Create(ctx context.Context, desc []string, priority, proje
 		Status:      "pending",
 		Priority:    priority,
 		Project:     project,
+		Context:     context,
 		Tags:        tags,
 	}
 
@@ -89,6 +90,9 @@ func (h *TaskHandler) Create(ctx context.Context, desc []string, priority, proje
 	if project != "" {
 		fmt.Printf("Project: %s\n", project)
 	}
+	if context != "" {
+		fmt.Printf("Context: %s\n", context)
+	}
 	if len(tags) > 0 {
 		fmt.Printf("Tags: %s\n", strings.Join(tags, ", "))
 	}
@@ -100,19 +104,20 @@ func (h *TaskHandler) Create(ctx context.Context, desc []string, priority, proje
 }
 
 // List lists all tasks with optional filtering
-func (h *TaskHandler) List(ctx context.Context, static, showAll bool, status, priority, project string) error {
+func (h *TaskHandler) List(ctx context.Context, static, showAll bool, status, priority, project, context string) error {
 	if static {
-		return h.listTasksStatic(ctx, showAll, status, priority, project)
+		return h.listTasksStatic(ctx, showAll, status, priority, project, context)
 	}
 
-	return h.listTasksInteractive(ctx, showAll, status, priority, project)
+	return h.listTasksInteractive(ctx, showAll, status, priority, project, context)
 }
 
-func (h *TaskHandler) listTasksStatic(ctx context.Context, showAll bool, status, priority, project string) error {
+func (h *TaskHandler) listTasksStatic(ctx context.Context, showAll bool, status, priority, project, context string) error {
 	opts := repo.TaskListOptions{
 		Status:   status,
 		Priority: priority,
 		Project:  project,
+		Context:  context,
 	}
 
 	if !showAll && opts.Status == "" {
@@ -137,12 +142,13 @@ func (h *TaskHandler) listTasksStatic(ctx context.Context, showAll bool, status,
 	return nil
 }
 
-func (h *TaskHandler) listTasksInteractive(ctx context.Context, showAll bool, status, priority, project string) error {
+func (h *TaskHandler) listTasksInteractive(ctx context.Context, showAll bool, status, priority, project, context string) error {
 	taskList := ui.NewTaskList(h.repos.Tasks, ui.TaskListOptions{
 		ShowAll:  showAll,
 		Status:   status,
 		Priority: priority,
 		Project:  project,
+		Context:  context,
 		Static:   false,
 	})
 
@@ -150,7 +156,7 @@ func (h *TaskHandler) listTasksInteractive(ctx context.Context, showAll bool, st
 }
 
 // Update updates a task using parsed flag values
-func (h *TaskHandler) Update(ctx context.Context, taskID, description, status, priority, project, due string, addTags, removeTags []string) error {
+func (h *TaskHandler) Update(ctx context.Context, taskID, description, status, priority, project, context, due string, addTags, removeTags []string) error {
 	var task *models.Task
 	var err error
 
@@ -175,6 +181,9 @@ func (h *TaskHandler) Update(ctx context.Context, taskID, description, status, p
 	}
 	if project != "" {
 		task.Project = project
+	}
+	if context != "" {
+		task.Context = context
 	}
 	if due != "" {
 		if dueTime, err := time.Parse("2006-01-02", due); err == nil {
@@ -556,6 +565,52 @@ func (h *TaskHandler) ListTags(ctx context.Context, static bool) error {
 	return h.listTagsInteractive(ctx)
 }
 
+// ListContexts lists all contexts with their task counts
+func (h *TaskHandler) ListContexts(ctx context.Context, static bool) error {
+	if static {
+		return h.listContextsStatic(ctx)
+	}
+	return h.listContextsInteractive(ctx)
+}
+
+func (h *TaskHandler) listContextsStatic(ctx context.Context) error {
+	tasks, err := h.repos.Tasks.List(ctx, repo.TaskListOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to list tasks for contexts: %w", err)
+	}
+
+	contextCounts := make(map[string]int)
+	for _, task := range tasks {
+		if task.Context != "" {
+			contextCounts[task.Context]++
+		}
+	}
+
+	if len(contextCounts) == 0 {
+		fmt.Printf("No contexts found\n")
+		return nil
+	}
+
+	contexts := make([]string, 0, len(contextCounts))
+	for context := range contextCounts {
+		contexts = append(contexts, context)
+	}
+	slices.Sort(contexts)
+
+	fmt.Printf("Found %d context(s):\n\n", len(contexts))
+	for _, context := range contexts {
+		count := contextCounts[context]
+		fmt.Printf("%s (%d task%s)\n", context, count, pluralize(count))
+	}
+
+	return nil
+}
+
+func (h *TaskHandler) listContextsInteractive(ctx context.Context) error {
+	fmt.Println("Interactive context listing not implemented yet - using static mode")
+	return h.listContextsStatic(ctx)
+}
+
 func (h *TaskHandler) listTagsStatic(ctx context.Context) error {
 	tasks, err := h.repos.Tasks.List(ctx, repo.TaskListOptions{})
 	if err != nil {
@@ -609,8 +664,12 @@ func (h *TaskHandler) printTask(task *models.Task) {
 		fmt.Printf(" +%s", task.Project)
 	}
 
+	if task.Context != "" {
+		fmt.Printf(" @%s", task.Context)
+	}
+
 	if len(task.Tags) > 0 {
-		fmt.Printf(" @%s", strings.Join(task.Tags, " @"))
+		fmt.Printf(" #%s", strings.Join(task.Tags, " #"))
 	}
 
 	if task.Due != nil {
@@ -632,6 +691,10 @@ func (h *TaskHandler) printTaskDetail(task *models.Task, noMetadata bool) {
 
 	if task.Project != "" {
 		fmt.Printf("Project: %s\n", task.Project)
+	}
+
+	if task.Context != "" {
+		fmt.Printf("Context: %s\n", task.Context)
 	}
 
 	if len(task.Tags) > 0 {

@@ -261,104 +261,104 @@ func TestTimeTracking(t *testing.T) {
 			}
 		})
 	})
-}
 
-func TestFormatDuration(t *testing.T) {
-	tests := []struct {
-		duration time.Duration
-		expected string
-	}{
-		{30 * time.Second, "30s"},
-		{90 * time.Second, "2m"},
-		{30 * time.Minute, "30m"},
-		{90 * time.Minute, "1.5h"},
-		{2 * time.Hour, "2.0h"},
-		{25 * time.Hour, "1d 1.0h"},
-		{48 * time.Hour, "2d"},
-		{72 * time.Hour, "3d"},
-	}
-
-	for _, test := range tests {
-		result := formatDuration(test.duration)
-		if result != test.expected {
-			t.Errorf("formatDuration(%v) = %q, expected %q", test.duration, result, test.expected)
-		}
-	}
-}
-
-func TestTimeEntryMethods(t *testing.T) {
-	now := time.Now()
-
-	t.Run("IsActive returns true for entry without end time", func(t *testing.T) {
-		entry := &models.TimeEntry{
-			StartTime: now,
-			EndTime:   nil,
+	t.Run("TestFormatDuration", func(t *testing.T) {
+		tests := []struct {
+			duration time.Duration
+			expected string
+		}{
+			{30 * time.Second, "30s"},
+			{90 * time.Second, "2m"},
+			{30 * time.Minute, "30m"},
+			{90 * time.Minute, "1.5h"},
+			{2 * time.Hour, "2.0h"},
+			{25 * time.Hour, "1d 1.0h"},
+			{48 * time.Hour, "2d"},
+			{72 * time.Hour, "3d"},
 		}
 
-		if !entry.IsActive() {
-			t.Error("Expected entry to be active")
+		for _, test := range tests {
+			result := formatDuration(test.duration)
+			if result != test.expected {
+				t.Errorf("formatDuration(%v) = %q, expected %q", test.duration, result, test.expected)
+			}
 		}
 	})
 
-	t.Run("IsActive returns false for entry with end time", func(t *testing.T) {
-		endTime := now.Add(time.Hour)
-		entry := &models.TimeEntry{
-			StartTime: now,
-			EndTime:   &endTime,
-		}
+	t.Run("TestTimeEntryMethods", func(t *testing.T) {
+		now := time.Now()
 
-		if entry.IsActive() {
-			t.Error("Expected entry to not be active")
-		}
-	})
+		t.Run("IsActive returns true for entry without end time", func(t *testing.T) {
+			entry := &models.TimeEntry{
+				StartTime: now,
+				EndTime:   nil,
+			}
 
-	t.Run("Stop sets end time and calculates duration", func(t *testing.T) {
-		entry := &models.TimeEntry{
-			StartTime: now.Add(-time.Second), // Start 1 second ago
-			EndTime:   nil,
-		}
+			if !entry.IsActive() {
+				t.Error("Expected entry to be active")
+			}
+		})
 
-		entry.Stop()
+		t.Run("IsActive returns false for entry with end time", func(t *testing.T) {
+			endTime := now.Add(time.Hour)
+			entry := &models.TimeEntry{
+				StartTime: now,
+				EndTime:   &endTime,
+			}
 
-		if entry.EndTime == nil {
-			t.Error("Expected EndTime to be set after stopping")
-		}
-		if entry.DurationSeconds <= 0 {
-			t.Error("Expected duration to be calculated and greater than 0")
-		}
-		if entry.IsActive() {
-			t.Error("Expected entry to not be active after stopping")
-		}
-	})
+			if entry.IsActive() {
+				t.Error("Expected entry to not be active")
+			}
+		})
 
-	t.Run("GetDuration returns calculated duration for completed entry", func(t *testing.T) {
-		start := now
-		end := now.Add(2 * time.Hour)
-		entry := &models.TimeEntry{
-			StartTime:       start,
-			EndTime:         &end,
-			DurationSeconds: int64((2 * time.Hour).Seconds()),
-		}
+		t.Run("Stop sets end time and calculates duration", func(t *testing.T) {
+			entry := &models.TimeEntry{
+				StartTime: now.Add(-time.Second), // Start 1 second ago
+				EndTime:   nil,
+			}
 
-		duration := entry.GetDuration()
-		expected := 2 * time.Hour
+			entry.Stop()
 
-		if duration != expected {
-			t.Errorf("Expected duration %v, got %v", expected, duration)
-		}
-	})
+			if entry.EndTime == nil {
+				t.Error("Expected EndTime to be set after stopping")
+			}
+			if entry.DurationSeconds <= 0 {
+				t.Error("Expected duration to be calculated and greater than 0")
+			}
+			if entry.IsActive() {
+				t.Error("Expected entry to not be active after stopping")
+			}
+		})
 
-	t.Run("GetDuration returns live duration for active entry", func(t *testing.T) {
-		start := time.Now().Add(-time.Minute)
-		entry := &models.TimeEntry{
-			StartTime: start,
-			EndTime:   nil,
-		}
+		t.Run("GetDuration returns calculated duration for completed entry", func(t *testing.T) {
+			start := now
+			end := now.Add(2 * time.Hour)
+			entry := &models.TimeEntry{
+				StartTime:       start,
+				EndTime:         &end,
+				DurationSeconds: int64((2 * time.Hour).Seconds()),
+			}
 
-		duration := entry.GetDuration()
+			duration := entry.GetDuration()
+			expected := 2 * time.Hour
 
-		if duration < 59*time.Second || duration > 61*time.Second {
-			t.Errorf("Expected duration around 1 minute, got %v", duration)
-		}
+			if duration != expected {
+				t.Errorf("Expected duration %v, got %v", expected, duration)
+			}
+		})
+
+		t.Run("GetDuration returns live duration for active entry", func(t *testing.T) {
+			start := time.Now().Add(-time.Minute)
+			entry := &models.TimeEntry{
+				StartTime: start,
+				EndTime:   nil,
+			}
+
+			duration := entry.GetDuration()
+
+			if duration < 59*time.Second || duration > 61*time.Second {
+				t.Errorf("Expected duration around 1 minute, got %v", duration)
+			}
+		})
 	})
 }

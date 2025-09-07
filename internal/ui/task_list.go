@@ -91,6 +91,7 @@ type TaskListOptions struct {
 	Status   string
 	Priority string
 	Project  string
+	Context  string
 	ShowAll  bool
 }
 

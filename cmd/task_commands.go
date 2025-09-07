@@ -1,8 +1,6 @@
 package main
 
 import (
-	"fmt"
-
 	"github.com/spf13/cobra"
 	"github.com/stormlightlabs/noteleaf/internal/handlers"
 )
@@ -16,15 +14,17 @@ func addTaskCmd(h *handlers.TaskHandler) *cobra.Command {
 		RunE: func(c *cobra.Command, args []string) error {
 			priority, _ := c.Flags().GetString("priority")
 			project, _ := c.Flags().GetString("project")
+			context, _ := c.Flags().GetString("context")
 			due, _ := c.Flags().GetString("due")
 			tags, _ := c.Flags().GetStringSlice("tags")
 
 			defer h.Close()
-			return h.Create(c.Context(), args, priority, project, due, tags)
+			return h.Create(c.Context(), args, priority, project, context, due, tags)
 		},
 	}
 	cmd.Flags().StringP("priority", "p", "", "Set task priority")
 	cmd.Flags().String("project", "", "Set task project")
+	cmd.Flags().StringP("context", "c", "", "Set task context")
 	cmd.Flags().StringP("due", "d", "", "Set due date (YYYY-MM-DD)")
 	cmd.Flags().StringSliceP("tags", "t", []string{}, "Add tags to task")
 
@@ -47,9 +47,10 @@ Use --all to show all tasks, otherwise only pending tasks are shown.`,
 			status, _ := c.Flags().GetString("status")
 			priority, _ := c.Flags().GetString("priority")
 			project, _ := c.Flags().GetString("project")
+			context, _ := c.Flags().GetString("context")
 
 			defer h.Close()
-			return h.List(c.Context(), static, showAll, status, priority, project)
+			return h.List(c.Context(), static, showAll, status, priority, project, context)
 		},
 	}
 	cmd.Flags().BoolP("interactive", "i", false, "Force interactive mode (default)")
@@ -58,6 +59,7 @@ Use --all to show all tasks, otherwise only pending tasks are shown.`,
 	cmd.Flags().String("status", "", "Filter by status")
 	cmd.Flags().String("priority", "", "Filter by priority")
 	cmd.Flags().String("project", "", "Filter by project")
+	cmd.Flags().String("context", "", "Filter by context")
 
 	return cmd
 }
@@ -94,18 +96,20 @@ func updateTaskCmd(handler *handlers.TaskHandler) *cobra.Command {
 			status, _ := cmd.Flags().GetString("status")
 			priority, _ := cmd.Flags().GetString("priority")
 			project, _ := cmd.Flags().GetString("project")
+			context, _ := cmd.Flags().GetString("context")
 			due, _ := cmd.Flags().GetString("due")
 			addTags, _ := cmd.Flags().GetStringSlice("add-tag")
 			removeTags, _ := cmd.Flags().GetStringSlice("remove-tag")
 
 			defer handler.Close()
-			return handler.Update(cmd.Context(), taskID, description, status, priority, project, due, addTags, removeTags)
+			return handler.Update(cmd.Context(), taskID, description, status, priority, project, context, due, addTags, removeTags)
 		},
 	}
 	updateCmd.Flags().String("description", "", "Update task description")
 	updateCmd.Flags().String("status", "", "Update task status")
 	updateCmd.Flags().StringP("priority", "p", "", "Update task priority")
 	updateCmd.Flags().String("project", "", "Update task project")
+	updateCmd.Flags().StringP("context", "c", "", "Update task context")
 	updateCmd.Flags().StringP("due", "d", "", "Update due date (YYYY-MM-DD)")
 	updateCmd.Flags().StringSlice("add-tag", []string{}, "Add tags to task")
 	updateCmd.Flags().StringSlice("remove-tag", []string{}, "Remove tags from task")
@@ -223,16 +227,20 @@ func deleteTaskCmd(h *handlers.TaskHandler) *cobra.Command {
 	}
 }
 
-func taskContextsCmd(*handlers.TaskHandler) *cobra.Command {
-	return &cobra.Command{
+func taskContextsCmd(h *handlers.TaskHandler) *cobra.Command {
+	cmd := &cobra.Command{
 		Use:     "contexts",
 		Short:   "List contexts (locations)",
 		Aliases: []string{"loc", "ctx", "locations"},
 		RunE: func(c *cobra.Command, args []string) error {
-			fmt.Println("Listing task contexts...")
-			return nil
+			static, _ := c.Flags().GetBool("static")
+
+			defer h.Close()
+			return h.ListContexts(c.Context(), static)
 		},
 	}
+	cmd.Flags().Bool("static", false, "Use static text output instead of interactive")
+	return cmd
 }
 
 func taskCompleteCmd(h *handlers.TaskHandler) *cobra.Command {

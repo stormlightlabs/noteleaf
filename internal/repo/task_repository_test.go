@@ -30,6 +30,7 @@ func createTaskTestDB(t *testing.T) *sql.DB {
 			status TEXT DEFAULT 'pending',
 			priority TEXT,
 			project TEXT,
+			context TEXT,
 			tags TEXT,
 			due DATETIME,
 			entry DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -58,6 +59,7 @@ func createSampleTask() *models.Task {
 		Status:      "pending",
 		Priority:    "H",
 		Project:     "test-project",
+		Context:     "test-context",
 		Tags:        []string{"test", "important"},
 		Annotations: []string{"This is a test", "Another annotation"},
 	}
@@ -122,6 +124,9 @@ func TestTaskRepository(t *testing.T) {
 		}
 		if retrieved.Project != original.Project {
 			t.Errorf("Expected project %s, got %s", original.Project, retrieved.Project)
+		}
+		if retrieved.Context != original.Context {
+			t.Errorf("Expected context %s, got %s", original.Context, retrieved.Context)
 		}
 
 		if len(retrieved.Tags) != len(original.Tags) {
@@ -820,4 +825,125 @@ func TestTaskRepository(t *testing.T) {
 			}
 		})
 	})
+}
+
+func TestTaskRepository_GetContexts(t *testing.T) {
+	db := createTaskTestDB(t)
+	repo := NewTaskRepository(db)
+	ctx := context.Background()
+
+	// Create tasks with different contexts
+	task1 := createSampleTask()
+	task1.Context = "work"
+	_, err := repo.Create(ctx, task1)
+	if err != nil {
+		t.Fatalf("Failed to create task1: %v", err)
+	}
+
+	task2 := createSampleTask()
+	task2.Context = "home"
+	_, err = repo.Create(ctx, task2)
+	if err != nil {
+		t.Fatalf("Failed to create task2: %v", err)
+	}
+
+	task3 := createSampleTask()
+	task3.Context = "work"
+	_, err = repo.Create(ctx, task3)
+	if err != nil {
+		t.Fatalf("Failed to create task3: %v", err)
+	}
+
+	// Task with empty context should not be included
+	task4 := createSampleTask()
+	task4.Context = ""
+	_, err = repo.Create(ctx, task4)
+	if err != nil {
+		t.Fatalf("Failed to create task4: %v", err)
+	}
+
+	contexts, err := repo.GetContexts(ctx)
+	if err != nil {
+		t.Fatalf("Failed to get contexts: %v", err)
+	}
+
+	if len(contexts) != 2 {
+		t.Errorf("Expected 2 contexts, got %d", len(contexts))
+	}
+
+	expectedCounts := map[string]int{
+		"home": 1,
+		"work": 2,
+	}
+
+	for _, context := range contexts {
+		expected, exists := expectedCounts[context.Name]
+		if !exists {
+			t.Errorf("Unexpected context: %s", context.Name)
+		}
+		if context.TaskCount != expected {
+			t.Errorf("Expected %d tasks for context %s, got %d", expected, context.Name, context.TaskCount)
+		}
+	}
+}
+
+func TestTaskRepository_GetByContext(t *testing.T) {
+	db := createTaskTestDB(t)
+	repo := NewTaskRepository(db)
+	ctx := context.Background()
+
+	// Create tasks with different contexts
+	task1 := createSampleTask()
+	task1.Context = "work"
+	task1.Description = "Work task 1"
+	_, err := repo.Create(ctx, task1)
+	if err != nil {
+		t.Fatalf("Failed to create task1: %v", err)
+	}
+
+	task2 := createSampleTask()
+	task2.Context = "home"
+	task2.Description = "Home task 1"
+	_, err = repo.Create(ctx, task2)
+	if err != nil {
+		t.Fatalf("Failed to create task2: %v", err)
+	}
+
+	task3 := createSampleTask()
+	task3.Context = "work"
+	task3.Description = "Work task 2"
+	_, err = repo.Create(ctx, task3)
+	if err != nil {
+		t.Fatalf("Failed to create task3: %v", err)
+	}
+
+	// Get tasks by work context
+	workTasks, err := repo.GetByContext(ctx, "work")
+	if err != nil {
+		t.Fatalf("Failed to get tasks by context: %v", err)
+	}
+
+	if len(workTasks) != 2 {
+		t.Errorf("Expected 2 work tasks, got %d", len(workTasks))
+	}
+
+	for _, task := range workTasks {
+		if task.Context != "work" {
+			t.Errorf("Expected context 'work', got '%s'", task.Context)
+		}
+	}
+
+	// Get tasks by home context  
+	homeTasks, err := repo.GetByContext(ctx, "home")
+	if err != nil {
+		t.Fatalf("Failed to get tasks by context: %v", err)
+	}
+
+	if len(homeTasks) != 1 {
+		t.Errorf("Expected 1 home task, got %d", len(homeTasks))
+	}
+
+	if homeTasks[0].Context != "home" {
+		t.Errorf("Expected context 'home', got '%s'", homeTasks[0].Context)
+	}
 }

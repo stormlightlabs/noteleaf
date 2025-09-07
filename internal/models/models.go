@@ -63,6 +63,7 @@ type Task struct {
 	// A-Z or empty
 	Priority string     `json:"priority,omitempty"`
 	Project  string     `json:"project,omitempty"`
+	Context  string     `json:"context,omitempty"`
 	Tags     []string   `json:"tags,omitempty"`
 	Due      *time.Time `json:"due,omitempty"`
 	Entry    time.Time  `json:"entry"`
