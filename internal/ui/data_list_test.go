@@ -311,16 +311,10 @@ func TestDataList(t *testing.T) {
 
 	t.Run("Model", func(t *testing.T) {
 		t.Run("initial model state", func(t *testing.T) {
-			source := &MockListSource{items: createMockItems()}
-			keys := DefaultDataListKeys()
-
 			model := dataListModel{
-				source: source,
 				opts: DataListOptions{
 					Title: "Test",
 				},
-				keys:    keys,
-				help:    help.New(),
 				loading: true,
 			}
 

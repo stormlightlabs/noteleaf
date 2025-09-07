@@ -363,15 +363,7 @@ func (h *NoteHandler) View(ctx context.Context, id int64) error {
 
 // List opens either an interactive TUI browser for navigating and viewing notes or a static list
 func (h *NoteHandler) List(ctx context.Context, static, showArchived bool, tags []string) error {
-	opts := ui.NoteListOptions{
-		Output:       os.Stdout,
-		Input:        os.Stdin,
-		Static:       static,
-		ShowArchived: showArchived,
-		Tags:         tags,
-	}
-
-	noteList := ui.NewNoteList(h.repos.Notes, opts)
+	noteList := ui.NewNoteListFromList(h.repos.Notes, os.Stdout, os.Stdin, static, showArchived, tags)
 	return noteList.Browse(ctx)
 }
 

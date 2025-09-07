@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -143,16 +144,8 @@ func (h *TaskHandler) listTasksStatic(ctx context.Context, showAll bool, status,
 }
 
 func (h *TaskHandler) listTasksInteractive(ctx context.Context, showAll bool, status, priority, project, context string) error {
-	taskList := ui.NewTaskList(h.repos.Tasks, ui.TaskListOptions{
-		ShowAll:  showAll,
-		Status:   status,
-		Priority: priority,
-		Project:  project,
-		Context:  context,
-		Static:   false,
-	})
-
-	return taskList.Browse(ctx)
+	taskTable := ui.NewTaskListFromTable(h.repos.Tasks, os.Stdout, os.Stdin, false, showAll, status, priority, project)
+	return taskTable.Browse(ctx)
 }
 
 // Update updates a task using parsed flag values

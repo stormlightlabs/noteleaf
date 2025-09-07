@@ -8,6 +8,12 @@ version: 0.1.0
 
 ### Added
 
+#### 2025-09-07
+
+- Task `context` field with list command (static)
+- General data table & data list abstraction on top of bubbles (basically, more consistent UI)
+- Media queue service with `colly` (v2), tested with sample files
+
 #### 2025-08-23
 
 - CLI with cobra and fang integration

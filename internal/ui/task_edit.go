@@ -13,6 +13,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/stormlightlabs/noteleaf/internal/models"
+	"github.com/stormlightlabs/noteleaf/internal/utils"
 )
 
 type TaskEditOptions struct {
@@ -24,11 +25,11 @@ type TaskEditOptions struct {
 
 type TaskEditor struct {
 	task *models.Task
-	repo TaskRepository
+	repo utils.TestTaskRepository
 	opts TaskEditOptions
 }
 
-func NewTaskEditor(task *models.Task, repo TaskRepository, opts TaskEditOptions) *TaskEditor {
+func NewTaskEditor(task *models.Task, repo utils.TestTaskRepository, opts TaskEditOptions) *TaskEditor {
 	if opts.Output == nil {
 		opts.Output = os.Stdout
 	}
@@ -136,7 +137,7 @@ var taskEditKeys = taskEditKeyMap{
 type taskEditModel struct {
 	task         *models.Task
 	originalTask *models.Task
-	repo         TaskRepository
+	repo         utils.TestTaskRepository
 	opts         TaskEditOptions
 	keys         taskEditKeyMap
 	help         help.Model

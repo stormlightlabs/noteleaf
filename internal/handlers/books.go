@@ -114,12 +114,8 @@ func (h *BookHandler) searchAndAddWithOptions(ctx context.Context, args []string
 	}
 
 	if interactive {
-		bookList := ui.NewBookList(h.service, h.repos.Books, ui.BookListOptions{
-			Output: os.Stdout,
-			Input:  os.Stdin,
-			Static: false,
-		})
-		return bookList.SearchAndSelect(ctx, query)
+		bookList := ui.NewBookListFromList(h.repos.Books, os.Stdout, os.Stdin, false, "")
+		return bookList.Browse(ctx)
 	}
 
 	fmt.Printf("Searching for books: %s\n", query)
@@ -173,7 +169,6 @@ func (h *BookHandler) searchAndAddWithOptions(ctx context.Context, args []string
 		return fmt.Errorf("invalid choice: %d", choice)
 	}
 
-	// Add selected book
 	selectedBook, ok := (*results[choice-1]).(*models.Book)
 	if !ok {
 		return fmt.Errorf("error processing selected book")

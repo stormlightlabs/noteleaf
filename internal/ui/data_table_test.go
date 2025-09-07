@@ -18,42 +18,17 @@ type MockDataRecord struct {
 	fields map[string]any
 }
 
-func (m MockDataRecord) GetID() int64 {
-	return 1 // Mock ID
-}
-
-func (m MockDataRecord) SetID(id int64) {
-	// Mock - no-op
-}
-
-func (m MockDataRecord) GetTableName() string {
-	return "mock_records"
-}
-
-func (m MockDataRecord) GetCreatedAt() time.Time {
-	return time.Time{} // Mock - zero time
-}
-
-func (m MockDataRecord) SetCreatedAt(t time.Time) {
-	// Mock - no-op
-}
-
-func (m MockDataRecord) GetUpdatedAt() time.Time {
-	return time.Time{} // Mock - zero time
-}
-
-func (m MockDataRecord) SetUpdatedAt(t time.Time) {
-	// Mock - no-op
-}
-
-func (m MockDataRecord) GetField(name string) any {
-	return m.fields[name]
-}
+func (m MockDataRecord) GetID() int64             { return 1 }
+func (m MockDataRecord) SetID(id int64)           {}
+func (m MockDataRecord) GetTableName() string     { return "mock_records" }
+func (m MockDataRecord) GetCreatedAt() time.Time  { return time.Time{} }
+func (m MockDataRecord) SetCreatedAt(t time.Time) {}
+func (m MockDataRecord) GetUpdatedAt() time.Time  { return time.Time{} }
+func (m MockDataRecord) SetUpdatedAt(t time.Time) {}
+func (m MockDataRecord) GetField(name string) any { return m.fields[name] }
 
 func NewMockRecord(id int64, fields map[string]any) MockDataRecord {
-	return MockDataRecord{
-		fields: fields,
-	}
+	return MockDataRecord{fields: fields}
 }
 
 type MockDataSource struct {
@@ -299,16 +274,10 @@ func TestDataTable(t *testing.T) {
 
 	t.Run("Model", func(t *testing.T) {
 		t.Run("initial model state", func(t *testing.T) {
-			source := &MockDataSource{records: createMockRecords()}
-			keys := DefaultDataTableKeys()
-
 			model := dataTableModel{
-				source: source,
 				opts: DataTableOptions{
 					Fields: createTestFields(),
 				},
-				keys:    keys,
-				help:    help.New(),
 				loading: true,
 			}
 
@@ -907,7 +876,7 @@ func TestDataTable(t *testing.T) {
 
 	t.Run("Field", func(t *testing.T) {
 		t.Run("field without formatter", func(t *testing.T) {
-			field := Field{Name: "test", Title: "Test", Width: 10}
+			field := Field{Name: "test"}
 
 			record := NewMockRecord(1, map[string]interface{}{
 				"test": "value",
@@ -923,9 +892,7 @@ func TestDataTable(t *testing.T) {
 
 		t.Run("field with formatter", func(t *testing.T) {
 			field := Field{
-				Name:  "test",
-				Title: "Test",
-				Width: 10,
+				Name: "test",
 				Formatter: func(v interface{}) string {
 					return strings.ToUpper(fmt.Sprintf("%v", v))
 				},

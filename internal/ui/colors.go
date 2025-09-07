@@ -8,7 +8,14 @@ import (
 	"image/color"
 	"slices"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/lucasb-eyer/go-colorful"
+)
+
+var (
+	TitleColorStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("212")).Bold(true)
+	SelectedColorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("0")).Background(lipgloss.Color("212"))
+	HeaderColorStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Bold(true)
 )
 
 var _ color.Color = Key(0)

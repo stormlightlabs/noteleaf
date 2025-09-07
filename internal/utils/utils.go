@@ -1,10 +1,13 @@
 package utils
 
 import (
+	"context"
 	"os"
 	"strings"
 
 	"github.com/charmbracelet/log"
+	"github.com/stormlightlabs/noteleaf/internal/models"
+	"github.com/stormlightlabs/noteleaf/internal/repo"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 )
@@ -50,4 +53,20 @@ func GetLogger() *log.Logger {
 
 func Titlecase(s string) string {
 	return cases.Title(language.Und, cases.NoLower).String(s)
+}
+
+// TestTaskRepository interface for dependency injection in tests
+type TestTaskRepository interface {
+	List(ctx context.Context, options repo.TaskListOptions) ([]*models.Task, error)
+	Update(ctx context.Context, task *models.Task) error
+}
+
+// TestBookRepository interface for dependency injection in tests
+type TestBookRepository interface {
+	List(ctx context.Context, options repo.BookListOptions) ([]*models.Book, error)
+}
+
+// TestNoteRepository interface for dependency injection in tests
+type TestNoteRepository interface {
+	List(ctx context.Context, options repo.NoteListOptions) ([]*models.Note, error)
 }
