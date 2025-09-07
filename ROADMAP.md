@@ -1,89 +1,94 @@
 # ROADMAP
 
-## Core Task Management (TaskWarrior-inspired)
+## Task Management Commands (TaskWarrior-inspired)
 
-### Basic Operations
+### Implemented Commands
 
-- [x] `create|new` - Add new task with description and optional metadata
-- [x] `list` - Display tasks with filtering and sorting options
-- [x] `view` - View task by ID
-- [x] `update` - Edit task properties (description, priority, project, tags)
-- [x] `done` - Mark task as completed
-- [x] `delete` - Remove task permanently
+- [x] `todo add [description]` - Create new task with metadata (priority, project, context, due, tags)
+- [x] `todo list` - Display tasks with filtering (status, priority, project, context) and interactive/static modes
+- [x] `todo view [task-id]` - View task details with format options (detailed, brief, json)
+- [x] `todo update [task-id]` - Edit task properties via flags
+- [x] `todo edit [task-id]` - Interactive task editor with status picker and priority toggle
+- [x] `todo done [task-id]` - Mark task as completed
+- [x] `todo delete [task-id]` - Remove task permanently
 
-### Organization & Metadata
+---
 
-- [x] Project & context organization
-    - [x] `projects` - List all project names
-- [x] Tag management system
-    - [x] `tags` - List all tag names
-- [x] Status tracking - todo, in-progress, blocked, done, abandoned
-    - [x] Status indicators in task list view (colored unicode/non-emoji symbols)
-- [x] Priority system - High/medium/low or numeric scales
-    - [x] Priority indicators in task list view (★★★ visual + color coding)
-- [x] Edit View
-    - [x] Interactive status picker in task edit view
-    - [x] Priority system toggle in task edit view (Text/Numeric/Legacy modes)
+- [x] `todo projects` - List all project names (interactive/static modes)
+- [x] `todo tags` - List all tag names (interactive/static modes)
+- [x] `todo contexts` - List all contexts/locations (interactive/static modes)
+
+---
+
+- [x] `todo start [task-id]` - Start time tracking for a task
+- [x] `todo stop [task-id]` - Stop time tracking for a task
+- [x] `todo timesheet` - Show time tracking summaries (with date range and task filters)
+
+### Commands To Be Implemented
+
 - [ ] Due dates & scheduling - Including recurring tasks
 - [ ] Task dependencies - Task A blocks task B relationships
-
-### Time Management
-
-- [ ] Time tracking functionality
-    - [ ] `start/stop` - Track active time on tasks
-    - [ ] `timesheet` - Show time tracking summaries
-    - [ ] `calendar` - Display tasks in calendar view
-
-### Advanced Task Features
-
 - [ ] `annotate` - Add notes/comments to existing tasks
 - [ ] Recurring tasks
 - [ ] Smart due date suggestions
 - [ ] Completion notifications
+- [ ] `calendar` - Display tasks in calendar view
 
-## Content Queue Management
+## Media Queue Management Commands
 
-### Reading Management
+### Implemented Commands
 
-- [x] `book add` - Add book to reading list
-- [x] `book list` - Show reading queue with progress
-- [x] `book reading` - Mark book as currently reading
-- [x] `book finished|read` - Mark book as completed
-- [x] `book remove|rm` - Remove from reading list
-- [x] `book progress` - Update reading progress percentage
+Book Management
 
-#### Enhanced Reading Features
+- [x] `media book add [search query...]` - Search and add book to reading list (with interactive mode)
+- [x] `media book list` - Show reading queue with progress and status filtering
+- [x] `media book reading <id>` - Mark book as currently reading
+- [x] `media book finished <id>` - Mark book as completed
+- [x] `media book remove <id>` - Remove from reading list
+- [x] `media book progress <id> <percentage>` - Update reading progress (0-100%)
+- [x] `media book update <id> <status>` - Update book status (queued|reading|finished|removed)
+
+### Commands To Be Implemented
+
+Movie Management
+
+- [ ] `media movie add [title]` - Add movie to watch queue
+- [ ] `media movie list` - Show movie queue with ratings/metadata
+- [ ] `media movie watched <id>` - Mark movie as watched
+- [ ] `media movie remove <id>` - Remove from queue
+
+TV Show Management
+
+- [ ] `media tv add [title]` - Add TV show/season to queue
+- [ ] `media tv list` - Show TV queue with episode tracking
+- [ ] `media tv watched <id>` - Mark episodes/seasons as watched
+- [ ] `media tv remove <id>` - Remove from TV queue
+
+---
 
 - [ ] Articles, papers, blogs support (implement article parser)
-- [ ] Reading status: want-to-read, currently-reading, completed, abandoned
 - [ ] Source tracking (recommendation sources)
 - [ ] Ratings and personal notes
 - [ ] Genre/topic tagging
-- [ ] Progress tracking (pages/chapters read, completion %)
-
-### Watching Management
-
-- [ ] `movie add` - Add movie to watch queue
-- [ ] `movie list` - Show movie queue with ratings/metadata
-- [ ] `movie watched|seen` - Mark movie as watched
-- [ ] `movie remove|rm` - Remove from queue
-
-- [ ] `tv add` - Add TV show/season to queue
-- [ ] `tv list` - Show TV queue with episode tracking
-- [ ] `tv watched|seen` - Mark episodes/seasons as watched
-- [ ] `tv remove|rm` - Remove from TV queue
-
-#### Enhanced Watching Features
-
-- [ ] Episode/season progress tracking
-- [ ] Watch status: queued, watching, completed, dropped
+- [ ] Episode/season progress tracking for TV
 - [ ] Platform tracking (Netflix, Amazon, etc.)
-- [ ] Ratings and reviews
-- [ ] Genre/mood tagging
+- [ ] Watch status: queued, watching, completed, dropped
 
-## Organization & Discovery Features
+## Management Commands
 
-### Smart Views & Filtering
+### Implemented Commands
+
+Application Management
+
+- [x] `status` - Show application status and configuration
+- [x] `setup` - Initialize and manage application setup
+- [x] `setup seed` - Populate database with test data (with --force flag)
+- [x] `reset` - Reset the application (removes all data)
+- [x] `config [key] [value]` - Manage configuration settings (stubbed)
+
+### Commands To Be Implemented
+
+Organization Features
 
 - [ ] Custom queries and saved searches
 - [ ] Context-aware suggestions
@@ -92,7 +97,7 @@
 - [ ] Seasonal/mood-based filtering
 - [ ] Full-text search across titles, notes, tags
 
-### Analytics & Insights
+Analytics
 
 - [ ] Reading/watching velocity tracking
 - [ ] Completion rates by content type
@@ -100,9 +105,7 @@
 - [ ] Personal productivity metrics
 - [ ] Content source analysis
 
-## Advanced Workflow Features
-
-### Integration & Import
+Integrations
 
 - [ ] `import` - Import from various formats (CSV, JSON, todo.txt)
 - [ ] `export` - Export to various formats
@@ -112,7 +115,7 @@
 - [ ] TaskWarrior import/export
 - [ ] URL parsing for automatic metadata
 
-### Todo.txt Compatibility
+`todo.txt` Compatibility
 
 - [ ] `archive` - Move completed tasks to done.txt
 - [ ] `[con]texts` - List all contexts (@context)
@@ -122,16 +125,14 @@
 - [ ] `[re]place` - Replace task text entirely
 - [ ] `prepend/append` - Add text to beginning/end of task
 
-### Automation
+Automation
 
 - [ ] Auto-categorization of new items
 - [ ] Smart due date suggestions
 - [ ] Recurring content (weekly podcast check-ins)
 - [ ] Completion notifications
 
-## Data Management
-
-### Storage & Sync
+Storage
 
 - [ ] `sync` - Synchronize with remote storage
 - [ ] `sync setup` - Setup remote storage
@@ -140,42 +141,55 @@
 - [ ] `backup` - Create local backup
 - [ ] Backup/restore functionality
 
-### Configuration
+Configuration
 
-- [ ] `config` - Manage configuration settings
+- [ ] Enhanced `config` command implementation
 - [ ] `undo` - Reverse last operation
 - [ ] Themes and personalization
 - [ ] Customizable output formats
 
-## Notes Management
+## Notes Management Commands
 
-### Basic Operations
+### Implemented Commands
 
-- [x] `create|new` - Creates a new markdown note and optionally opens in configured editor
-- [x] `list` - Opens interactive TUI browser for navigating and viewing notes
-- [x] `read|view` - Displays formatted note content with syntax highlighting
-- [x] `edit|update` - Opens configured editor OR replaces note content with new markdown file
-- [x] `remove|rm|delete|del` - Permanently removes the note file and metadata
+Core Notes Operations
 
-### Advanced Notes Features
+- [x] `note create [title] [content...]` - Create new markdown note with optional interactive editor
+- [x] `note list` - Interactive TUI browser for navigating and viewing notes (with archive and tag filtering)
+- [x] `note read <note-id>` - Display formatted note content with syntax highlighting
+- [x] `note edit <note-id>` - Edit note in configured editor
+- [x] `note remove <note-id>` - Permanently remove note file and metadata
 
-- [ ] `search` - Search notes by content, title, or tags
-- [ ] `tag` - Add/remove tags from notes
-- [ ] `recent` - Show recently created/modified notes
-- [ ] `templates` - Create notes from predefined templates
-- [ ] `archive` - Archive old notes
-- [ ] `export` - Export notes to various formats
+Additional Options
+
+- [x] `--interactive|-i` flag for create command (opens editor)
+- [x] `--file|-f` flag for create command (create from markdown file)
+- [x] `--archived|-a` flag for list command
+- [x] `--tags` filtering for list command
+
+### Commands To Be Implemented
+
+- [ ] `note search [query]` - Search notes by content, title, or tags
+- [ ] `note tag <note-id> [tags...]` - Add/remove tags from notes
+- [ ] `note recent` - Show recently created/modified notes
+- [ ] `note templates` - Create notes from predefined templates
+- [ ] `note archive <note-id>` - Archive old notes
+- [ ] `note export` - Export notes to various formats
 - [ ] Full-text search integration
 - [ ] Linking between notes and tasks/content
 
 ## User Experience
 
-### Interface
+- [x] Interactive TUI modes for task lists, projects, tags, contexts, and notes
+- [x] Static output modes as alternatives to interactive TUI
+- [x] Color-coded priority and status indicators
+- [x] Comprehensive help system via cobra CLI framework
 
-- [ ] Interactive TUI mode for browsing (likely using Bubbletea)
+---
+
 - [ ] Quick-add commands for rapid entry
-- [ ] Progress tracking UI
-- [ ] Comprehensive help system
+- [ ] Enhanced progress tracking UI
+- [ ] Calendar view for tasks
 
 ### Technical Infrastructure
 

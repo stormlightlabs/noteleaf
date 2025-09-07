@@ -2,9 +2,13 @@ package services
 
 import (
 	"bytes"
+	"context"
 	_ "embed"
+	"errors"
 	"strings"
 	"testing"
+
+	"github.com/stormlightlabs/noteleaf/internal/models"
 )
 
 // From: https://www.rottentomatoes.com/m/the_fantastic_four_first_steps
@@ -27,7 +31,132 @@ var SeriesSample []byte
 //go:embed samples/series_season.html
 var SeasonSample []byte
 
-func TestMediaService(t *testing.T) {
+// From: https://www.rottentomatoes.com/search?search=Fantastic%20Four
+//
+//go:embed samples/movie_search.html
+var MovieSearchSample []byte
+
+func TestMovieService(t *testing.T) {
+	t.Run("Search", func(t *testing.T) {
+		originalSearch := SearchRottenTomatoes
+		defer func() { SearchRottenTomatoes = originalSearch }()
+
+		SearchRottenTomatoes = func(q string) ([]Media, error) {
+			if q == "error" {
+				return nil, errors.New("search error")
+			}
+			if q == "Fantastic Four" {
+				return ParseSearch(bytes.NewReader(MovieSearchSample))
+			}
+			return nil, errors.New("unexpected query")
+		}
+
+		service := NewMovieService()
+
+		t.Run("successful search", func(t *testing.T) {
+			results, err := service.Search(context.Background(), "Fantastic Four", 1, 10)
+			if err != nil {
+				t.Fatalf("Search failed: %v", err)
+			}
+			if len(results) == 0 {
+				t.Fatal("expected search results, got none")
+			}
+
+			var movieFound bool
+			for _, r := range results {
+				m, ok := (*r).(*models.Movie)
+				if !ok {
+					continue
+				}
+				if strings.Contains(m.Title, "Fantastic Four") {
+					movieFound = true
+					break
+				}
+			}
+			if !movieFound {
+				t.Error("expected to find a movie in search results")
+			}
+		})
+
+		t.Run("search returns error", func(t *testing.T) {
+			_, err := service.Search(context.Background(), "error", 1, 10)
+			if err == nil {
+				t.Fatal("expected error from search, got nil")
+			}
+			if !strings.Contains(err.Error(), "search error") {
+				t.Errorf("expected error to contain 'search error', got %v", err)
+			}
+		})
+	})
+
+	t.Run("Get", func(t *testing.T) {
+		originalFetch := FetchMovie
+		defer func() { FetchMovie = originalFetch }()
+
+		FetchMovie = func(url string) (*Movie, error) {
+			if url == "error" {
+				return nil, errors.New("fetch error")
+			}
+			return ExtractMovieMetadata(bytes.NewReader(MovieSample))
+		}
+
+		service := NewMovieService()
+
+		t.Run("successful get", func(t *testing.T) {
+			result, err := service.Get(context.Background(), "some-url")
+			if err != nil {
+				t.Fatalf("Get failed: %v", err)
+			}
+			movie, ok := (*result).(*models.Movie)
+			if !ok {
+				t.Fatalf("expected a movie model, got %T", *result)
+			}
+			if movie.Title != "The Fantastic Four: First Steps" {
+				t.Errorf("expected title 'The Fantastic Four: First Steps', got '%s'", movie.Title)
+			}
+		})
+
+		t.Run("get returns error", func(t *testing.T) {
+			_, err := service.Get(context.Background(), "error")
+			if err == nil {
+				t.Fatal("expected error from get, got nil")
+			}
+			if !strings.Contains(err.Error(), "fetch error") {
+				t.Errorf("expected error to contain 'fetch error', got %v", err)
+			}
+		})
+	})
+
+	t.Run("Check", func(t *testing.T) {
+		originalFetchHTML := FetchHTML
+		defer func() { FetchHTML = originalFetchHTML }()
+
+		service := NewMovieService()
+
+		t.Run("successful check", func(t *testing.T) {
+			FetchHTML = func(url string) (string, error) {
+				return "ok", nil
+			}
+			err := service.Check(context.Background())
+			if err != nil {
+				t.Fatalf("Check failed: %v", err)
+			}
+		})
+
+		t.Run("check returns error", func(t *testing.T) {
+			FetchHTML = func(url string) (string, error) {
+				return "", errors.New("html fetch error")
+			}
+			err := service.Check(context.Background())
+			if err == nil {
+				t.Fatal("expected error from check, got nil")
+			}
+			if !strings.Contains(err.Error(), "html fetch error") {
+				t.Errorf("expected error to contain 'html fetch error', got %v", err)
+			}
+		})
+	})
+
 	t.Run("Parse Search results", func(t *testing.T) {
 		results, err := ParseSearch(bytes.NewReader(SearchSample))
 		if err != nil {
@@ -143,4 +272,114 @@ func TestMediaService(t *testing.T) {
 		}
 	})
 
+}
+
+func TestTVService(t *testing.T) {
+	t.Run("Search", func(t *testing.T) {
+		originalSearch := SearchRottenTomatoes
+		defer func() { SearchRottenTomatoes = originalSearch }()
+
+		SearchRottenTomatoes = func(q string) ([]Media, error) {
+			if q == "error" {
+				return nil, errors.New("search error")
+			}
+			return ParseSearch(bytes.NewReader(SearchSample))
+		}
+
+		service := NewTVService()
+
+		t.Run("successful search", func(t *testing.T) {
+			results, err := service.Search(context.Background(), "peacemaker", 1, 10)
+			if err != nil {
+				t.Fatalf("Search failed: %v", err)
+			}
+			if len(results) == 0 {
+				t.Fatal("expected search results, got none")
+			}
+
+			var tvFound bool
+			for _, r := range results {
+				s, ok := (*r).(*models.TVShow)
+				if !ok {
+					continue
+				}
+				if strings.Contains(s.Title, "Peacemaker") {
+					tvFound = true
+					break
+				}
+			}
+			if !tvFound {
+				t.Error("expected to find a tv show in search results")
+			}
+		})
+
+		t.Run("search returns error", func(t *testing.T) {
+			_, err := service.Search(context.Background(), "error", 1, 10)
+			if err == nil {
+				t.Fatal("expected error from search, got nil")
+			}
+		})
+	})
+
+	t.Run("Get", func(t *testing.T) {
+		originalFetch := FetchTVSeries
+		defer func() { FetchTVSeries = originalFetch }()
+
+		FetchTVSeries = func(url string) (*TVSeries, error) {
+			if url == "error" {
+				return nil, errors.New("fetch error")
+			}
+			return ExtractTVSeriesMetadata(bytes.NewReader(SeriesSample))
+		}
+
+		service := NewTVService()
+
+		t.Run("successful get", func(t *testing.T) {
+			result, err := service.Get(context.Background(), "some-url")
+			if err != nil {
+				t.Fatalf("Get failed: %v", err)
+			}
+			show, ok := (*result).(*models.TVShow)
+			if !ok {
+				t.Fatalf("expected a tv show model, got %T", *result)
+			}
+			if !strings.Contains(show.Title, "Peacemaker") {
+				t.Errorf("expected title to contain 'Peacemaker', got '%s'", show.Title)
+			}
+		})
+
+		t.Run("get returns error", func(t *testing.T) {
+			_, err := service.Get(context.Background(), "error")
+			if err == nil {
+				t.Fatal("expected error from get, got nil")
+			}
+		})
+	})
+
+	t.Run("Check", func(t *testing.T) {
+		originalFetchHTML := FetchHTML
+		defer func() { FetchHTML = originalFetchHTML }()
+
+		service := NewTVService()
+
+		t.Run("successful check", func(t *testing.T) {
+			FetchHTML = func(url string) (string, error) {
+				return "ok", nil
+			}
+			err := service.Check(context.Background())
+			if err != nil {
+				t.Fatalf("Check failed: %v", err)
+			}
+		})
+
+		t.Run("check returns error", func(t *testing.T) {
+			FetchHTML = func(url string) (string, error) {
+				return "", errors.New("html fetch error")
+			}
+			err := service.Check(context.Background())
+			if err == nil {
+				t.Fatal("expected error from check, got nil")
+			}
+		})
+	})
 }
