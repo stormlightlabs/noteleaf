@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -381,6 +382,94 @@ This is the content of my note.`
 					t.Errorf("Expected empty editor, got %q", editor)
 				}
 			})
+		})
+	})
+
+	t.Run("CreateInteractive", func(t *testing.T) {
+		ctx := context.Background()
+
+		t.Run("creates note successfully", func(t *testing.T) {
+			mockEditor := func(editor, filePath string) error {
+				content := `# Test Interactive Note
+
+This is content from the interactive editor.
+
+<!-- Tags: interactive, test -->`
+				return os.WriteFile(filePath, []byte(content), 0644)
+			}
+
+			handler.openInEditorFunc = mockEditor
+
+			err := handler.createInteractive(ctx)
+			if err != nil {
+				t.Errorf("createInteractive should succeed: %v", err)
+			}
+		})
+
+		t.Run("handles cancelled note creation", func(t *testing.T) {
+			mockEditor := func(editor, filePath string) error {
+				return nil
+			}
+
+			handler.openInEditorFunc = mockEditor
+
+			err := handler.createInteractive(ctx)
+			if err != nil {
+				t.Errorf("createInteractive should succeed even when cancelled: %v", err)
+			}
+		})
+
+		t.Run("handles editor error", func(t *testing.T) {
+			mockEditor := func(editor, filePath string) error {
+				return fmt.Errorf("editor failed to open")
+			}
+
+			handler.openInEditorFunc = mockEditor
+
+			err := handler.createInteractive(ctx)
+			if err == nil {
+				t.Error("createInteractive should fail when editor fails")
+			}
+			if !strings.Contains(err.Error(), "failed to open editor") {
+				t.Errorf("Expected editor error, got: %v", err)
+			}
+		})
+
+		t.Run("handles no editor configured", func(t *testing.T) {
+			oldEditor := os.Getenv("EDITOR")
+			oldPath := os.Getenv("PATH")
+			os.Unsetenv("EDITOR")
+			os.Setenv("PATH", "")
+			defer func() {
+				if oldEditor != "" {
+					os.Setenv("EDITOR", oldEditor)
+				}
+				os.Setenv("PATH", oldPath)
+			}()
+
+			err := handler.createInteractive(ctx)
+			if err == nil {
+				t.Error("createInteractive should fail when no editor is configured")
+			}
+			if !strings.Contains(err.Error(), "no editor configured") {
+				t.Errorf("Expected no editor error, got: %v", err)
+			}
+		})
+
+		t.Run("handles file read error after editing", func(t *testing.T) {
+			mockEditor := func(editor, filePath string) error {
+				return os.Remove(filePath)
+			}
+
+			handler.openInEditorFunc = mockEditor
+
+			err := handler.createInteractive(ctx)
+			if err == nil {
+				t.Error("createInteractive should fail when temp file is deleted")
+			}
+			if !strings.Contains(err.Error(), "failed to read edited content") {
+				t.Errorf("Expected read error, got: %v", err)
+			}
 		})
 	})
 }

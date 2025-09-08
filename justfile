@@ -15,7 +15,7 @@ coverage:
     @echo "Coverage report generated: coverage.html"
 
 # Run tests and show coverage in terminal
-test-coverage:
+cov:
     go test ./... -coverprofile=coverage.out
     go tool cover -func=coverage.out
 
@@ -36,7 +36,7 @@ lint:
     go fmt ./...
 
 # Run all quality checks
-check: lint test-coverage
+check: lint cov
 
 # Install dependencies
 deps:

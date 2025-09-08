@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"runtime"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stormlightlabs/noteleaf/internal/models"
+	"github.com/stormlightlabs/noteleaf/internal/ui"
 )
 
 func setupTaskTest(t *testing.T) (string, func()) {
@@ -922,6 +924,107 @@ func TestTaskHandler(t *testing.T) {
 			if result != "s" {
 				t.Errorf("Expected 's' for 10, got '%s'", result)
 			}
+		})
+	})
+
+	t.Run("InteractiveComponentsStatic", func(t *testing.T) {
+		_, cleanup := setupTaskTest(t)
+		defer cleanup()
+
+		handler, err := NewTaskHandler()
+		if err != nil {
+			t.Fatalf("Failed to create task handler: %v", err)
+		}
+		defer handler.Close()
+
+		ctx := context.Background()
+
+		err = handler.Create(ctx, []string{"Test", "Task", "1"}, "high", "test-project", "test-context", "", []string{"tag1"})
+		if err != nil {
+			t.Fatalf("Failed to create test task: %v", err)
+		}
+
+		err = handler.Create(ctx, []string{"Test", "Task", "2"}, "medium", "test-project", "test-context", "", []string{"tag2"})
+		if err != nil {
+			t.Fatalf("Failed to create test task: %v", err)
+		}
+
+		t.Run("taskListStaticMode", func(t *testing.T) {
+			var output bytes.Buffer
+
+			t.Run("lists all tasks", func(t *testing.T) {
+				output.Reset()
+				taskTable := ui.NewTaskListFromTable(handler.repos.Tasks, &output, os.Stdin, true, true, "", "", "")
+				err := taskTable.Browse(ctx)
+				if err != nil {
+					t.Errorf("Static task list should succeed: %v", err)
+				}
+				if !strings.Contains(output.String(), "Test Task 1") {
+					t.Error("Output should contain Test Task 1")
+				}
+				if !strings.Contains(output.String(), "Test Task 2") {
+					t.Error("Output should contain Test Task 2")
+				}
+			})
+
+			t.Run("filters by status", func(t *testing.T) {
+				output.Reset()
+				taskTable := ui.NewTaskListFromTable(handler.repos.Tasks, &output, os.Stdin, true, false, "pending", "", "")
+				err := taskTable.Browse(ctx)
+				if err != nil {
+					t.Errorf("Static task list with status filter should succeed: %v", err)
+				}
+			})
+
+			t.Run("filters by priority", func(t *testing.T) {
+				output.Reset()
+				taskTable := ui.NewTaskListFromTable(handler.repos.Tasks, &output, os.Stdin, true, false, "", "high", "")
+				err := taskTable.Browse(ctx)
+				if err != nil {
+					t.Errorf("Static task list with priority filter should succeed: %v", err)
+				}
+			})
+
+			t.Run("filters by project", func(t *testing.T) {
+				output.Reset()
+				taskTable := ui.NewTaskListFromTable(handler.repos.Tasks, &output, os.Stdin, true, false, "", "", "test-project")
+				err := taskTable.Browse(ctx)
+				if err != nil {
+					t.Errorf("Static task list with project filter should succeed: %v", err)
+				}
+			})
+		})
+
+		t.Run("projectListStaticMode", func(t *testing.T) {
+			var output bytes.Buffer
+
+			t.Run("lists projects", func(t *testing.T) {
+				output.Reset()
+				projectTable := ui.NewProjectListFromTable(handler.repos.Tasks, &output, os.Stdin, true)
+				err := projectTable.Browse(ctx)
+				if err != nil {
+					t.Errorf("Static project list should succeed: %v", err)
+				}
+				if !strings.Contains(output.String(), "test-project") {
+					t.Error("Output should contain test-project")
+				}
+			})
+		})
+
+		t.Run("tagListStaticMode", func(t *testing.T) {
+			var output bytes.Buffer
+
+			t.Run("lists tags", func(t *testing.T) {
+				output.Reset()
+				tagTable := ui.NewTagListFromTable(handler.repos.Tasks, &output, os.Stdin, true)
+				err := tagTable.Browse(ctx)
+				if err != nil {
+					t.Errorf("Static tag list should succeed: %v", err)
+				}
+				if !strings.Contains(output.String(), "tag1") {
+					t.Error("Output should contain tag1")
+				}
+			})
 		})
 	})
 }
