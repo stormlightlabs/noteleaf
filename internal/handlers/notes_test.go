@@ -59,9 +59,7 @@ func TestNoteHandler(t *testing.T) {
 	t.Run("New", func(t *testing.T) {
 		t.Run("creates handler successfully", func(t *testing.T) {
 			testHandler, err := NewNoteHandler()
-			if err != nil {
-				t.Fatalf("NewNoteHandler failed: %v", err)
-			}
+			Expect.AssertNoError(t, err, "NewNoteHandler should succeed")
 			if testHandler == nil {
 				t.Fatal("Handler should not be nil")
 			}
@@ -79,30 +77,18 @@ func TestNoteHandler(t *testing.T) {
 		})
 
 		t.Run("handles database initialization error", func(t *testing.T) {
-			originalXDG := os.Getenv("XDG_CONFIG_HOME")
-			originalHome := os.Getenv("HOME")
+			envHelper := NewEnvironmentTestHelper()
+			defer envHelper.RestoreEnv()
 
 			if runtime.GOOS == "windows" {
-				originalAppData := os.Getenv("APPDATA")
-				os.Unsetenv("APPDATA")
-				defer os.Setenv("APPDATA", originalAppData)
+				envHelper.UnsetEnv("APPDATA")
 			} else {
-				os.Unsetenv("XDG_CONFIG_HOME")
-				os.Unsetenv("HOME")
+				envHelper.UnsetEnv("XDG_CONFIG_HOME")
+				envHelper.UnsetEnv("HOME")
 			}
-
-			defer func() {
-				os.Setenv("XDG_CONFIG_HOME", originalXDG)
-				os.Setenv("HOME", originalHome)
-			}()
 
 			_, err := NewNoteHandler()
-			if err == nil {
-				t.Error("NewNoteHandler should fail when database initialization fails")
-			}
-			if !strings.Contains(err.Error(), "failed to initialize database") {
-				t.Errorf("Expected database error, got: %v", err)
-			}
+			Expect.AssertError(t, err, "failed to initialize database", "NewNoteHandler should fail when database initialization fails")
 		})
 	})
 
@@ -111,16 +97,12 @@ func TestNoteHandler(t *testing.T) {
 
 		t.Run("creates note from title only", func(t *testing.T) {
 			err := handler.Create(ctx, "Test Note 1", "", "", false)
-			if err != nil {
-				t.Errorf("Create failed: %v", err)
-			}
+			Expect.AssertNoError(t, err, "Create should succeed")
 		})
 
 		t.Run("creates note from title and content", func(t *testing.T) {
 			err := handler.Create(ctx, "Test Note 2", "This is test content", "", false)
-			if err != nil {
-				t.Errorf("Create failed: %v", err)
-			}
+			Expect.AssertNoError(t, err, "Create should succeed")
 		})
 
 		t.Run("creates note from markdown file", func(t *testing.T) {
@@ -131,16 +113,12 @@ This is the content of my note.`
 			filePath := createTestMarkdownFile(t, tempDir, "test.md", content)
 
 			err := handler.Create(ctx, "", "", filePath, false)
-			if err != nil {
-				t.Errorf("Create from file failed: %v", err)
-			}
+			Expect.AssertNoError(t, err, "Create from file should succeed")
 		})
 
 		t.Run("handles non-existent file", func(t *testing.T) {
 			err := handler.Create(ctx, "", "", "/non/existent/file.md", false)
-			if err == nil {
-				t.Error("Create should fail with non-existent file")
-			}
+			Expect.AssertError(t, err, "", "Create should fail with non-existent file")
 		})
 	})
 
@@ -149,31 +127,18 @@ This is the content of my note.`
 
 		t.Run("handles non-existent note", func(t *testing.T) {
 			err := handler.Edit(ctx, 999)
-			if err == nil {
-				t.Error("Edit should fail with non-existent note ID")
-			}
-			if !strings.Contains(err.Error(), "failed to get note") && !strings.Contains(err.Error(), "failed to find note") {
-				t.Errorf("Expected note not found error, got: %v", err)
-			}
+			Expect.AssertError(t, err, "failed to get note", "Edit should fail with non-existent note ID")
 		})
 
 		t.Run("handles no editor configured", func(t *testing.T) {
-			originalEditor := os.Getenv("EDITOR")
-			originalPath := os.Getenv("PATH")
-			os.Setenv("EDITOR", "")
-			os.Setenv("PATH", "")
-			defer func() {
-				os.Setenv("EDITOR", originalEditor)
-				os.Setenv("PATH", originalPath)
-			}()
+			envHelper := NewEnvironmentTestHelper()
+			defer envHelper.RestoreEnv()
+
+			envHelper.SetEnv("EDITOR", "")
+			envHelper.SetEnv("PATH", "")
 
 			err := handler.Edit(ctx, 1)
-			if err == nil {
-				t.Error("Edit should fail when no editor is configured")
-			}
-			if !strings.Contains(err.Error(), "no editor configured") && !strings.Contains(err.Error(), "failed to open editor") {
-				t.Errorf("Expected no editor error, got: %v", err)
-			}
+			Expect.AssertError(t, err, "failed to open editor", "Edit should fail when no editor is configured")
 		})
 
 		t.Run("handles database connection error", func(t *testing.T) {
@@ -181,110 +146,68 @@ This is the content of my note.`
 			defer func() {
 				var err error
 				handler.db, err = store.NewDatabase()
-				if err != nil {
-					t.Fatalf("Failed to reconnect to database: %v", err)
-				}
+				Expect.AssertNoError(t, err, "Failed to reconnect to database")
 			}()
 
 			err := handler.Edit(ctx, 1)
-			if err == nil {
-				t.Error("Edit should fail when database is closed")
-			}
-			if !strings.Contains(err.Error(), "failed to get note") {
-				t.Errorf("Expected database error, got: %v", err)
-			}
+			Expect.AssertError(t, err, "failed to get note", "Edit should fail when database is closed")
 		})
 
 		t.Run("handles temp file creation error", func(t *testing.T) {
 			testHandler, err := NewNoteHandler()
-			if err != nil {
-				t.Fatalf("Failed to create test handler: %v", err)
-			}
+			Expect.AssertNoError(t, err, "Failed to create test handler")
 			defer testHandler.Close()
 
 			err = testHandler.Create(ctx, "Temp File Test Note", "Test content", "", false)
-			if err != nil {
-				t.Fatalf("Failed to create test note: %v", err)
-			}
+			Expect.AssertNoError(t, err, "Failed to create test note")
 
-			originalTempDir := os.Getenv("TMPDIR")
-			os.Setenv("TMPDIR", "/non/existent/path")
-			defer os.Setenv("TMPDIR", originalTempDir)
+			envHelper := NewEnvironmentTestHelper()
+			defer envHelper.RestoreEnv()
+			envHelper.SetEnv("TMPDIR", "/non/existent/path")
 
 			err = testHandler.Edit(ctx, 1)
-			if err == nil {
-				t.Error("Edit should fail when temp file creation fails")
-			}
-			if !strings.Contains(err.Error(), "failed to create temporary file") {
-				t.Errorf("Expected temp file error, got: %v", err)
-			}
+			Expect.AssertError(t, err, "failed to create temporary file", "Edit should fail when temp file creation fails")
 		})
 
 		t.Run("handles editor failure", func(t *testing.T) {
 			testHandler, err := NewNoteHandler()
-			if err != nil {
-				t.Fatalf("Failed to create test handler: %v", err)
-			}
+			Expect.AssertNoError(t, err, "Failed to create test handler")
 			defer testHandler.Close()
 
 			err = testHandler.Create(ctx, "Editor Failure Test Note", "Test content", "", false)
-			if err != nil {
-				t.Fatalf("Failed to create test note: %v", err)
-			}
+			Expect.AssertNoError(t, err, "Failed to create test note")
 
-			mockEditor := func(editor, filePath string) error {
-				return fmt.Errorf("editor process failed")
-			}
-			testHandler.openInEditorFunc = mockEditor
+			mockEditor := NewMockEditor().WithFailure("editor process failed")
+			testHandler.openInEditorFunc = mockEditor.GetEditorFunc()
 
 			err = testHandler.Edit(ctx, 1)
-			if err == nil {
-				t.Error("Edit should fail when editor fails")
-			}
-			if !strings.Contains(err.Error(), "failed to open editor") {
-				t.Errorf("Expected editor error, got: %v", err)
-			}
+			Expect.AssertError(t, err, "failed to open editor", "Edit should fail when editor fails")
 		})
 
 		t.Run("handles temp file write error", func(t *testing.T) {
 			originalHandler := handler.openInEditorFunc
 			defer func() { handler.openInEditorFunc = originalHandler }()
 
-			mockEditor := func(editor, filePath string) error {
-				return os.Chmod(filePath, 0444)
-			}
-			handler.openInEditorFunc = mockEditor
+			mockEditor := NewMockEditor().WithReadOnly()
+			handler.openInEditorFunc = mockEditor.GetEditorFunc()
 
 			err := handler.Edit(ctx, 1)
-			if err == nil {
-				t.Error("Edit should handle temp file write issues")
-			}
+			Expect.AssertError(t, err, "", "Edit should handle temp file write issues")
 		})
 
 		t.Run("handles file read error after editing", func(t *testing.T) {
 			testHandler, err := NewNoteHandler()
-			if err != nil {
-				t.Fatalf("Failed to create test handler: %v", err)
-			}
+			Expect.AssertNoError(t, err, "Failed to create test handler")
 			defer testHandler.Close()
 
 			err = testHandler.Create(ctx, "File Read Error Test Note", "Test content", "", false)
-			if err != nil {
-				t.Fatalf("Failed to create test note: %v", err)
-			}
+			Expect.AssertNoError(t, err, "Failed to create test note")
 
-			mockEditor := func(editor, filePath string) error {
-				return os.Remove(filePath)
-			}
-			testHandler.openInEditorFunc = mockEditor
+			mockEditor := NewMockEditor().WithFileDeleted()
+			testHandler.openInEditorFunc = mockEditor.GetEditorFunc()
 
 			err = testHandler.Edit(ctx, 1)
-			if err == nil {
-				t.Error("Edit should fail when temp file is deleted")
-			}
-			if !strings.Contains(err.Error(), "failed to read edited content") {
-				t.Errorf("Expected file read error, got: %v", err)
-			}
+			Expect.AssertError(t, err, "failed to read edited content", "Edit should fail when temp file is deleted")
 		})
 
 		t.Run("handles database update error", func(t *testing.T) {
