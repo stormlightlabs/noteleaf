@@ -2,7 +2,6 @@ package repo
 
 import (
 	"context"
-	"database/sql"
 	"testing"
 	"time"
 
@@ -10,123 +9,43 @@ import (
 	"github.com/stormlightlabs/noteleaf/internal/models"
 )
 
-func createBookTestDB(t *testing.T) *sql.DB {
-	db, err := sql.Open("sqlite3", ":memory:")
-	if err != nil {
-		t.Fatalf("Failed to create in-memory database: %v", err)
-	}
-
-	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
-		t.Fatalf("Failed to enable foreign keys: %v", err)
-	}
-
-	schema := `
-		CREATE TABLE IF NOT EXISTS books (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			title TEXT NOT NULL,
-			author TEXT,
-			status TEXT DEFAULT 'queued',
-			progress INTEGER DEFAULT 0,
-			pages INTEGER,
-			rating REAL,
-			notes TEXT,
-			added DATETIME DEFAULT CURRENT_TIMESTAMP,
-			started DATETIME,
-			finished DATETIME
-		);
-	`
-
-	if _, err := db.Exec(schema); err != nil {
-		t.Fatalf("Failed to create schema: %v", err)
-	}
-
-	t.Cleanup(func() {
-		db.Close()
-	})
-
-	return db
-}
-
-func createSampleBook() *models.Book {
-	return &models.Book{
-		Title:    "Test Book",
-		Author:   "Test Author",
-		Status:   "queued",
-		Progress: 25,
-		Pages:    300,
-		Rating:   4.5,
-		Notes:    "Interesting read",
-	}
-}
-
 func TestBookRepository(t *testing.T) {
 	t.Run("CRUD Operations", func(t *testing.T) {
-		db := createBookTestDB(t)
+		db := CreateTestDB(t)
 		repo := NewBookRepository(db)
 		ctx := context.Background()
 
 		t.Run("Create Book", func(t *testing.T) {
-			book := createSampleBook()
+			book := CreateSampleBook()
 
 			id, err := repo.Create(ctx, book)
-			if err != nil {
-				t.Errorf("Failed to create book: %v", err)
-			}
-
-			if id == 0 {
-				t.Error("Expected non-zero ID")
-			}
-
-			if book.ID != id {
-				t.Errorf("Expected book ID to be set to %d, got %d", id, book.ID)
-			}
-
-			if book.Added.IsZero() {
-				t.Error("Expected Added timestamp to be set")
-			}
+			AssertNoError(t, err, "Failed to create book")
+			AssertNotEqual(t, int64(0), id, "Expected non-zero ID")
+			AssertEqual(t, id, book.ID, "Expected book ID to be set correctly")
+			AssertFalse(t, book.Added.IsZero(), "Expected Added timestamp to be set")
 		})
 
 		t.Run("Get Book", func(t *testing.T) {
-			original := createSampleBook()
+			original := CreateSampleBook()
 			id, err := repo.Create(ctx, original)
-			if err != nil {
-				t.Fatalf("Failed to create book: %v", err)
-			}
+			AssertNoError(t, err, "Failed to create book")
 
 			retrieved, err := repo.Get(ctx, id)
-			if err != nil {
-				t.Errorf("Failed to get book: %v", err)
-			}
+			AssertNoError(t, err, "Failed to get book")
 
-			if retrieved.Title != original.Title {
-				t.Errorf("Expected title %s, got %s", original.Title, retrieved.Title)
-			}
-			if retrieved.Author != original.Author {
-				t.Errorf("Expected author %s, got %s", original.Author, retrieved.Author)
-			}
-			if retrieved.Status != original.Status {
-				t.Errorf("Expected status %s, got %s", original.Status, retrieved.Status)
-			}
-			if retrieved.Progress != original.Progress {
-				t.Errorf("Expected progress %d, got %d", original.Progress, retrieved.Progress)
-			}
-			if retrieved.Pages != original.Pages {
-				t.Errorf("Expected pages %d, got %d", original.Pages, retrieved.Pages)
-			}
-			if retrieved.Rating != original.Rating {
-				t.Errorf("Expected rating %f, got %f", original.Rating, retrieved.Rating)
-			}
-			if retrieved.Notes != original.Notes {
-				t.Errorf("Expected notes %s, got %s", original.Notes, retrieved.Notes)
-			}
+			AssertEqual(t, original.Title, retrieved.Title, "Title mismatch")
+			AssertEqual(t, original.Author, retrieved.Author, "Author mismatch")
+			AssertEqual(t, original.Status, retrieved.Status, "Status mismatch")
+			AssertEqual(t, original.Progress, retrieved.Progress, "Progress mismatch")
+			AssertEqual(t, original.Pages, retrieved.Pages, "Pages mismatch")
+			AssertEqual(t, original.Rating, retrieved.Rating, "Rating mismatch")
+			AssertEqual(t, original.Notes, retrieved.Notes, "Notes mismatch")
 		})
 
 		t.Run("Update Book", func(t *testing.T) {
-			book := createSampleBook()
+			book := CreateSampleBook()
 			id, err := repo.Create(ctx, book)
-			if err != nil {
-				t.Fatalf("Failed to create book: %v", err)
-			}
+			AssertNoError(t, err, "Failed to create book")
 
 			book.Title = "Updated Book"
 			book.Status = "reading"
@@ -136,53 +55,33 @@ func TestBookRepository(t *testing.T) {
 			book.Started = &now
 
 			err = repo.Update(ctx, book)
-			if err != nil {
-				t.Errorf("Failed to update book: %v", err)
-			}
+			AssertNoError(t, err, "Failed to update book")
 
 			updated, err := repo.Get(ctx, id)
-			if err != nil {
-				t.Fatalf("Failed to get updated book: %v", err)
-			}
+			AssertNoError(t, err, "Failed to get updated book")
 
-			if updated.Title != "Updated Book" {
-				t.Errorf("Expected updated title, got %s", updated.Title)
-			}
-			if updated.Status != "reading" {
-				t.Errorf("Expected status reading, got %s", updated.Status)
-			}
-			if updated.Progress != 50 {
-				t.Errorf("Expected progress 50, got %d", updated.Progress)
-			}
-			if updated.Rating != 5.0 {
-				t.Errorf("Expected rating 5.0, got %f", updated.Rating)
-			}
-			if updated.Started == nil {
-				t.Error("Expected started time to be set")
-			}
+			AssertEqual(t, "Updated Book", updated.Title, "Expected updated title")
+			AssertEqual(t, "reading", updated.Status, "Expected reading status")
+			AssertEqual(t, 50, updated.Progress, "Expected progress 50")
+			AssertEqual(t, 5.0, updated.Rating, "Expected rating 5.0")
+			AssertTrue(t, updated.Started != nil, "Expected started time to be set")
 		})
 
 		t.Run("Delete Book", func(t *testing.T) {
-			book := createSampleBook()
+			book := CreateSampleBook()
 			id, err := repo.Create(ctx, book)
-			if err != nil {
-				t.Fatalf("Failed to create book: %v", err)
-			}
+			AssertNoError(t, err, "Failed to create book")
 
 			err = repo.Delete(ctx, id)
-			if err != nil {
-				t.Errorf("Failed to delete book: %v", err)
-			}
+			AssertNoError(t, err, "Failed to delete book")
 
 			_, err = repo.Get(ctx, id)
-			if err == nil {
-				t.Error("Expected error when getting deleted book")
-			}
+			AssertError(t, err, "Expected error when getting deleted book")
 		})
 	})
 
 	t.Run("List", func(t *testing.T) {
-		db := createBookTestDB(t)
+		db := CreateTestDB(t)
 		repo := NewBookRepository(db)
 		ctx := context.Background()
 
@@ -195,119 +94,74 @@ func TestBookRepository(t *testing.T) {
 
 		for _, book := range books {
 			_, err := repo.Create(ctx, book)
-			if err != nil {
-				t.Fatalf("Failed to create book: %v", err)
-			}
+			AssertNoError(t, err, "Failed to create book")
 		}
 
 		t.Run("List All Books", func(t *testing.T) {
 			results, err := repo.List(ctx, BookListOptions{})
-			if err != nil {
-				t.Errorf("Failed to list books: %v", err)
-			}
-
-			if len(results) != 4 {
-				t.Errorf("Expected 4 books, got %d", len(results))
-			}
+			AssertNoError(t, err, "Failed to list books")
+			AssertEqual(t, 4, len(results), "Expected 4 books")
 		})
 
 		t.Run("List Books with Status Filter", func(t *testing.T) {
 			results, err := repo.List(ctx, BookListOptions{Status: "queued"})
-			if err != nil {
-				t.Errorf("Failed to list books: %v", err)
-			}
-
-			if len(results) != 2 {
-				t.Errorf("Expected 2 queued books, got %d", len(results))
-			}
+			AssertNoError(t, err, "Failed to list books")
+			AssertEqual(t, 2, len(results), "Expected 2 queued books")
 
 			for _, book := range results {
-				if book.Status != "queued" {
-					t.Errorf("Expected queued status, got %s", book.Status)
-				}
+				AssertEqual(t, "queued", book.Status, "Expected queued status")
 			}
 		})
 
 		t.Run("List Books by Author", func(t *testing.T) {
 			results, err := repo.List(ctx, BookListOptions{Author: "Author A"})
-			if err != nil {
-				t.Errorf("Failed to list books: %v", err)
-			}
-
-			if len(results) != 2 {
-				t.Errorf("Expected 2 books by Author A, got %d", len(results))
-			}
+			AssertNoError(t, err, "Failed to list books")
+			AssertEqual(t, 2, len(results), "Expected 2 books by Author A")
 
 			for _, book := range results {
-				if book.Author != "Author A" {
-					t.Errorf("Expected author 'Author A', got %s", book.Author)
-				}
+				AssertEqual(t, "Author A", book.Author, "Expected author 'Author A'")
 			}
 		})
 
 		t.Run("List Books with Progress Filter", func(t *testing.T) {
 			results, err := repo.List(ctx, BookListOptions{MinProgress: 50})
-			if err != nil {
-				t.Errorf("Failed to list books: %v", err)
-			}
-
-			if len(results) != 2 {
-				t.Errorf("Expected 2 books with progress >= 50, got %d", len(results))
-			}
+			AssertNoError(t, err, "Failed to list books")
+			AssertEqual(t, 2, len(results), "Expected 2 books with progress >= 50")
 
 			for _, book := range results {
-				if book.Progress < 50 {
-					t.Errorf("Expected progress >= 50, got %d", book.Progress)
-				}
+				AssertTrue(t, book.Progress >= 50, "Expected progress >= 50")
 			}
 		})
 
 		t.Run("List Books with Rating Filter", func(t *testing.T) {
 			results, err := repo.List(ctx, BookListOptions{MinRating: 4.5})
-			if err != nil {
-				t.Errorf("Failed to list books: %v", err)
-			}
-
-			if len(results) != 2 {
-				t.Errorf("Expected 2 books with rating >= 4.5, got %d", len(results))
-			}
+			AssertNoError(t, err, "Failed to list books")
+			AssertEqual(t, 2, len(results), "Expected 2 books with rating >= 4.5")
 
 			for _, book := range results {
-				if book.Rating < 4.5 {
-					t.Errorf("Expected rating >= 4.5, got %f", book.Rating)
-				}
+				AssertTrue(t, book.Rating >= 4.5, "Expected rating >= 4.5")
 			}
 		})
 
 		t.Run("List Books with Search", func(t *testing.T) {
 			results, err := repo.List(ctx, BookListOptions{Search: "Book 1"})
-			if err != nil {
-				t.Errorf("Failed to list books: %v", err)
-			}
+			AssertNoError(t, err, "Failed to list books")
+			AssertEqual(t, 1, len(results), "Expected 1 book matching search")
 
-			if len(results) != 1 {
-				t.Errorf("Expected 1 book matching search, got %d", len(results))
-			}
-
-			if len(results) > 0 && results[0].Title != "Book 1" {
-				t.Errorf("Expected 'Book 1', got %s", results[0].Title)
+			if len(results) > 0 {
+				AssertEqual(t, "Book 1", results[0].Title, "Expected 'Book 1'")
 			}
 		})
 
 		t.Run("List Books with Limit", func(t *testing.T) {
 			results, err := repo.List(ctx, BookListOptions{Limit: 2})
-			if err != nil {
-				t.Errorf("Failed to list books: %v", err)
-			}
-
-			if len(results) != 2 {
-				t.Errorf("Expected 2 books due to limit, got %d", len(results))
-			}
+			AssertNoError(t, err, "Failed to list books")
+			AssertEqual(t, 2, len(results), "Expected 2 books due to limit")
 		})
 	})
 
 	t.Run("Special Methods", func(t *testing.T) {
-		db := createBookTestDB(t)
+		db := CreateTestDB(t)
 		repo := NewBookRepository(db)
 		ctx := context.Background()
 
@@ -319,9 +173,7 @@ func TestBookRepository(t *testing.T) {
 		var book1ID int64
 		for _, book := range []*models.Book{book1, book2, book3, book4} {
 			id, err := repo.Create(ctx, book)
-			if err != nil {
-				t.Fatalf("Failed to create book: %v", err)
-			}
+			AssertNoError(t, err, "Failed to create book")
 			if book == book1 {
 				book1ID = id
 			}
@@ -329,173 +181,100 @@ func TestBookRepository(t *testing.T) {
 
 		t.Run("GetQueued", func(t *testing.T) {
 			results, err := repo.GetQueued(ctx)
-			if err != nil {
-				t.Errorf("Failed to get queued books: %v", err)
-			}
-
-			if len(results) != 2 {
-				t.Errorf("Expected 2 queued books, got %d", len(results))
-			}
+			AssertNoError(t, err, "Failed to get queued books")
+			AssertEqual(t, 2, len(results), "Expected 2 queued books")
 
 			for _, book := range results {
-				if book.Status != "queued" {
-					t.Errorf("Expected queued status, got %s", book.Status)
-				}
+				AssertEqual(t, "queued", book.Status, "Expected queued status")
 			}
 		})
 
 		t.Run("GetReading", func(t *testing.T) {
 			results, err := repo.GetReading(ctx)
-			if err != nil {
-				t.Errorf("Failed to get reading books: %v", err)
-			}
+			AssertNoError(t, err, "Failed to get reading books")
+			AssertEqual(t, 1, len(results), "Expected 1 reading book")
 
-			if len(results) != 1 {
-				t.Errorf("Expected 1 reading book, got %d", len(results))
-			}
-
-			if len(results) > 0 && results[0].Status != "reading" {
-				t.Errorf("Expected reading status, got %s", results[0].Status)
+			if len(results) > 0 {
+				AssertEqual(t, "reading", results[0].Status, "Expected reading status")
 			}
 		})
 
 		t.Run("GetFinished", func(t *testing.T) {
 			results, err := repo.GetFinished(ctx)
-			if err != nil {
-				t.Errorf("Failed to get finished books: %v", err)
-			}
+			AssertNoError(t, err, "Failed to get finished books")
+			AssertEqual(t, 1, len(results), "Expected 1 finished book")
 
-			if len(results) != 1 {
-				t.Errorf("Expected 1 finished book, got %d", len(results))
-			}
-
-			if len(results) > 0 && results[0].Status != "finished" {
-				t.Errorf("Expected finished status, got %s", results[0].Status)
+			if len(results) > 0 {
+				AssertEqual(t, "finished", results[0].Status, "Expected finished status")
 			}
 		})
 
 		t.Run("GetByAuthor", func(t *testing.T) {
 			results, err := repo.GetByAuthor(ctx, "Author A")
-			if err != nil {
-				t.Errorf("Failed to get books by author: %v", err)
-			}
-
-			if len(results) != 2 {
-				t.Errorf("Expected 2 books by Author A, got %d", len(results))
-			}
+			AssertNoError(t, err, "Failed to get books by author")
+			AssertEqual(t, 2, len(results), "Expected 2 books by Author A")
 
 			for _, book := range results {
-				if book.Author != "Author A" {
-					t.Errorf("Expected author 'Author A', got %s", book.Author)
-				}
+				AssertEqual(t, "Author A", book.Author, "Expected author 'Author A'")
 			}
 		})
 
 		t.Run("StartReading", func(t *testing.T) {
 			err := repo.StartReading(ctx, book1ID)
-			if err != nil {
-				t.Errorf("Failed to start reading book: %v", err)
-			}
+			AssertNoError(t, err, "Failed to start reading book")
 
 			updated, err := repo.Get(ctx, book1ID)
-			if err != nil {
-				t.Fatalf("Failed to get updated book: %v", err)
-			}
+			AssertNoError(t, err, "Failed to get updated book")
 
-			if updated.Status != "reading" {
-				t.Errorf("Expected status to be reading, got %s", updated.Status)
-			}
-
-			if updated.Started == nil {
-				t.Error("Expected started timestamp to be set")
-			}
+			AssertEqual(t, "reading", updated.Status, "Expected status to be reading")
+			AssertTrue(t, updated.Started != nil, "Expected started timestamp to be set")
 		})
 
 		t.Run("FinishReading", func(t *testing.T) {
 			newBook := &models.Book{Title: "New Book", Status: "reading", Progress: 80}
 			id, err := repo.Create(ctx, newBook)
-			if err != nil {
-				t.Fatalf("Failed to create new book: %v", err)
-			}
+			AssertNoError(t, err, "Failed to create new book")
 
 			err = repo.FinishReading(ctx, id)
-			if err != nil {
-				t.Errorf("Failed to finish reading book: %v", err)
-			}
+			AssertNoError(t, err, "Failed to finish reading book")
 
 			updated, err := repo.Get(ctx, id)
-			if err != nil {
-				t.Fatalf("Failed to get updated book: %v", err)
-			}
+			AssertNoError(t, err, "Failed to get updated book")
 
-			if updated.Status != "finished" {
-				t.Errorf("Expected status to be finished, got %s", updated.Status)
-			}
-
-			if updated.Progress != 100 {
-				t.Errorf("Expected progress to be 100, got %d", updated.Progress)
-			}
-
-			if updated.Finished == nil {
-				t.Error("Expected finished timestamp to be set")
-			}
+			AssertEqual(t, "finished", updated.Status, "Expected status to be finished")
+			AssertEqual(t, 100, updated.Progress, "Expected progress to be 100")
+			AssertTrue(t, updated.Finished != nil, "Expected finished timestamp to be set")
 		})
 
 		t.Run("UpdateProgress", func(t *testing.T) {
 			newBook := &models.Book{Title: "Progress Book", Status: "queued", Progress: 0}
 			id, err := repo.Create(ctx, newBook)
-			if err != nil {
-				t.Fatalf("Failed to create new book: %v", err)
-			}
+			AssertNoError(t, err, "Failed to create new book")
 
 			err = repo.UpdateProgress(ctx, id, 25)
-			if err != nil {
-				t.Errorf("Failed to update progress: %v", err)
-			}
+			AssertNoError(t, err, "Failed to update progress")
 
 			updated, err := repo.Get(ctx, id)
-			if err != nil {
-				t.Fatalf("Failed to get updated book: %v", err)
-			}
+			AssertNoError(t, err, "Failed to get updated book")
 
-			if updated.Status != "reading" {
-				t.Errorf("Expected status to be reading when progress > 0, got %s", updated.Status)
-			}
-
-			if updated.Progress != 25 {
-				t.Errorf("Expected progress 25, got %d", updated.Progress)
-			}
-
-			if updated.Started == nil {
-				t.Error("Expected started timestamp to be set when progress > 0")
-			}
+			AssertEqual(t, "reading", updated.Status, "Expected status to be reading when progress > 0")
+			AssertEqual(t, 25, updated.Progress, "Expected progress 25")
+			AssertTrue(t, updated.Started != nil, "Expected started timestamp to be set when progress > 0")
 
 			err = repo.UpdateProgress(ctx, id, 100)
-			if err != nil {
-				t.Errorf("Failed to update progress to 100: %v", err)
-			}
+			AssertNoError(t, err, "Failed to update progress to 100")
 
 			updated, err = repo.Get(ctx, id)
-			if err != nil {
-				t.Fatalf("Failed to get updated book: %v", err)
-			}
+			AssertNoError(t, err, "Failed to get updated book")
 
-			if updated.Status != "finished" {
-				t.Errorf("Expected status to be finished when progress = 100, got %s", updated.Status)
-			}
-
-			if updated.Progress != 100 {
-				t.Errorf("Expected progress 100, got %d", updated.Progress)
-			}
-
-			if updated.Finished == nil {
-				t.Error("Expected finished timestamp to be set when progress = 100")
-			}
+			AssertEqual(t, "finished", updated.Status, "Expected status to be finished when progress = 100")
+			AssertEqual(t, 100, updated.Progress, "Expected progress 100")
+			AssertTrue(t, updated.Finished != nil, "Expected finished timestamp to be set when progress = 100")
 		})
 	})
 
 	t.Run("Count", func(t *testing.T) {
-		db := createBookTestDB(t)
+		db := CreateTestDB(t)
 		repo := NewBookRepository(db)
 		ctx := context.Background()
 
@@ -508,53 +287,31 @@ func TestBookRepository(t *testing.T) {
 
 		for _, book := range books {
 			_, err := repo.Create(ctx, book)
-			if err != nil {
-				t.Fatalf("Failed to create book: %v", err)
-			}
+			AssertNoError(t, err, "Failed to create book")
 		}
 
 		t.Run("Count all books", func(t *testing.T) {
 			count, err := repo.Count(ctx, BookListOptions{})
-			if err != nil {
-				t.Errorf("Failed to count books: %v", err)
-			}
-
-			if count != 4 {
-				t.Errorf("Expected 4 books, got %d", count)
-			}
+			AssertNoError(t, err, "Failed to count books")
+			AssertEqual(t, int64(4), count, "Expected 4 books")
 		})
 
 		t.Run("Count queued books", func(t *testing.T) {
 			count, err := repo.Count(ctx, BookListOptions{Status: "queued"})
-			if err != nil {
-				t.Errorf("Failed to count queued books: %v", err)
-			}
-
-			if count != 2 {
-				t.Errorf("Expected 2 queued books, got %d", count)
-			}
+			AssertNoError(t, err, "Failed to count queued books")
+			AssertEqual(t, int64(2), count, "Expected 2 queued books")
 		})
 
 		t.Run("Count books by progress", func(t *testing.T) {
 			count, err := repo.Count(ctx, BookListOptions{MinProgress: 50})
-			if err != nil {
-				t.Errorf("Failed to count books with progress >= 50: %v", err)
-			}
-
-			if count != 2 {
-				t.Errorf("Expected 2 books with progress >= 50, got %d", count)
-			}
+			AssertNoError(t, err, "Failed to count books with progress >= 50")
+			AssertEqual(t, int64(2), count, "Expected 2 books with progress >= 50")
 		})
 
 		t.Run("Count books by rating", func(t *testing.T) {
 			count, err := repo.Count(ctx, BookListOptions{MinRating: 4.0})
-			if err != nil {
-				t.Errorf("Failed to count high-rated books: %v", err)
-			}
-
-			if count != 3 {
-				t.Errorf("Expected 3 books with rating >= 4.0, got %d", count)
-			}
+			AssertNoError(t, err, "Failed to count high-rated books")
+			AssertEqual(t, int64(3), count, "Expected 3 books with rating >= 4.0")
 		})
 	})
 }

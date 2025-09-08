@@ -2,7 +2,6 @@ package repo
 
 import (
 	"context"
-	"database/sql"
 	"testing"
 	"time"
 
@@ -10,60 +9,14 @@ import (
 	"github.com/stormlightlabs/noteleaf/internal/models"
 )
 
-func createTVTestDB(t *testing.T) *sql.DB {
-	db, err := sql.Open("sqlite3", ":memory:")
-	if err != nil {
-		t.Fatalf("Failed to create in-memory database: %v", err)
-	}
-
-	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
-		t.Fatalf("Failed to enable foreign keys: %v", err)
-	}
-
-	schema := `
-		CREATE TABLE IF NOT EXISTS tv_shows (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			title TEXT NOT NULL,
-			season INTEGER,
-			episode INTEGER,
-			status TEXT DEFAULT 'queued',
-			rating REAL,
-			notes TEXT,
-			added DATETIME DEFAULT CURRENT_TIMESTAMP,
-			last_watched DATETIME
-		);
-	`
-
-	if _, err := db.Exec(schema); err != nil {
-		t.Fatalf("Failed to create schema: %v", err)
-	}
-
-	t.Cleanup(func() {
-		db.Close()
-	})
-
-	return db
-}
-
-func createSampleTVShow() *models.TVShow {
-	return &models.TVShow{
-		Title:   "Test Show",
-		Season:  1,
-		Episode: 1,
-		Status:  "queued",
-		Rating:  9.0,
-		Notes:   "Excellent series",
-	}
-}
-
 func TestTVRepository(t *testing.T) {
 	t.Run("CRUD Operations", func(t *testing.T) {
-		db := createTVTestDB(t)
+		db := CreateTestDB(t)
 		repo := NewTVRepository(db)
 		ctx := context.Background()
 
 		t.Run("Create TV Show", func(t *testing.T) {
-			tvShow := createSampleTVShow()
+			tvShow := CreateSampleTVShow()
 
 			id, err := repo.Create(ctx, tvShow)
 			if err != nil {
@@ -84,7 +37,7 @@ func TestTVRepository(t *testing.T) {
 		})
 
 		t.Run("Get TV Show", func(t *testing.T) {
-			original := createSampleTVShow()
+			original := CreateSampleTVShow()
 			id, err := repo.Create(ctx, original)
 			if err != nil {
 				t.Fatalf("Failed to create TV show: %v", err)
@@ -116,7 +69,7 @@ func TestTVRepository(t *testing.T) {
 		})
 
 		t.Run("Update TV Show", func(t *testing.T) {
-			tvShow := createSampleTVShow()
+			tvShow := CreateSampleTVShow()
 			id, err := repo.Create(ctx, tvShow)
 			if err != nil {
 				t.Fatalf("Failed to create TV show: %v", err)
@@ -161,7 +114,7 @@ func TestTVRepository(t *testing.T) {
 		})
 
 		t.Run("Delete TV Show", func(t *testing.T) {
-			tvShow := createSampleTVShow()
+			tvShow := CreateSampleTVShow()
 			id, err := repo.Create(ctx, tvShow)
 			if err != nil {
 				t.Fatalf("Failed to create TV show: %v", err)
@@ -180,7 +133,7 @@ func TestTVRepository(t *testing.T) {
 	})
 
 	t.Run("List", func(t *testing.T) {
-		db := createTVTestDB(t)
+		db := CreateTestDB(t)
 		repo := NewTVRepository(db)
 		ctx := context.Background()
 
@@ -307,7 +260,7 @@ func TestTVRepository(t *testing.T) {
 	})
 
 	t.Run("Special Methods", func(t *testing.T) {
-		db := createTVTestDB(t)
+		db := CreateTestDB(t)
 		repo := NewTVRepository(db)
 		ctx := context.Background()
 
@@ -458,7 +411,7 @@ func TestTVRepository(t *testing.T) {
 	})
 
 	t.Run("Count", func(t *testing.T) {
-		db := createTVTestDB(t)
+		db := CreateTestDB(t)
 		repo := NewTVRepository(db)
 		ctx := context.Background()
 

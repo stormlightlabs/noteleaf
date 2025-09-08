@@ -1024,9 +1024,7 @@ func TestModels(t *testing.T) {
 				t.Errorf("Expected 6 models, got %d", len(models))
 			}
 
-			// Test that all models have the required methods
 			for i, model := range models {
-				// Test ID methods
 				model.SetID(int64(i + 1))
 				if model.GetID() != int64(i+1) {
 					t.Errorf("Model %d: ID not set correctly", i)
@@ -1103,7 +1101,6 @@ func TestModels(t *testing.T) {
 			book := &Book{}
 			note := &Note{}
 
-			// Test that zero values don't cause panics
 			if task.IsCompleted() || task.IsPending() || task.IsDeleted() {
 				t.Error("Zero value task should have false status methods")
 			}
@@ -1126,6 +1123,145 @@ func TestModels(t *testing.T) {
 
 			if note.IsArchived() {
 				t.Error("Zero value note should not be archived")
+			}
+		})
+	})
+
+	t.Run("TimeEntry Model", func(t *testing.T) {
+		t.Run("IsActive", func(t *testing.T) {
+			now := time.Now()
+
+			t.Run("returns true when EndTime is nil", func(t *testing.T) {
+				te := &TimeEntry{
+					TaskID:    1,
+					StartTime: now,
+					EndTime:   nil,
+				}
+
+				if !te.IsActive() {
+					t.Error("TimeEntry with nil EndTime should be active")
+				}
+			})
+
+			t.Run("returns false when EndTime is set", func(t *testing.T) {
+				endTime := now.Add(time.Hour)
+				te := &TimeEntry{
+					TaskID:    1,
+					StartTime: now,
+					EndTime:   &endTime,
+				}
+
+				if te.IsActive() {
+					t.Error("TimeEntry with EndTime should not be active")
+				}
+			})
+		})
+
+		t.Run("Stop", func(t *testing.T) {
+			startTime := time.Now().Add(-time.Hour)
+			te := &TimeEntry{
+				TaskID:    1,
+				StartTime: startTime,
+				EndTime:   nil,
+				Created:   startTime,
+				Modified:  startTime,
+			}
+
+			if !te.IsActive() {
+				t.Error("TimeEntry should be active before Stop()")
+			}
+
+			te.Stop()
+
+			if te.IsActive() {
+				t.Error("TimeEntry should not be active after Stop()")
+			}
+
+			if te.EndTime == nil {
+				t.Error("EndTime should be set after Stop()")
+			}
+
+			if te.EndTime.Before(startTime) {
+				t.Error("EndTime should be after StartTime")
+			}
+
+			expectedDuration := int64(te.EndTime.Sub(startTime).Seconds())
+			if te.DurationSeconds != expectedDuration {
+				t.Errorf("Expected DurationSeconds %d, got %d", expectedDuration, te.DurationSeconds)
+			}
+
+			if te.Modified.Before(startTime) {
+				t.Error("Modified time should be updated after Stop()")
+			}
+		})
+
+		t.Run("GetDuration", func(t *testing.T) {
+			startTime := time.Now().Add(-time.Hour)
+
+			t.Run("returns calculated duration when stopped", func(t *testing.T) {
+				endTime := startTime.Add(30 * time.Minute)
+				te := &TimeEntry{
+					TaskID:          1,
+					StartTime:       startTime,
+					EndTime:         &endTime,
+					DurationSeconds: 1800,
+				}
+
+				duration := te.GetDuration()
+				expectedDuration := 30 * time.Minute
+
+				if duration != expectedDuration {
+					t.Errorf("Expected duration %v, got %v", expectedDuration, duration)
+				}
+			})
+
+			t.Run("returns time since start when active", func(t *testing.T) {
+				te := &TimeEntry{
+					TaskID:    1,
+					StartTime: startTime,
+					EndTime:   nil,
+				}
+
+				duration := te.GetDuration()
+
+				if duration < 59*time.Minute || duration > 61*time.Minute {
+					t.Errorf("Expected duration around 1 hour, got %v", duration)
+				}
+			})
+		})
+
+		t.Run("Model Interface Implementation", func(t *testing.T) {
+			now := time.Now()
+			te := &TimeEntry{
+				ID:       1,
+				TaskID:   100,
+				Created:  now,
+				Modified: now,
+			}
+
+			if te.GetID() != 1 {
+				t.Errorf("Expected ID 1, got %d", te.GetID())
+			}
+
+			te.SetID(2)
+			if te.GetID() != 2 {
+				t.Errorf("Expected ID 2 after SetID, got %d", te.GetID())
+			}
+
+			if te.GetTableName() != "time_entries" {
+				t.Errorf("Expected table name 'time_entries', got '%s'", te.GetTableName())
+			}
+
+			createdAt := time.Now()
+			te.SetCreatedAt(createdAt)
+			if !te.GetCreatedAt().Equal(createdAt) {
+				t.Errorf("Expected created at %v, got %v", createdAt, te.GetCreatedAt())
+			}
+
+			updatedAt := time.Now().Add(time.Hour)
+			te.SetUpdatedAt(updatedAt)
+			if !te.GetUpdatedAt().Equal(updatedAt) {
+				t.Errorf("Expected updated at %v, got %v", updatedAt, te.GetUpdatedAt())
 			}
 		})
 	})

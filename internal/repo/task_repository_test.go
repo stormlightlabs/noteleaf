@@ -2,7 +2,6 @@ package repo
 
 import (
 	"context"
-	"database/sql"
 	"slices"
 	"testing"
 	"time"
@@ -12,70 +11,17 @@ import (
 	"github.com/stormlightlabs/noteleaf/internal/models"
 )
 
-func createTaskTestDB(t *testing.T) *sql.DB {
-	db, err := sql.Open("sqlite3", ":memory:")
-	if err != nil {
-		t.Fatalf("Failed to create in-memory database: %v", err)
-	}
-
-	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
-		t.Fatalf("Failed to enable foreign keys: %v", err)
-	}
-
-	schema := `
-		CREATE TABLE IF NOT EXISTS tasks (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			uuid TEXT UNIQUE NOT NULL,
-			description TEXT NOT NULL,
-			status TEXT DEFAULT 'pending',
-			priority TEXT,
-			project TEXT,
-			context TEXT,
-			tags TEXT,
-			due DATETIME,
-			entry DATETIME DEFAULT CURRENT_TIMESTAMP,
-			modified DATETIME DEFAULT CURRENT_TIMESTAMP,
-			end DATETIME,
-			start DATETIME,
-			annotations TEXT
-		);
-	`
-
-	if _, err := db.Exec(schema); err != nil {
-		t.Fatalf("Failed to create schema: %v", err)
-	}
-
-	t.Cleanup(func() {
-		db.Close()
-	})
-
-	return db
-}
-
-func createSampleTask() *models.Task {
-	return &models.Task{
-		UUID:        newUUID(),
-		Description: "Test task",
-		Status:      "pending",
-		Priority:    "H",
-		Project:     "test-project",
-		Context:     "test-context",
-		Tags:        []string{"test", "important"},
-		Annotations: []string{"This is a test", "Another annotation"},
-	}
-}
-
 func newUUID() string {
 	return uuid.New().String()
 }
 
 func TestTaskRepository(t *testing.T) {
-	db := createTaskTestDB(t)
+	db := CreateTestDB(t)
 	repo := NewTaskRepository(db)
 	ctx := context.Background()
 
 	t.Run("Create Task", func(t *testing.T) {
-		task := createSampleTask()
+		task := CreateSampleTask()
 
 		id, err := repo.Create(ctx, task)
 		if err != nil {
@@ -99,7 +45,7 @@ func TestTaskRepository(t *testing.T) {
 	})
 
 	t.Run("Get Task", func(t *testing.T) {
-		original := createSampleTask()
+		original := CreateSampleTask()
 		id, err := repo.Create(ctx, original)
 		if err != nil {
 			t.Fatalf("Failed to create task: %v", err)
@@ -144,7 +90,7 @@ func TestTaskRepository(t *testing.T) {
 	})
 
 	t.Run("Update Task", func(t *testing.T) {
-		task := createSampleTask()
+		task := CreateSampleTask()
 		id, err := repo.Create(ctx, task)
 		if err != nil {
 			t.Fatalf("Failed to create task: %v", err)
@@ -181,7 +127,7 @@ func TestTaskRepository(t *testing.T) {
 	})
 
 	t.Run("Delete Task", func(t *testing.T) {
-		task := createSampleTask()
+		task := CreateSampleTask()
 		id, err := repo.Create(ctx, task)
 		if err != nil {
 			t.Fatalf("Failed to create task: %v", err)
@@ -681,7 +627,6 @@ func TestTaskRepository(t *testing.T) {
 		})
 
 		t.Run("GetByPriority", func(t *testing.T) {
-			// Test numeric priority
 			results, err := repo.GetByPriority(ctx, "5")
 			if err != nil {
 				t.Errorf("Failed to get tasks by priority 5: %v", err)
@@ -713,7 +658,6 @@ func TestTaskRepository(t *testing.T) {
 				}
 			}
 
-			// Test empty priority - create a specific task with no priority for this test
 			noPriorityTask := &models.Task{
 				UUID:        newUUID(),
 				Description: "No priority task for test",
@@ -828,26 +772,26 @@ func TestTaskRepository(t *testing.T) {
 }
 
 func TestTaskRepository_GetContexts(t *testing.T) {
-	db := createTaskTestDB(t)
+	db := CreateTestDB(t)
 	repo := NewTaskRepository(db)
 	ctx := context.Background()
 
 	// Create tasks with different contexts
-	task1 := createSampleTask()
+	task1 := CreateSampleTask()
 	task1.Context = "work"
 	_, err := repo.Create(ctx, task1)
 	if err != nil {
 		t.Fatalf("Failed to create task1: %v", err)
 	}
 
-	task2 := createSampleTask()
+	task2 := CreateSampleTask()
 	task2.Context = "home"
 	_, err = repo.Create(ctx, task2)
 	if err != nil {
 		t.Fatalf("Failed to create task2: %v", err)
 	}
 
-	task3 := createSampleTask()
+	task3 := CreateSampleTask()
 	task3.Context = "work"
 	_, err = repo.Create(ctx, task3)
 	if err != nil {
@@ -855,7 +799,7 @@ func TestTaskRepository_GetContexts(t *testing.T) {
 	}
 
 	// Task with empty context should not be included
-	task4 := createSampleTask()
+	task4 := CreateSampleTask()
 	task4.Context = ""
 	_, err = repo.Create(ctx, task4)
 	if err != nil {
@@ -888,12 +832,12 @@ func TestTaskRepository_GetContexts(t *testing.T) {
 }
 
 func TestTaskRepository_GetByContext(t *testing.T) {
-	db := createTaskTestDB(t)
+	db := CreateTestDB(t)
 	repo := NewTaskRepository(db)
 	ctx := context.Background()
 
 	// Create tasks with different contexts
-	task1 := createSampleTask()
+	task1 := CreateSampleTask()
 	task1.Context = "work"
 	task1.Description = "Work task 1"
 	_, err := repo.Create(ctx, task1)
@@ -901,7 +845,7 @@ func TestTaskRepository_GetByContext(t *testing.T) {
 		t.Fatalf("Failed to create task1: %v", err)
 	}
 
-	task2 := createSampleTask()
+	task2 := CreateSampleTask()
 	task2.Context = "home"
 	task2.Description = "Home task 1"
 	_, err = repo.Create(ctx, task2)
@@ -909,7 +853,7 @@ func TestTaskRepository_GetByContext(t *testing.T) {
 		t.Fatalf("Failed to create task2: %v", err)
 	}
 
-	task3 := createSampleTask()
+	task3 := CreateSampleTask()
 	task3.Context = "work"
 	task3.Description = "Work task 2"
 	_, err = repo.Create(ctx, task3)
@@ -933,7 +877,7 @@ func TestTaskRepository_GetByContext(t *testing.T) {
 		}
 	}
 
-	// Get tasks by home context  
+	// Get tasks by home context
 	homeTasks, err := repo.GetByContext(ctx, "home")
 	if err != nil {
 		t.Fatalf("Failed to get tasks by context: %v", err)
