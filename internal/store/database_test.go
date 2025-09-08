@@ -3,6 +3,7 @@ package store
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -159,6 +160,76 @@ func TestDatabaseErrorHandling(t *testing.T) {
 		_, err := NewDatabase()
 		if err == nil {
 			t.Error("NewDatabase should fail with invalid database path")
+		}
+	})
+
+	t.Run("handles invalid database connection", func(t *testing.T) {
+		originalGetConfigDir := GetConfigDir
+		GetConfigDir = func() (string, error) {
+			return "/dev/null", nil
+		}
+		defer func() { GetConfigDir = originalGetConfigDir }()
+
+		_, err := NewDatabase()
+		if err == nil {
+			t.Error("NewDatabase should fail when database path is invalid")
+		}
+	})
+
+	t.Run("handles migration failure during database creation", func(t *testing.T) {
+		tempDir, err := os.MkdirTemp("", "noteleaf-db-migration-fail-test-*")
+		if err != nil {
+			t.Fatalf("Failed to create temp directory: %v", err)
+		}
+		defer os.RemoveAll(tempDir)
+
+		originalGetConfigDir := GetConfigDir
+		GetConfigDir = func() (string, error) {
+			return tempDir, nil
+		}
+		defer func() { GetConfigDir = originalGetConfigDir }()
+
+		dbPath := filepath.Join(tempDir, "noteleaf.db")
+		
+		// Create a corrupted database file that will cause issues
+		corruptedSQL := "this is not valid SQL and will cause failures"
+		err = os.WriteFile(dbPath, []byte(corruptedSQL), 0644)
+		if err != nil {
+			t.Fatalf("Failed to create corrupted database file: %v", err)
+		}
+
+		_, err = NewDatabase()
+		if err == nil {
+			t.Error("NewDatabase should fail when database file is corrupted")
+		}
+	})
+
+	t.Run("handles database file permission error", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("Permission test not reliable on Windows")
+		}
+
+		tempDir, err := os.MkdirTemp("", "noteleaf-db-perm-test-*")
+		if err != nil {
+			t.Fatalf("Failed to create temp directory: %v", err)
+		}
+		defer os.RemoveAll(tempDir)
+
+		originalGetConfigDir := GetConfigDir
+		GetConfigDir = func() (string, error) {
+			return tempDir, nil
+		}
+		defer func() { GetConfigDir = originalGetConfigDir }()
+
+		err = os.Chmod(tempDir, 0555)
+		if err != nil {
+			t.Fatalf("Failed to change directory permissions: %v", err)
+		}
+		defer os.Chmod(tempDir, 0755)
+
+		_, err = NewDatabase()
+		if err == nil {
+			t.Error("NewDatabase should fail when database directory is not writable")
 		}
 	})
 }

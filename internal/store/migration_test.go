@@ -3,6 +3,8 @@ package store
 import (
 	"database/sql"
 	"embed"
+	"fmt"
+	"io/fs"
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -10,6 +12,56 @@ import (
 
 //go:embed sql/migrations
 var testMigrationFiles embed.FS
+
+type fakeMigrationFS struct {
+	shouldFailRead   bool
+	invalidSQL       bool
+	hasNewMigrations bool
+}
+
+type fakeDirEntry struct {
+	name string
+}
+
+func (f fakeDirEntry) Name() string               { return f.name }
+func (f fakeDirEntry) IsDir() bool                { return false }
+func (f fakeDirEntry) Type() fs.FileMode          { return 0 }
+func (f fakeDirEntry) Info() (fs.FileInfo, error) { return nil, fmt.Errorf("info not available") }
+
+func (f *fakeMigrationFS) ReadDir(name string) ([]fs.DirEntry, error) {
+	if name == "sql/migrations" {
+		entries := []fs.DirEntry{
+			fakeDirEntry{name: "0000_create_migrations_table_up.sql"},
+		}
+		if f.hasNewMigrations {
+			entries = append(entries,
+				fakeDirEntry{name: "0001_test_migration_up.sql"},
+				fakeDirEntry{name: "0001_test_migration_down.sql"},
+			)
+		}
+		return entries, nil
+	}
+	return nil, fmt.Errorf("directory not found: %s", name)
+}
+
+func (f *fakeMigrationFS) ReadFile(name string) ([]byte, error) {
+	if f.shouldFailRead {
+		return nil, fmt.Errorf("simulated read failure")
+	}
+	if f.invalidSQL {
+		return []byte("INVALID SQL SYNTAX GOES HERE AND MAKES DATABASE SAD"), nil
+	}
+	if name == "sql/migrations/0000_create_migrations_table_up.sql" {
+		return []byte("CREATE TABLE migrations (version TEXT PRIMARY KEY, applied_at DATETIME DEFAULT CURRENT_TIMESTAMP);"), nil
+	}
+	if name == "sql/migrations/0001_test_migration_up.sql" {
+		return []byte("CREATE TABLE test_table (id INTEGER PRIMARY KEY);"), nil
+	}
+	if name == "sql/migrations/0001_test_migration_down.sql" {
+		return []byte("DROP TABLE IF EXISTS test_table;"), nil
+	}
+	return nil, fmt.Errorf("file not found: %s", name)
+}
 
 func createTestDB(t *testing.T) *sql.DB {
 	db, err := sql.Open("sqlite3", ":memory:")
@@ -69,6 +121,78 @@ func TestMigrationRunner_RunMigrations(t *testing.T) {
 
 		if migrationCount == 0 {
 			t.Error("At least one migration should be applied")
+		}
+	})
+
+	t.Run("handles migration directory read failure", func(t *testing.T) {
+		db := createTestDB(t)
+
+		emptyFS := embed.FS{}
+		runner := NewMigrationRunner(db, emptyFS)
+
+		err := runner.RunMigrations()
+		if err == nil {
+			t.Error("RunMigrations should fail when migration directory cannot be read")
+		}
+	})
+
+	t.Run("handles migration table check failure", func(t *testing.T) {
+		db := createTestDB(t)
+		db.Close()
+
+		runner := NewMigrationRunner(db, testMigrationFiles)
+		err := runner.RunMigrations()
+		if err == nil {
+			t.Error("RunMigrations should fail when database connection is closed")
+		}
+	})
+
+	t.Run("handles migration file read failure", func(t *testing.T) {
+		db := createTestDB(t)
+
+		fakeFS := &fakeMigrationFS{shouldFailRead: true, hasNewMigrations: true}
+		runner := NewMigrationRunner(db, fakeFS)
+
+		err := runner.RunMigrations()
+		if err == nil {
+			t.Error("RunMigrations should fail when migration file cannot be read")
+		}
+	})
+
+	t.Run("handles invalid SQL in migration file", func(t *testing.T) {
+		db := createTestDB(t)
+
+		fakeFS := &fakeMigrationFS{invalidSQL: true, hasNewMigrations: true}
+		runner := NewMigrationRunner(db, fakeFS)
+
+		err := runner.RunMigrations()
+		if err == nil {
+			t.Error("RunMigrations should fail when migration contains invalid SQL")
+		}
+	})
+
+	t.Run("handles migration record insertion failure", func(t *testing.T) {
+		db := createTestDB(t)
+		runner := NewMigrationRunner(db, testMigrationFiles)
+
+		err := runner.RunMigrations()
+		if err != nil {
+			t.Fatalf("First RunMigrations failed: %v", err)
+		}
+
+		_, err = db.Exec("DROP TABLE migrations")
+		if err != nil {
+			t.Fatalf("Failed to drop migrations table: %v", err)
+		}
+
+		_, err = db.Exec("CREATE TABLE migrations (version TEXT PRIMARY KEY CHECK(length(version) < 0))")
+		if err != nil {
+			t.Fatalf("Failed to create migrations table with constraint: %v", err)
+		}
+
+		err = runner.RunMigrations()
+		if err == nil {
+			t.Error("RunMigrations should fail when migration record cannot be inserted")
 		}
 	})
 
@@ -143,6 +267,56 @@ func TestMigrationRunner_GetAppliedMigrations(t *testing.T) {
 		}
 	})
 
+	t.Run("handles database connection failure", func(t *testing.T) {
+		db := createTestDB(t)
+		db.Close()
+		runner := NewMigrationRunner(db, testMigrationFiles)
+
+		_, err := runner.GetAppliedMigrations()
+		if err == nil {
+			t.Error("GetAppliedMigrations should fail when database connection is closed")
+		}
+	})
+
+	t.Run("handles query execution failure", func(t *testing.T) {
+		db := createTestDB(t)
+		runner := NewMigrationRunner(db, testMigrationFiles)
+
+		err := runner.RunMigrations()
+		if err != nil {
+			t.Fatalf("RunMigrations failed: %v", err)
+		}
+
+		// Close the database to trigger a query failure
+		db.Close()
+
+		_, err = runner.GetAppliedMigrations()
+		if err == nil {
+			t.Error("GetAppliedMigrations should fail when database is closed")
+		}
+	})
+
+	t.Run("handles row scan failure", func(t *testing.T) {
+		db := createTestDB(t)
+		runner := NewMigrationRunner(db, testMigrationFiles)
+
+		err := runner.RunMigrations()
+		if err != nil {
+			t.Fatalf("RunMigrations failed: %v", err)
+		}
+
+		// Insert a record with NULL applied_at which should cause scan issues
+		_, err = db.Exec("INSERT INTO migrations (version, applied_at) VALUES ('test', NULL)")
+		if err != nil {
+			t.Fatalf("Failed to insert NULL migration record: %v", err)
+		}
+
+		_, err = runner.GetAppliedMigrations()
+		if err == nil {
+			t.Error("GetAppliedMigrations should fail when scanning NULL applied_at field")
+		}
+	})
+
 	t.Run("returns applied migrations", func(t *testing.T) {
 		db := createTestDB(t)
 		runner := NewMigrationRunner(db, testMigrationFiles)
@@ -213,6 +387,30 @@ func TestMigrationRunner_GetAvailableMigrations(t *testing.T) {
 		}
 	})
 
+	t.Run("handles migration directory read failure", func(t *testing.T) {
+		db := createTestDB(t)
+
+		emptyFS := embed.FS{}
+		runner := NewMigrationRunner(db, emptyFS)
+
+		_, err := runner.GetAvailableMigrations()
+		if err == nil {
+			t.Error("GetAvailableMigrations should fail when migration directory cannot be read")
+		}
+	})
+
+	t.Run("handles migration file read failure", func(t *testing.T) {
+		db := createTestDB(t)
+
+		fakeFS := &fakeMigrationFS{shouldFailRead: true}
+		runner := NewMigrationRunner(db, fakeFS)
+
+		_, err := runner.GetAvailableMigrations()
+		if err == nil {
+			t.Error("GetAvailableMigrations should fail when migration file cannot be read")
+		}
+	})
+
 	t.Run("includes both up and down SQL when available", func(t *testing.T) {
 		db := createTestDB(t)
 		runner := NewMigrationRunner(db, testMigrationFiles)
@@ -244,6 +442,117 @@ func TestMigrationRunner_Rollback(t *testing.T) {
 		err := runner.Rollback()
 		if err == nil {
 			t.Error("Rollback should fail when no migrations are applied")
+		}
+	})
+
+	t.Run("handles database connection failure", func(t *testing.T) {
+		db := createTestDB(t)
+		runner := NewMigrationRunner(db, testMigrationFiles)
+
+		err := runner.RunMigrations()
+		if err != nil {
+			t.Fatalf("RunMigrations failed: %v", err)
+		}
+
+		db.Close()
+
+		err = runner.Rollback()
+		if err == nil {
+			t.Error("Rollback should fail when database connection is closed")
+		}
+	})
+
+	t.Run("handles migration directory read failure during rollback", func(t *testing.T) {
+		db := createTestDB(t)
+		runner := NewMigrationRunner(db, testMigrationFiles)
+
+		err := runner.RunMigrations()
+		if err != nil {
+			t.Fatalf("RunMigrations failed: %v", err)
+		}
+
+		emptyFS := embed.FS{}
+		runner.migrationFiles = emptyFS
+
+		err = runner.Rollback()
+		if err == nil {
+			t.Error("Rollback should fail when migration directory cannot be read")
+		}
+	})
+
+	t.Run("handles missing down migration file", func(t *testing.T) {
+		db := createTestDB(t)
+		runner := NewMigrationRunner(db, testMigrationFiles)
+
+		err := runner.RunMigrations()
+		if err != nil {
+			t.Fatalf("RunMigrations failed: %v", err)
+		}
+
+		fakeFS := &fakeMigrationFS{}
+		runner.migrationFiles = fakeFS
+
+		err = runner.Rollback()
+		if err == nil {
+			t.Error("Rollback should fail when down migration file is not found")
+		}
+	})
+
+	t.Run("handles down migration file read failure", func(t *testing.T) {
+		db := createTestDB(t)
+
+		fakeFS := &fakeMigrationFS{}
+		runner := NewMigrationRunner(db, fakeFS)
+
+		err := runner.RunMigrations()
+		if err != nil {
+			t.Fatalf("RunMigrations failed: %v", err)
+		}
+
+		fakeFS.shouldFailRead = true
+
+		err = runner.Rollback()
+		if err == nil {
+			t.Error("Rollback should fail when down migration file cannot be read")
+		}
+	})
+
+	t.Run("handles invalid down migration SQL", func(t *testing.T) {
+		db := createTestDB(t)
+
+		fakeFS := &fakeMigrationFS{}
+		runner := NewMigrationRunner(db, fakeFS)
+
+		err := runner.RunMigrations()
+		if err != nil {
+			t.Fatalf("RunMigrations failed: %v", err)
+		}
+
+		fakeFS.invalidSQL = true
+
+		err = runner.Rollback()
+		if err == nil {
+			t.Error("Rollback should fail when down migration contains invalid SQL")
+		}
+	})
+
+	t.Run("handles migration record deletion failure", func(t *testing.T) {
+		db := createTestDB(t)
+		runner := NewMigrationRunner(db, testMigrationFiles)
+
+		err := runner.RunMigrations()
+		if err != nil {
+			t.Fatalf("RunMigrations failed: %v", err)
+		}
+
+		_, err = db.Exec("DROP TABLE migrations")
+		if err != nil {
+			t.Fatalf("Failed to drop migrations table: %v", err)
+		}
+
+		err = runner.Rollback()
+		if err == nil {
+			t.Error("Rollback should fail when migration record cannot be deleted")
 		}
 	})
 

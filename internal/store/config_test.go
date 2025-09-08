@@ -221,6 +221,81 @@ func TestConfigErrorHandling(t *testing.T) {
 		}
 	})
 
+	t.Run("LoadConfig handles file read permission error", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("Permission test not reliable on Windows")
+		}
+
+		tempDir, err := os.MkdirTemp("", "noteleaf-config-perm-test-*")
+		if err != nil {
+			t.Fatalf("Failed to create temp directory: %v", err)
+		}
+		defer os.RemoveAll(tempDir)
+
+		originalGetConfigDir := GetConfigDir
+		GetConfigDir = func() (string, error) {
+			return tempDir, nil
+		}
+		defer func() { GetConfigDir = originalGetConfigDir }()
+
+		configPath := filepath.Join(tempDir, ".noteleaf.conf.toml")
+		validTOML := `color_scheme = "dark"`
+		err = os.WriteFile(configPath, []byte(validTOML), 0644)
+		if err != nil {
+			t.Fatalf("Failed to write config file: %v", err)
+		}
+
+		err = os.Chmod(configPath, 0000)
+		if err != nil {
+			t.Fatalf("Failed to change file permissions: %v", err)
+		}
+		defer os.Chmod(configPath, 0644)
+
+		_, err = LoadConfig()
+		if err == nil {
+			t.Error("LoadConfig should fail when config file is not readable")
+		}
+	})
+
+	t.Run("LoadConfig handles GetConfigDir error", func(t *testing.T) {
+		originalGetConfigDir := GetConfigDir
+		GetConfigDir = func() (string, error) {
+			return "", os.ErrPermission
+		}
+		defer func() { GetConfigDir = originalGetConfigDir }()
+
+		_, err := LoadConfig()
+		if err == nil {
+			t.Error("LoadConfig should fail when GetConfigDir fails")
+		}
+	})
+
+	t.Run("LoadConfig handles SaveConfig failure when creating default", func(t *testing.T) {
+		tempDir, err := os.MkdirTemp("", "noteleaf-config-save-fail-test-*")
+		if err != nil {
+			t.Fatalf("Failed to create temp directory: %v", err)
+		}
+		defer os.RemoveAll(tempDir)
+
+		_ = filepath.Join(tempDir, ".noteleaf.conf.toml")
+
+		callCount := 0
+		originalGetConfigDir := GetConfigDir
+		GetConfigDir = func() (string, error) {
+			callCount++
+			if callCount == 1 {
+				return tempDir, nil
+			}
+			return "", os.ErrPermission
+		}
+		defer func() { GetConfigDir = originalGetConfigDir }()
+
+		_, err = LoadConfig()
+		if err == nil {
+			t.Error("LoadConfig should fail when SaveConfig fails during default config creation")
+		}
+	})
+
 	t.Run("SaveConfig handles directory creation failure", func(t *testing.T) {
 		originalGetConfigDir := GetConfigDir
 		GetConfigDir = func() (string, error) {
@@ -232,6 +307,36 @@ func TestConfigErrorHandling(t *testing.T) {
 		err := SaveConfig(config)
 		if err == nil {
 			t.Error("SaveConfig should fail when config directory cannot be accessed")
+		}
+	})
+
+	t.Run("SaveConfig handles file write permission error", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("Permission test not reliable on Windows")
+		}
+
+		tempDir, err := os.MkdirTemp("", "noteleaf-config-write-perm-test-*")
+		if err != nil {
+			t.Fatalf("Failed to create temp directory: %v", err)
+		}
+		defer os.RemoveAll(tempDir)
+
+		originalGetConfigDir := GetConfigDir
+		GetConfigDir = func() (string, error) {
+			return tempDir, nil
+		}
+		defer func() { GetConfigDir = originalGetConfigDir }()
+
+		err = os.Chmod(tempDir, 0555)
+		if err != nil {
+			t.Fatalf("Failed to change directory permissions: %v", err)
+		}
+		defer os.Chmod(tempDir, 0755)
+
+		config := DefaultConfig()
+		err = SaveConfig(config)
+		if err == nil {
+			t.Error("SaveConfig should fail when directory is not writable")
 		}
 	})
 
@@ -342,6 +447,64 @@ func TestGetConfigDir(t *testing.T) {
 			if configDir != expectedPath {
 				t.Errorf("Expected config dir %s, got %s", expectedPath, configDir)
 			}
+		}
+	})
+
+	t.Run("handles HOME directory lookup failure on Unix", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("HOME directory test not applicable on Windows")
+		}
+
+		originalXDG := os.Getenv("XDG_CONFIG_HOME")
+		originalHome := os.Getenv("HOME")
+		os.Unsetenv("XDG_CONFIG_HOME")
+		os.Unsetenv("HOME")
+
+		defer func() {
+			os.Setenv("XDG_CONFIG_HOME", originalXDG)
+			os.Setenv("HOME", originalHome)
+		}()
+
+		_, err := GetConfigDir()
+		if err == nil {
+			t.Error("GetConfigDir should fail when both XDG_CONFIG_HOME and HOME are not available")
+		}
+	})
+
+	t.Run("handles directory creation permission failure", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("Permission test not reliable on Windows")
+		}
+
+		tempParent, err := os.MkdirTemp("", "noteleaf-parent-test-*")
+		if err != nil {
+			t.Fatalf("Failed to create temp parent directory: %v", err)
+		}
+		defer os.RemoveAll(tempParent)
+
+		err = os.Chmod(tempParent, 0555)
+		if err != nil {
+			t.Fatalf("Failed to change parent directory permissions: %v", err)
+		}
+		defer os.Chmod(tempParent, 0755)
+
+		var originalEnv string
+		var envVar string
+		switch runtime.GOOS {
+		case "windows":
+			envVar = "APPDATA"
+			originalEnv = os.Getenv("APPDATA")
+			os.Setenv("APPDATA", tempParent)
+		default:
+			envVar = "XDG_CONFIG_HOME"
+			originalEnv = os.Getenv("XDG_CONFIG_HOME")
+			os.Setenv("XDG_CONFIG_HOME", tempParent)
+		}
+		defer os.Setenv(envVar, originalEnv)
+
+		_, err = GetConfigDir()
+		if err == nil {
+			t.Error("GetConfigDir should fail when directory creation is not permitted")
 		}
 	})
 }

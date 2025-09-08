@@ -2,8 +2,8 @@ package store
 
 import (
 	"database/sql"
-	"embed"
 	"fmt"
+	"io/fs"
 	"sort"
 	"strings"
 )
@@ -18,14 +18,20 @@ type Migration struct {
 	AppliedAt string
 }
 
+// FileSystem interface for reading migration files
+type FileSystem interface {
+	ReadDir(name string) ([]fs.DirEntry, error)
+	ReadFile(name string) ([]byte, error)
+}
+
 // MigrationRunner handles database migrations
 type MigrationRunner struct {
 	db             *sql.DB
-	migrationFiles embed.FS
+	migrationFiles FileSystem
 }
 
 // NewMigrationRunner creates a new migration runner
-func NewMigrationRunner(db *sql.DB, files embed.FS) *MigrationRunner {
+func NewMigrationRunner(db *sql.DB, files FileSystem) *MigrationRunner {
 	return &MigrationRunner{
 		db:             db,
 		migrationFiles: files,
