@@ -15,6 +15,8 @@ require (
 	golang.org/x/time v0.12.0
 )
 
+require github.com/gomarkdown/markdown v0.0.0-20250810172220-2e2c11897d1a // indirect
+
 require (
 	github.com/PuerkitoBio/goquery v1.10.3
 	github.com/andybalholm/cascadia v1.3.3 // indirect

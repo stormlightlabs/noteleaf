@@ -2,6 +2,7 @@ package models
 
 import (
 	"encoding/json"
+	"net/url"
 	"slices"
 	"time"
 )
@@ -156,6 +157,19 @@ type TimeEntry struct {
 	Description     string     `json:"description,omitempty"`
 	Created         time.Time  `json:"created"`
 	Modified        time.Time  `json:"modified"`
+}
+
+// Article represents a parsed article from a web URL
+type Article struct {
+	ID           int64     `json:"id"`
+	URL          string    `json:"url"`
+	Title        string    `json:"title"`
+	Author       string    `json:"author,omitempty"`
+	Date         string    `json:"date,omitempty"`
+	MarkdownPath string    `json:"markdown_path"`
+	HTMLPath     string    `json:"html_path"`
+	Created      time.Time `json:"created"`
+	Modified     time.Time `json:"modified"`
 }
 
 // MarshalTags converts tags slice to JSON string for database storage
@@ -468,3 +482,27 @@ func (te *TimeEntry) GetCreatedAt() time.Time     { return te.Created }
 func (te *TimeEntry) SetCreatedAt(time time.Time) { te.Created = time }
 func (te *TimeEntry) GetUpdatedAt() time.Time     { return te.Modified }
 func (te *TimeEntry) SetUpdatedAt(time time.Time) { te.Modified = time }
+
+func (a *Article) GetID() int64                { return a.ID }
+func (a *Article) SetID(id int64)              { a.ID = id }
+func (a *Article) GetTableName() string        { return "articles" }
+func (a *Article) GetCreatedAt() time.Time     { return a.Created }
+func (a *Article) SetCreatedAt(time time.Time) { a.Created = time }
+func (a *Article) GetUpdatedAt() time.Time     { return a.Modified }
+func (a *Article) SetUpdatedAt(time time.Time) { a.Modified = time }
+
+// IsValidURL returns true if the article has parseable URL
+func (a *Article) IsValidURL() bool {
+	_, err := url.ParseRequestURI(a.URL)
+	return err == nil
+}
+
+// HasAuthor returns true if the article has an author
+func (a *Article) HasAuthor() bool {
+	return a.Author != ""
+}
+
+// HasDate returns true if the article has a date
+func (a *Article) HasDate() bool {
+	return a.Date != ""
+}
