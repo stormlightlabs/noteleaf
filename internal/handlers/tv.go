@@ -172,14 +172,19 @@ func (h *TVHandler) List(ctx context.Context, status string) error {
 
 	fmt.Printf("Found %d TV show(s):\n\n", len(shows))
 	for _, show := range shows {
-		h.printTVShow(show)
+		h.print(show)
 	}
 
 	return nil
 }
 
 // View displays detailed information about a specific TV show
-func (h *TVHandler) View(ctx context.Context, showID int64) error {
+func (h *TVHandler) View(ctx context.Context, id string) error {
+	showID, err := strconv.ParseInt(id, 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid TV show ID: %s", id)
+	}
+
 	show, err := h.repos.TV.Get(ctx, showID)
 	if err != nil {
 		return fmt.Errorf("failed to get TV show %d: %w", showID, err)
@@ -245,12 +250,22 @@ func (h *TVHandler) MarkWatching(ctx context.Context, showID int64) error {
 }
 
 // MarkWatched marks a TV show as watched
-func (h *TVHandler) MarkWatched(ctx context.Context, showID int64) error {
+func (h *TVHandler) MarkWatched(ctx context.Context, id string) error {
+	showID, err := strconv.ParseInt(id, 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid TV show ID: %s", id)
+	}
+
 	return h.UpdateStatus(ctx, showID, "watched")
 }
 
 // Remove removes a TV show from the queue
-func (h *TVHandler) Remove(ctx context.Context, showID int64) error {
+func (h *TVHandler) Remove(ctx context.Context, id string) error {
+	showID, err := strconv.ParseInt(id, 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid TV show ID: %s", id)
+	}
+
 	show, err := h.repos.TV.Get(ctx, showID)
 	if err != nil {
 		return fmt.Errorf("TV show %d not found: %w", showID, err)
@@ -269,7 +284,7 @@ func (h *TVHandler) Remove(ctx context.Context, showID int64) error {
 	return nil
 }
 
-func (h *TVHandler) printTVShow(show *models.TVShow) {
+func (h *TVHandler) print(show *models.TVShow) {
 	fmt.Printf("[%d] %s", show.ID, show.Title)
 	if show.Season > 0 {
 		fmt.Printf(" (Season %d", show.Season)
@@ -285,25 +300,6 @@ func (h *TVHandler) printTVShow(show *models.TVShow) {
 		fmt.Printf(" ★%.1f", show.Rating)
 	}
 	fmt.Println()
-}
-
-// SearchAndAddTV searches for TV shows and allows user to select and add to queue
-func (h *TVHandler) SearchAndAddTV(ctx context.Context, query string, interactive bool) error {
-	return h.SearchAndAdd(ctx, query, interactive)
-}
-
-// ListTVShows lists all TV shows in the queue with status filtering
-func (h *TVHandler) ListTVShows(ctx context.Context, status string) error {
-	return h.List(ctx, status)
-}
-
-// ViewTVShow displays detailed information about a specific TV show
-func (h *TVHandler) ViewTVShow(ctx context.Context, id string) error {
-	showID, err := strconv.ParseInt(id, 10, 64)
-	if err != nil {
-		return fmt.Errorf("invalid TV show ID: %s", id)
-	}
-	return h.View(ctx, showID)
 }
 
 // UpdateTVShowStatus changes the status of a TV show
@@ -322,22 +318,4 @@ func (h *TVHandler) MarkTVShowWatching(ctx context.Context, id string) error {
 		return fmt.Errorf("invalid TV show ID: %s", id)
 	}
 	return h.MarkWatching(ctx, showID)
-}
-
-// MarkTVShowWatched marks a TV show as watched
-func (h *TVHandler) MarkTVShowWatched(ctx context.Context, id string) error {
-	showID, err := strconv.ParseInt(id, 10, 64)
-	if err != nil {
-		return fmt.Errorf("invalid TV show ID: %s", id)
-	}
-	return h.MarkWatched(ctx, showID)
-}
-
-// RemoveTVShow removes a TV show from the queue
-func (h *TVHandler) RemoveTVShow(ctx context.Context, id string) error {
-	showID, err := strconv.ParseInt(id, 10, 64)
-	if err != nil {
-		return fmt.Errorf("invalid TV show ID: %s", id)
-	}
-	return h.Remove(ctx, showID)
 }

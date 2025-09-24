@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"testing"
 	"time"
 
@@ -153,7 +154,7 @@ func TestTVHandler(t *testing.T) {
 			handler := createTestTVHandler(t)
 			defer handler.Close()
 
-			err := handler.View(context.Background(), 999)
+			err := handler.View(context.Background(), strconv.Itoa(int(999)))
 			if err == nil {
 				t.Error("Expected error for non-existent TV show")
 			}
@@ -163,7 +164,7 @@ func TestTVHandler(t *testing.T) {
 			handler := createTestTVHandler(t)
 			defer handler.Close()
 
-			err := handler.ViewTVShow(context.Background(), "invalid")
+			err := handler.View(context.Background(), "invalid")
 			if err == nil {
 				t.Error("Expected error for invalid TV show ID")
 			}
@@ -214,7 +215,7 @@ func TestTVHandler(t *testing.T) {
 		handler := createTestTVHandler(t)
 		defer handler.Close()
 
-		err := handler.MarkWatched(context.Background(), 999)
+		err := handler.MarkWatched(context.Background(), strconv.Itoa(int(999)))
 		if err == nil {
 			t.Error("Expected error for non-existent TV show")
 		}
@@ -224,7 +225,7 @@ func TestTVHandler(t *testing.T) {
 		handler := createTestTVHandler(t)
 		defer handler.Close()
 
-		err := handler.Remove(context.Background(), 999)
+		err := handler.Remove(context.Background(), strconv.Itoa(int(999)))
 		if err == nil {
 			t.Error("Expected error for non-existent TV show")
 		}
@@ -256,11 +257,11 @@ func TestTVHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("MarkTVShowWatched_InvalidID", func(t *testing.T) {
+	t.Run("MarkWatched_InvalidID", func(t *testing.T) {
 		handler := createTestTVHandler(t)
 		defer handler.Close()
 
-		err := handler.MarkTVShowWatched(context.Background(), "invalid")
+		err := handler.MarkWatched(context.Background(), "invalid")
 		if err == nil {
 			t.Error("Expected error for invalid TV show ID")
 		}
@@ -269,11 +270,11 @@ func TestTVHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("RemoveTVShow_InvalidID", func(t *testing.T) {
+	t.Run("Remove_InvalidID", func(t *testing.T) {
 		handler := createTestTVHandler(t)
 		defer handler.Close()
 
-		err := handler.RemoveTVShow(context.Background(), "invalid")
+		err := handler.Remove(context.Background(), "invalid")
 		if err == nil {
 			t.Error("Expected error for invalid TV show ID")
 		}
@@ -282,19 +283,19 @@ func TestTVHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("printTVShow", func(t *testing.T) {
+	t.Run("print", func(t *testing.T) {
 		handler := createTestTVHandler(t)
 		defer handler.Close()
 
 		show := createTestTVShow()
 
-		handler.printTVShow(show)
+		handler.print(show)
 
 		minimalShow := &models.TVShow{
 			ID:    2,
 			Title: "Minimal Show",
 		}
-		handler.printTVShow(minimalShow)
+		handler.print(minimalShow)
 
 		watchedShow := &models.TVShow{
 			ID:      3,
@@ -304,32 +305,7 @@ func TestTVHandler(t *testing.T) {
 			Status:  "watched",
 			Rating:  3.5,
 		}
-		handler.printTVShow(watchedShow)
-	})
-
-	t.Run("SearchAndAddTV", func(t *testing.T) {
-		handler := createTestTVHandler(t)
-		defer handler.Close()
-
-		err := handler.SearchAndAddTV(context.Background(), "", false)
-		if err == nil {
-			t.Error("Expected error for empty query")
-		}
-	})
-
-	t.Run("List TV Shows", func(t *testing.T) {
-		handler := createTestTVHandler(t)
-		defer handler.Close()
-
-		err := handler.ListTVShows(context.Background(), "")
-		if err != nil {
-			t.Errorf("Expected no error for listing all TV shows, got: %v", err)
-		}
-
-		err = handler.ListTVShows(context.Background(), "invalid")
-		if err == nil {
-			t.Error("Expected error for invalid status")
-		}
+		handler.print(watchedShow)
 	})
 
 	t.Run("Integration", func(t *testing.T) {
@@ -346,7 +322,7 @@ func TestTVHandler(t *testing.T) {
 				return
 			}
 
-			err = handler.View(context.Background(), id)
+			err = handler.View(context.Background(), strconv.Itoa(int(id)))
 			if err != nil {
 				t.Errorf("Failed to view created TV show: %v", err)
 			}
@@ -356,7 +332,7 @@ func TestTVHandler(t *testing.T) {
 				t.Errorf("Failed to update TV show status: %v", err)
 			}
 
-			err = handler.MarkWatched(context.Background(), id)
+			err = handler.MarkWatched(context.Background(), strconv.Itoa(int(id)))
 			if err != nil {
 				t.Errorf("Failed to mark TV show as watched: %v", err)
 			}
@@ -366,7 +342,7 @@ func TestTVHandler(t *testing.T) {
 				t.Errorf("Failed to mark TV show as watching: %v", err)
 			}
 
-			err = handler.Remove(context.Background(), id)
+			err = handler.Remove(context.Background(), strconv.Itoa(int(id)))
 			if err != nil {
 				t.Errorf("Failed to remove TV show: %v", err)
 			}
@@ -436,7 +412,7 @@ func TestTVHandler(t *testing.T) {
 		}{
 			{
 				name: "View non-existent show",
-				fn:   func() error { return handler.View(ctx, nonExistentID) },
+				fn:   func() error { return handler.View(ctx, strconv.Itoa(int(nonExistentID))) },
 			},
 			{
 				name: "Update status of non-existent show",
@@ -448,11 +424,11 @@ func TestTVHandler(t *testing.T) {
 			},
 			{
 				name: "Mark non-existent show as watched",
-				fn:   func() error { return handler.MarkWatched(ctx, nonExistentID) },
+				fn:   func() error { return handler.MarkWatched(ctx, strconv.Itoa(int(nonExistentID))) },
 			},
 			{
 				name: "Remove non-existent show",
-				fn:   func() error { return handler.Remove(ctx, nonExistentID) },
+				fn:   func() error { return handler.Remove(ctx, strconv.Itoa(int(nonExistentID))) },
 			},
 		}
 

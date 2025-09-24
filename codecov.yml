@@ -21,5 +21,4 @@ ignore:
   - "**/testdata/**"
   - "**/vendor/**"
   - "cmd/main.go"
-  - "internal/repo/test_utilities.go"
-  - "internal/handlers/test_utilities.go"
+  - "internal/**/*/test_utilities.go"

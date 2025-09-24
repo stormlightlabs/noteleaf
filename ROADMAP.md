@@ -197,3 +197,27 @@ Additional Options
 - [ ] Complete README/documentation
 - [ ] Installation instructions
 - [ ] Usage examples
+
+## Tech Debt
+
+### Signatures
+
+We've got inconsistent argument parsing and sanitization leading to calls to strconv.Atoi in tests & handler funcs.
+This is only done correctly in the note command -> handler sequence
+
+### Movie Commands - Missing Tests
+
+- movie watched [id] - marks movie as watched
+
+### TV Commands - Missing Tests
+
+- tv watching [id] - marks TV show as watching
+- tv watched [id] - marks TV show as watched
+
+### Book Commands - Missing Tests
+
+- book add [search query...] - search and add book
+- book reading `<id>` - marks book as reading
+- book finished `<id>` - marks book as finished
+- book progress `<id>` `<percentage>` - updates reading progress
+

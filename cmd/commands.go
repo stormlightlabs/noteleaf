@@ -12,6 +12,15 @@ import (
 	"github.com/stormlightlabs/noteleaf/internal/handlers"
 )
 
+func parseID(k string, args []string) (int64, error) {
+	id, err := strconv.ParseInt(args[0], 10, 64)
+	if err != nil {
+		return id, fmt.Errorf("invalid %v ID: %s", k, args[0])
+	}
+
+	return id, err
+}
+
 // CommandGroup represents a group of related CLI commands
 type CommandGroup interface {
 	Create() *cobra.Command
@@ -44,7 +53,7 @@ Use the -i flag for an interactive interface with navigation keys.`,
 			interactive, _ := cmd.Flags().GetBool("interactive")
 			query := strings.Join(args, " ")
 
-			return c.handler.SearchAndAddMovie(cmd.Context(), query, interactive)
+			return c.handler.SearchAndAdd(cmd.Context(), query, interactive)
 		},
 	}
 	addCmd.Flags().BoolP("interactive", "i", false, "Use interactive interface for movie selection")
@@ -68,7 +77,7 @@ Use the -i flag for an interactive interface with navigation keys.`,
 				}
 			}
 
-			return c.handler.ListMovies(cmd.Context(), status)
+			return c.handler.List(cmd.Context(), status)
 		},
 	})
 
@@ -78,7 +87,7 @@ Use the -i flag for an interactive interface with navigation keys.`,
 		Aliases: []string{"seen"},
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return c.handler.MarkMovieWatched(cmd.Context(), args[0])
+			return c.handler.MarkWatched(cmd.Context(), args[0])
 		},
 	})
 
@@ -88,7 +97,7 @@ Use the -i flag for an interactive interface with navigation keys.`,
 		Aliases: []string{"rm"},
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return c.handler.RemoveMovie(cmd.Context(), args[0])
+			return c.handler.Remove(cmd.Context(), args[0])
 		},
 	})
 
@@ -122,7 +131,7 @@ Use the -i flag for an interactive interface with navigation keys.`,
 			interactive, _ := cmd.Flags().GetBool("interactive")
 			query := strings.Join(args, " ")
 
-			return c.handler.SearchAndAddTV(cmd.Context(), query, interactive)
+			return c.handler.SearchAndAdd(cmd.Context(), query, interactive)
 		},
 	}
 	addCmd.Flags().BoolP("interactive", "i", false, "Use interactive interface for TV show selection")
@@ -148,7 +157,7 @@ Use the -i flag for an interactive interface with navigation keys.`,
 				}
 			}
 
-			return c.handler.ListTVShows(cmd.Context(), status)
+			return c.handler.List(cmd.Context(), status)
 		},
 	})
 
@@ -167,7 +176,7 @@ Use the -i flag for an interactive interface with navigation keys.`,
 		Aliases: []string{"seen"},
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return c.handler.MarkTVShowWatched(cmd.Context(), args[0])
+			return c.handler.MarkWatched(cmd.Context(), args[0])
 		},
 	})
 
@@ -177,7 +186,7 @@ Use the -i flag for an interactive interface with navigation keys.`,
 		Aliases: []string{"rm"},
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return c.handler.RemoveTVShow(cmd.Context(), args[0])
+			return c.handler.Remove(cmd.Context(), args[0])
 		},
 	})
 
@@ -206,7 +215,7 @@ By default, shows search results in a simple list format where you can select by
 Use the -i flag for an interactive interface with navigation keys.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			interactive, _ := cmd.Flags().GetBool("interactive")
-			return c.handler.SearchAndAddBook(cmd.Context(), args, interactive)
+			return c.handler.SearchAndAdd(cmd.Context(), args, interactive)
 		},
 	}
 	addCmd.Flags().BoolP("interactive", "i", false, "Use interactive interface for book selection")
@@ -231,7 +240,7 @@ Use the -i flag for an interactive interface with navigation keys.`,
 					return fmt.Errorf("invalid status filter: %s (use: --all, --reading, --finished, --queued)", args[0])
 				}
 			}
-			return c.handler.ListBooks(cmd.Context(), status)
+			return c.handler.List(cmd.Context(), status)
 		},
 	})
 
@@ -240,7 +249,7 @@ Use the -i flag for an interactive interface with navigation keys.`,
 		Short: "Mark book as currently reading",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return c.handler.UpdateBookStatusByID(cmd.Context(), args[0], "reading")
+			return c.handler.UpdateStatus(cmd.Context(), args[0], "reading")
 		},
 	})
 
@@ -250,7 +259,7 @@ Use the -i flag for an interactive interface with navigation keys.`,
 		Aliases: []string{"read"},
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return c.handler.UpdateBookStatusByID(cmd.Context(), args[0], "finished")
+			return c.handler.UpdateStatus(cmd.Context(), args[0], "finished")
 		},
 	})
 
@@ -260,7 +269,7 @@ Use the -i flag for an interactive interface with navigation keys.`,
 		Aliases: []string{"rm"},
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return c.handler.UpdateBookStatusByID(cmd.Context(), args[0], "removed")
+			return c.handler.UpdateStatus(cmd.Context(), args[0], "removed")
 		},
 	})
 
@@ -273,7 +282,7 @@ Use the -i flag for an interactive interface with navigation keys.`,
 			if err != nil {
 				return fmt.Errorf("invalid progress percentage: %s", args[1])
 			}
-			return c.handler.UpdateBookProgressByID(cmd.Context(), args[0], progress)
+			return c.handler.UpdateProgress(cmd.Context(), args[0], progress)
 		},
 	})
 
@@ -282,7 +291,7 @@ Use the -i flag for an interactive interface with navigation keys.`,
 		Short: "Update book status (queued|reading|finished|removed)",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return c.handler.UpdateBookStatusByID(cmd.Context(), args[0], args[1])
+			return c.handler.UpdateStatus(cmd.Context(), args[0], args[1])
 		},
 	})
 
@@ -360,12 +369,12 @@ func (c *NoteCommand) Create() *cobra.Command {
 		Aliases: []string{"view"},
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			noteID, err := strconv.ParseInt(args[0], 10, 64)
-			if err != nil {
-				return fmt.Errorf("invalid note ID: %s", args[0])
+			if noteID, err := parseID("note", args); err != nil {
+				return err
+			} else {
+				defer c.handler.Close()
+				return c.handler.View(cmd.Context(), noteID)
 			}
-			defer c.handler.Close()
-			return c.handler.View(cmd.Context(), noteID)
 		},
 	})
 
@@ -374,12 +383,12 @@ func (c *NoteCommand) Create() *cobra.Command {
 		Short: "Edit note in configured editor",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			noteID, err := strconv.ParseInt(args[0], 10, 64)
-			if err != nil {
-				return fmt.Errorf("invalid note ID: %s", args[0])
+			if noteID, err := parseID("note", args); err != nil {
+				return err
+			} else {
+				defer c.handler.Close()
+				return c.handler.Edit(cmd.Context(), noteID)
 			}
-			defer c.handler.Close()
-			return c.handler.Edit(cmd.Context(), noteID)
 		},
 	})
 
@@ -389,12 +398,12 @@ func (c *NoteCommand) Create() *cobra.Command {
 		Aliases: []string{"rm", "delete", "del"},
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			noteID, err := strconv.ParseInt(args[0], 10, 64)
-			if err != nil {
-				return fmt.Errorf("invalid note ID: %s", args[0])
+			if noteID, err := parseID("note", args); err != nil {
+				return err
+			} else {
+				defer c.handler.Close()
+				return c.handler.Delete(cmd.Context(), noteID)
 			}
-			defer c.handler.Close()
-			return c.handler.Delete(cmd.Context(), noteID)
 		},
 	})
 

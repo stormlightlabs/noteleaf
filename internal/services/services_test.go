@@ -8,11 +8,13 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"golang.org/x/time/rate"
 )
 
 func TestBookService(t *testing.T) {
 	t.Run("NewBookService", func(t *testing.T) {
-		service := NewBookService()
+		service := NewBookService(OpenLibraryBaseURL)
 
 		if service == nil {
 			t.Fatal("NewBookService should return a non-nil service")
@@ -26,7 +28,7 @@ func TestBookService(t *testing.T) {
 			t.Error("BookService should have a non-nil rate limiter")
 		}
 
-		if service.limiter.Limit() != requestsPerSecond {
+		if service.limiter.Limit() != rate.Limit(requestsPerSecond) {
 			t.Errorf("Expected rate limit of %v, got %v", requestsPerSecond, service.limiter.Limit())
 		}
 	})
@@ -84,7 +86,7 @@ func TestBookService(t *testing.T) {
 			}))
 			defer server.Close()
 
-			service := NewBookServiceWithBaseURL(server.URL)
+			service := NewBookService(server.URL)
 			ctx := context.Background()
 			results, err := service.Search(ctx, "roald dahl", 1, 10)
 
@@ -107,7 +109,7 @@ func TestBookService(t *testing.T) {
 			}))
 			defer server.Close()
 
-			service := NewBookServiceWithBaseURL(server.URL)
+			service := NewBookService(server.URL)
 			ctx := context.Background()
 
 			_, err := service.Search(ctx, "test", 1, 10)
@@ -115,9 +117,7 @@ func TestBookService(t *testing.T) {
 				t.Error("Search should return error for API failure")
 			}
 
-			if !strings.Contains(err.Error(), "API returned status 500") {
-				t.Errorf("Error should mention status code, got: %v", err)
-			}
+			AssertErrorContains(t, err, "API returned status 500")
 		})
 
 		t.Run("handles malformed JSON", func(t *testing.T) {
@@ -127,7 +127,7 @@ func TestBookService(t *testing.T) {
 			}))
 			defer server.Close()
 
-			service := NewBookServiceWithBaseURL(server.URL)
+			service := NewBookService(server.URL)
 			ctx := context.Background()
 
 			_, err := service.Search(ctx, "test", 1, 10)
@@ -135,13 +135,11 @@ func TestBookService(t *testing.T) {
 				t.Error("Search should return error for malformed JSON")
 			}
 
-			if !strings.Contains(err.Error(), "failed to decode response") {
-				t.Errorf("Error should mention decode failure, got: %v", err)
-			}
+			AssertErrorContains(t, err, "failed to decode response")
 		})
 
 		t.Run("handles context cancellation", func(t *testing.T) {
-			service := NewBookService()
+			service := NewBookService(OpenLibraryBaseURL)
 			ctx, cancel := context.WithCancel(context.Background())
 			cancel()
 
@@ -152,7 +150,7 @@ func TestBookService(t *testing.T) {
 		})
 
 		t.Run("respects pagination", func(t *testing.T) {
-			service := NewBookService()
+			service := NewBookService(OpenLibraryBaseURL)
 			ctx := context.Background()
 
 			_, err := service.Search(ctx, "test", 2, 5)
@@ -194,7 +192,7 @@ func TestBookService(t *testing.T) {
 			}))
 			defer server.Close()
 
-			service := NewBookServiceWithBaseURL(server.URL)
+			service := NewBookService(server.URL)
 			ctx := context.Background()
 
 			result, err := service.Get(ctx, "OL45804W")
@@ -208,7 +206,7 @@ func TestBookService(t *testing.T) {
 		})
 
 		t.Run("handles work key with /works/ prefix", func(t *testing.T) {
-			service := NewBookService()
+			service := NewBookService(OpenLibraryBaseURL)
 			ctx := context.Background()
 
 			_, err1 := service.Get(ctx, "OL45804W")
@@ -225,7 +223,7 @@ func TestBookService(t *testing.T) {
 			}))
 			defer server.Close()
 
-			service := NewBookServiceWithBaseURL(server.URL)
+			service := NewBookService(server.URL)
 			ctx := context.Background()
 
 			_, err := service.Get(ctx, "nonexistent")
@@ -233,9 +231,7 @@ func TestBookService(t *testing.T) {
 				t.Error("Get should return error for non-existent work")
 			}
 
-			if !strings.Contains(err.Error(), "book not found") {
-				t.Errorf("Error should mention book not found, got: %v", err)
-			}
+			AssertErrorContains(t, err, "book not found")
 		})
 
 		t.Run("handles API error", func(t *testing.T) {
@@ -244,7 +240,7 @@ func TestBookService(t *testing.T) {
 			}))
 			defer server.Close()
 
-			service := NewBookServiceWithBaseURL(server.URL)
+			service := NewBookService(server.URL)
 			ctx := context.Background()
 
 			_, err := service.Get(ctx, "test")
@@ -252,16 +248,13 @@ func TestBookService(t *testing.T) {
 				t.Error("Get should return error for API failure")
 			}
 
-			if !strings.Contains(err.Error(), "API returned status 500") {
-				t.Errorf("Error should mention status code, got: %v", err)
-			}
+			AssertErrorContains(t, err, "API returned status 500")
 		})
 	})
 
 	t.Run("Check", func(t *testing.T) {
 		t.Run("successful check", func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				// Verify it's a search request with test query
 				if r.URL.Path != "/search.json" {
 					t.Errorf("Expected path /search.json, got %s", r.URL.Path)
 				}
@@ -274,7 +267,6 @@ func TestBookService(t *testing.T) {
 					t.Errorf("Expected limit '1', got %s", query.Get("limit"))
 				}
 
-				// Verify User-Agent
 				if r.Header.Get("User-Agent") != userAgent {
 					t.Errorf("Expected User-Agent %s, got %s", userAgent, r.Header.Get("User-Agent"))
 				}
@@ -284,10 +276,9 @@ func TestBookService(t *testing.T) {
 			}))
 			defer server.Close()
 
-			service := NewBookServiceWithBaseURL(server.URL)
+			service := NewBookService(server.URL)
 			ctx := context.Background()
 
-			// Test with mock server
 			err := service.Check(ctx)
 			if err != nil {
 				t.Errorf("Check should not return error for healthy API: %v", err)
@@ -300,7 +291,7 @@ func TestBookService(t *testing.T) {
 			}))
 			defer server.Close()
 
-			service := NewBookServiceWithBaseURL(server.URL)
+			service := NewBookService(server.URL)
 			ctx := context.Background()
 
 			err := service.Check(ctx)
@@ -308,13 +299,11 @@ func TestBookService(t *testing.T) {
 				t.Error("Check should return error for API failure")
 			}
 
-			if !strings.Contains(err.Error(), "open Library API returned status 503") {
-				t.Errorf("Error should mention API status, got: %v", err)
-			}
+			AssertErrorContains(t, err, "open Library API returned status 503")
 		})
 
 		t.Run("handles network error", func(t *testing.T) {
-			service := NewBookService()
+			service := NewBookService(OpenLibraryBaseURL)
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
 			defer cancel()
 
@@ -326,7 +315,7 @@ func TestBookService(t *testing.T) {
 	})
 
 	t.Run("Close", func(t *testing.T) {
-		service := NewBookService()
+		service := NewBookService(OpenLibraryBaseURL)
 		err := service.Close()
 		if err != nil {
 			t.Errorf("Close should not return error: %v", err)
@@ -335,7 +324,7 @@ func TestBookService(t *testing.T) {
 
 	t.Run("RateLimiting", func(t *testing.T) {
 		t.Run("respects rate limits", func(t *testing.T) {
-			service := NewBookService()
+			service := NewBookService(OpenLibraryBaseURL)
 			ctx := context.Background()
 
 			start := time.Now()
@@ -368,7 +357,7 @@ func TestBookService(t *testing.T) {
 
 	t.Run("Conversion Functions", func(t *testing.T) {
 		t.Run("searchDocToBook conversion", func(t *testing.T) {
-			service := NewBookService()
+			service := NewBookService(OpenLibraryBaseURL)
 			doc := OpenLibrarySearchDoc{
 				Key:              "/works/OL45804W",
 				Title:            "Test Book",
@@ -403,7 +392,7 @@ func TestBookService(t *testing.T) {
 		})
 
 		t.Run("workToBook conversion with string description", func(t *testing.T) {
-			service := NewBookService()
+			service := NewBookService(OpenLibraryBaseURL)
 			work := OpenLibraryWork{
 				Key:   "/works/OL45804W",
 				Title: "Test Work",
@@ -431,7 +420,7 @@ func TestBookService(t *testing.T) {
 		})
 
 		t.Run("workToBook conversion with object description", func(t *testing.T) {
-			service := NewBookService()
+			service := NewBookService(OpenLibraryBaseURL)
 			work := OpenLibraryWork{
 				Title: "Test Work",
 				Description: map[string]any{
@@ -448,7 +437,7 @@ func TestBookService(t *testing.T) {
 		})
 
 		t.Run("workToBook uses subjects when no description", func(t *testing.T) {
-			service := NewBookService()
+			service := NewBookService(OpenLibraryBaseURL)
 			work := OpenLibraryWork{
 				Title:    "Test Work",
 				Subjects: []string{"Fiction", "Adventure", "Classic", "Literature", "Drama", "Extra"},
@@ -474,7 +463,7 @@ func TestBookService(t *testing.T) {
 	t.Run("Interface Compliance", func(t *testing.T) {
 		t.Run("implements APIService interface", func(t *testing.T) {
 			var _ APIService = &BookService{}
-			var _ APIService = NewBookService()
+			var _ APIService = NewBookService(OpenLibraryBaseURL)
 		})
 	})
 
@@ -487,8 +476,8 @@ func TestBookService(t *testing.T) {
 
 	t.Run("Constants", func(t *testing.T) {
 		t.Run("API endpoints are correct", func(t *testing.T) {
-			if openLibraryBaseURL != "https://openlibrary.org" {
-				t.Errorf("Base URL should be https://openlibrary.org, got %s", openLibraryBaseURL)
+			if OpenLibraryBaseURL != "https://openlibrary.org" {
+				t.Errorf("Base URL should be https://openlibrary.org, got %s", OpenLibraryBaseURL)
 			}
 
 			if openLibrarySearch != "https://openlibrary.org/search.json" {

@@ -179,10 +179,6 @@ func (h *NoteHandler) createFromFile(ctx context.Context, filePath string) error
 	return nil
 }
 
-func (h *NoteHandler) createFromArgs(ctx context.Context, title, content string) error {
-	return h.createFromArgsWithOptions(ctx, title, content, false)
-}
-
 func (h *NoteHandler) createFromArgsWithOptions(ctx context.Context, title, content string, promptEditor bool) error {
 	note := &models.Note{
 		Title:   title,

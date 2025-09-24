@@ -36,7 +36,7 @@ func NewBookHandler() (*BookHandler, error) {
 	}
 
 	repos := repo.NewRepositories(db.DB)
-	service := services.NewBookService()
+	service := services.NewBookService(services.OpenLibraryBaseURL)
 
 	return &BookHandler{
 		db:      db,
@@ -86,8 +86,8 @@ func (h *BookHandler) printBook(book *models.Book) {
 	fmt.Println()
 }
 
-// SearchAndAddBook searches for books and allows user to select and add to queue
-func (h *BookHandler) SearchAndAddBook(ctx context.Context, args []string, interactive bool) error {
+// SearchAndAdd searches for books and allows user to select and add to queue
+func (h *BookHandler) SearchAndAdd(ctx context.Context, args []string, interactive bool) error {
 	if len(args) == 0 {
 		return fmt.Errorf("usage: book add <search query>")
 	}
@@ -173,8 +173,8 @@ func (h *BookHandler) SearchAndAddBook(ctx context.Context, args []string, inter
 	return nil
 }
 
-// ListBooks lists all books with status filtering
-func (h *BookHandler) ListBooks(ctx context.Context, status string) error {
+// List lists all books with status filtering
+func (h *BookHandler) List(ctx context.Context, status string) error {
 	var books []*models.Book
 	var err error
 
@@ -214,8 +214,8 @@ func (h *BookHandler) ListBooks(ctx context.Context, status string) error {
 	return nil
 }
 
-// UpdateBookStatusByID changes the status of a book
-func (h *BookHandler) UpdateBookStatusByID(ctx context.Context, id, status string) error {
+// UpdateStatus changes the status of a [models.Book]
+func (h *BookHandler) UpdateStatus(ctx context.Context, id, status string) error {
 	bookID, err := strconv.ParseInt(id, 10, 64)
 	if err != nil {
 		return fmt.Errorf("invalid book ID: %s", id)
@@ -250,8 +250,8 @@ func (h *BookHandler) UpdateBookStatusByID(ctx context.Context, id, status strin
 	return nil
 }
 
-// UpdateBookProgressByID updates a book's reading progress percentage
-func (h *BookHandler) UpdateBookProgressByID(ctx context.Context, id string, progress int) error {
+// UpdateProgress updates a [models.Book]'s reading progress percentage
+func (h *BookHandler) UpdateProgress(ctx context.Context, id string, progress int) error {
 	bookID, err := strconv.ParseInt(id, 10, 64)
 	if err != nil {
 		return fmt.Errorf("invalid book ID: %s", id)

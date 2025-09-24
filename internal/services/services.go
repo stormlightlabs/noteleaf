@@ -21,12 +21,12 @@ import (
 
 const (
 	// Open Library API endpoints
-	openLibraryBaseURL = "https://openlibrary.org"
-	openLibrarySearch  = openLibraryBaseURL + "/search.json"
+	OpenLibraryBaseURL string = "https://openlibrary.org"
+	openLibrarySearch  string = OpenLibraryBaseURL + "/search.json"
 
 	// Rate limiting: 180 requests per minute = 3 requests per second
-	requestsPerSecond = 3
-	burstLimit        = 5
+	requestsPerSecond int = 3
+	burstLimit        int = 5
 
 	// User agent
 	// TODO: See https://www.digitalocean.com/community/tutorials/using-ldflags-to-set-version-information-for-go-applications
@@ -45,22 +45,11 @@ type APIService interface {
 type BookService struct {
 	client  *http.Client
 	limiter *rate.Limiter
-	baseURL string // Allow configurable base URL for testing
+	baseURL string // Allows configurable base URL for testing
 }
 
 // NewBookService creates a new book service with rate limiting
-func NewBookService() *BookService {
-	return &BookService{
-		client: &http.Client{
-			Timeout: 30 * time.Second,
-		},
-		limiter: rate.NewLimiter(rate.Limit(requestsPerSecond), burstLimit),
-		baseURL: openLibraryBaseURL,
-	}
-}
-
-// NewBookServiceWithBaseURL creates a book service with custom base URL (for testing)
-func NewBookServiceWithBaseURL(baseURL string) *BookService {
+func NewBookService(baseURL string) *BookService {
 	return &BookService{
 		client: &http.Client{
 			Timeout: 30 * time.Second,
@@ -125,20 +114,22 @@ type OpenLibraryType struct {
 	Key string `json:"key"`
 }
 
+func (bs *BookService) buildSearchURL(query string, page, limit int) string {
+	params := url.Values{}
+	params.Add("q", query)
+	params.Add("offset", strconv.Itoa((page-1)*limit))
+	params.Add("limit", strconv.Itoa(limit))
+	params.Add("fields", "key,title,author_name,first_publish_year,edition_count,isbn,publisher,subject,cover_i,has_fulltext")
+	return bs.baseURL + "/search.json?" + params.Encode()
+}
+
 // Search searches for books using the Open Library API
 func (bs *BookService) Search(ctx context.Context, query string, page, limit int) ([]*models.Model, error) {
 	if err := bs.limiter.Wait(ctx); err != nil {
 		return nil, fmt.Errorf("rate limit wait failed: %w", err)
 	}
 
-	// Build search URL
-	params := url.Values{}
-	params.Add("q", query)
-	params.Add("offset", strconv.Itoa((page-1)*limit))
-	params.Add("limit", strconv.Itoa(limit))
-	params.Add("fields", "key,title,author_name,first_publish_year,edition_count,isbn,publisher,subject,cover_i,has_fulltext")
-
-	searchURL := bs.baseURL + "/search.json?" + params.Encode()
+	searchURL := bs.buildSearchURL(query, page, limit)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", searchURL, nil)
 	if err != nil {
@@ -163,7 +154,6 @@ func (bs *BookService) Search(ctx context.Context, query string, page, limit int
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
-	// Convert to models
 	var books []*models.Model
 	for _, doc := range searchResp.Docs {
 		book := bs.searchDocToBook(doc)
@@ -180,7 +170,6 @@ func (bs *BookService) Get(ctx context.Context, id string) (*models.Model, error
 		return nil, fmt.Errorf("rate limit wait failed: %w", err)
 	}
 
-	// Ensure id starts with /works/
 	workKey := id
 	if !strings.HasPrefix(workKey, "/works/") {
 		workKey = "/works/" + id
@@ -253,8 +242,6 @@ func (bs *BookService) Close() error {
 	return nil
 }
 
-// Helper functions
-
 func (bs *BookService) searchDocToBook(doc OpenLibrarySearchDoc) *models.Book {
 	book := &models.Book{
 		Title:  doc.Title,
@@ -266,10 +253,9 @@ func (bs *BookService) searchDocToBook(doc OpenLibrarySearchDoc) *models.Book {
 		book.Author = strings.Join(doc.AuthorName, ", ")
 	}
 
-	// Set publication year as pages (approximation)
 	if doc.FirstPublishYear > 0 {
 		// We don't have page count, so we'll leave it as 0
-		// Could potentially estimate based on edition count or other factors
+		// TODO: Could potentially estimate based on edition count or other factors
 	}
 
 	var notes []string
@@ -297,9 +283,8 @@ func (bs *BookService) workToBook(work OpenLibraryWork) *models.Book {
 		Added:  time.Now(),
 	}
 
-	// Extract author names (would need additional API calls to get full names)
+	// TODO: Extract author names (would need additional API calls to get full names)
 	if len(work.Authors) > 0 {
-		// For now, just use the keys
 		var authorKeys []string
 		for _, author := range work.Authors {
 			key := strings.TrimPrefix(author.Author.Key, "/authors/")

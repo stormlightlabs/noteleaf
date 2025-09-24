@@ -131,7 +131,7 @@ func (h *MovieHandler) SearchAndAdd(ctx context.Context, query string, interacti
 	return nil
 }
 
-// List movies with status filtering
+// List lists all movies in the queue with status filtering
 func (h *MovieHandler) List(ctx context.Context, status string) error {
 	var movies []*models.Movie
 	var err error
@@ -231,12 +231,22 @@ func (h *MovieHandler) UpdateStatus(ctx context.Context, movieID int64, status s
 }
 
 // MarkWatched marks a movie as watched
-func (h *MovieHandler) MarkWatched(ctx context.Context, movieID int64) error {
+func (h *MovieHandler) MarkWatched(ctx context.Context, id string) error {
+	movieID, err := strconv.ParseInt(id, 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid movie ID: %s", id)
+	}
+
 	return h.UpdateStatus(ctx, movieID, "watched")
 }
 
 // Remove removes a movie from the queue
-func (h *MovieHandler) Remove(ctx context.Context, movieID int64) error {
+func (h *MovieHandler) Remove(ctx context.Context, id string) error {
+	movieID, err := strconv.ParseInt(id, 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid movie ID: %s", id)
+	}
+
 	movie, err := h.repos.Movies.Get(ctx, movieID)
 	if err != nil {
 		return fmt.Errorf("movie %d not found: %w", movieID, err)
@@ -267,51 +277,4 @@ func (h *MovieHandler) printMovie(movie *models.Movie) {
 		fmt.Printf(" ★%.1f", movie.Rating)
 	}
 	fmt.Println()
-}
-
-// SearchAndAddMovie searches for movies and allows user to select and add to queue
-func (h *MovieHandler) SearchAndAddMovie(ctx context.Context, query string, interactive bool) error {
-	return h.SearchAndAdd(ctx, query, interactive)
-}
-
-// ListMovies lists all movies in the queue with status filtering
-func (h *MovieHandler) ListMovies(ctx context.Context, status string) error {
-	return h.List(ctx, status)
-}
-
-// ViewMovie displays detailed information about a specific movie
-func (h *MovieHandler) ViewMovie(ctx context.Context, id string) error {
-	movieID, err := strconv.ParseInt(id, 10, 64)
-	if err != nil {
-		return fmt.Errorf("invalid movie ID: %s", id)
-	}
-	return h.View(ctx, movieID)
-}
-
-// UpdateMovieStatus changes the status of a movie
-func (h *MovieHandler) UpdateMovieStatus(ctx context.Context, id, status string) error {
-	movieID, err := strconv.ParseInt(id, 10, 64)
-	if err != nil {
-		return fmt.Errorf("invalid movie ID: %s", id)
-	}
-	return h.UpdateStatus(ctx, movieID, status)
-}
-
-// MarkMovieWatched marks a movie as watched
-func (h *MovieHandler) MarkMovieWatched(ctx context.Context, id string) error {
-	movieID, err := strconv.ParseInt(id, 10, 64)
-	if err != nil {
-		return fmt.Errorf("invalid movie ID: %s", id)
-	}
-	return h.MarkWatched(ctx, movieID)
-}
-
-// RemoveMovie removes a movie from the queue
-func (h *MovieHandler) RemoveMovie(ctx context.Context, id string) error {
-	movieID, err := strconv.ParseInt(id, 10, 64)
-	if err != nil {
-		return fmt.Errorf("invalid movie ID: %s", id)
-	}
-
-	return h.Remove(ctx, movieID)
 }

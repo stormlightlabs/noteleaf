@@ -4,9 +4,11 @@ import (
 	"context"
 	"os"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/stormlightlabs/noteleaf/internal/handlers"
+	"github.com/stormlightlabs/noteleaf/internal/services"
 )
 
 func setupCommandTest(t *testing.T) func() {
@@ -377,6 +379,54 @@ func TestCommandExecution(t *testing.T) {
 				t.Error("expected movie add command to fail with empty args")
 			}
 		})
+
+		t.Run("add command with valid args - successful search", func(t *testing.T) {
+			cleanup := services.SetupSuccessfulMovieMocks(t)
+			defer cleanup()
+
+			cmd := NewMovieCommand(handler).Create()
+			cmd.SetArgs([]string{"add", "Fantastic Four"})
+			err := cmd.Execute()
+
+			// NOTE: The command will find results but fail due to no user input in test environment
+			if err == nil {
+				t.Error("expected movie add command to fail due to no user input in test environment")
+			}
+			if !strings.Contains(err.Error(), "invalid input") {
+				t.Errorf("expected 'invalid input' error, got: %v", err)
+			}
+		})
+
+		t.Run("add command with valid args - search failure", func(t *testing.T) {
+			cleanup := services.SetupFailureMocks(t, "search failed")
+			defer cleanup()
+
+			cmd := NewMovieCommand(handler).Create()
+			cmd.SetArgs([]string{"add", "some movie"})
+			err := cmd.Execute()
+			if err == nil {
+				t.Error("expected movie add command to fail when search fails")
+			}
+			services.AssertErrorContains(t, err, "search failed")
+		})
+
+		t.Run("remove command with non-existent movie ID", func(t *testing.T) {
+			cmd := NewMovieCommand(handler).Create()
+			cmd.SetArgs([]string{"remove", "999"})
+			err := cmd.Execute()
+			if err == nil {
+				t.Error("expected movie remove command to fail with non-existent ID")
+			}
+		})
+
+		t.Run("remove command with non-numeric ID", func(t *testing.T) {
+			cmd := NewMovieCommand(handler).Create()
+			cmd.SetArgs([]string{"remove", "invalid"})
+			err := cmd.Execute()
+			if err == nil {
+				t.Error("expected movie remove command to fail with non-numeric ID")
+			}
+		})
 	})
 
 	t.Run("TV Commands", func(t *testing.T) {
@@ -400,6 +450,54 @@ func TestCommandExecution(t *testing.T) {
 				t.Error("expected tv add command to fail with empty args")
 			}
 		})
+
+		t.Run("add command with valid args - successful search", func(t *testing.T) {
+			cleanup := services.SetupSuccessfulTVMocks(t)
+			defer cleanup()
+
+			cmd := NewTVCommand(handler).Create()
+			cmd.SetArgs([]string{"add", "Peacemaker"})
+			err := cmd.Execute()
+
+			// NOTE: The command will find results but fail due to no user input in test environment
+			if err == nil {
+				t.Error("expected tv add command to fail due to no user input in test environment")
+			}
+			if !strings.Contains(err.Error(), "invalid input") {
+				t.Errorf("expected 'invalid input' error, got: %v", err)
+			}
+		})
+
+		t.Run("add command with valid args - search failure", func(t *testing.T) {
+			cleanup := services.SetupFailureMocks(t, "tv search failed")
+			defer cleanup()
+
+			cmd := NewTVCommand(handler).Create()
+			cmd.SetArgs([]string{"add", "some show"})
+			err := cmd.Execute()
+			if err == nil {
+				t.Error("expected tv add command to fail when search fails")
+			}
+			services.AssertErrorContains(t, err, "tv search failed")
+		})
+
+		t.Run("remove command with non-existent TV show ID", func(t *testing.T) {
+			cmd := NewTVCommand(handler).Create()
+			cmd.SetArgs([]string{"remove", "999"})
+			err := cmd.Execute()
+			if err == nil {
+				t.Error("expected tv remove command to fail with non-existent ID")
+			}
+		})
+
+		t.Run("remove command with non-numeric ID", func(t *testing.T) {
+			cmd := NewTVCommand(handler).Create()
+			cmd.SetArgs([]string{"remove", "invalid"})
+			err := cmd.Execute()
+			if err == nil {
+				t.Error("expected tv remove command to fail with non-numeric ID")
+			}
+		})
 	})
 
 	t.Run("Book Commands", func(t *testing.T) {
@@ -414,10 +512,45 @@ func TestCommandExecution(t *testing.T) {
 				t.Errorf("book list command failed: %v", err)
 			}
 		})
+
+		t.Run("remove command with non-existent book ID", func(t *testing.T) {
+			cmd := NewBookCommand(handler).Create()
+			cmd.SetArgs([]string{"remove", "999"})
+			err := cmd.Execute()
+			if err == nil {
+				t.Error("expected book remove command to fail with non-existent ID")
+			}
+		})
+
+		t.Run("remove command with non-numeric ID", func(t *testing.T) {
+			cmd := NewBookCommand(handler).Create()
+			cmd.SetArgs([]string{"remove", "invalid"})
+			err := cmd.Execute()
+			if err == nil {
+				t.Error("expected book remove command to fail with non-numeric ID")
+			}
+		})
+
+		t.Run("update command with removed status", func(t *testing.T) {
+			cmd := NewBookCommand(handler).Create()
+			cmd.SetArgs([]string{"update", "999", "removed"})
+			err := cmd.Execute()
+			if err == nil {
+				t.Error("expected book update command to fail with non-existent ID")
+			}
+		})
+
+		t.Run("update command with invalid status", func(t *testing.T) {
+			cmd := NewBookCommand(handler).Create()
+			cmd.SetArgs([]string{"update", "1", "invalid_status"})
+			err := cmd.Execute()
+			if err == nil {
+				t.Error("expected book update command to fail with invalid status")
+			}
+		})
 	})
 
 	t.Run("Note Commands", func(t *testing.T) {
-
 		t.Run("create command - non-interactive", func(t *testing.T) {
 			handler, cleanup := createTestNoteHandler(t)
 			defer cleanup()
@@ -439,6 +572,118 @@ func TestCommandExecution(t *testing.T) {
 			err := cmd.Execute()
 			if err != nil {
 				t.Errorf("note list command failed: %v", err)
+			}
+		})
+
+		t.Run("read command with valid note ID", func(t *testing.T) {
+			handler, cleanup := createTestNoteHandler(t)
+			defer cleanup()
+
+			err := handler.CreateWithOptions(context.Background(), "test note", "test content", "", false, false)
+			if err != nil {
+				t.Fatalf("failed to create test note: %v", err)
+			}
+
+			cmd := NewNoteCommand(handler).Create()
+			cmd.SetArgs([]string{"read", "1"})
+			err = cmd.Execute()
+			if err != nil {
+				t.Errorf("note read command failed: %v", err)
+			}
+		})
+
+		t.Run("edit command with valid note ID", func(t *testing.T) {
+			t.Skip("edit command requires interactive editor")
+		})
+
+		t.Run("remove command with valid note ID", func(t *testing.T) {
+			handler, cleanup := createTestNoteHandler(t)
+			defer cleanup()
+
+			err := handler.CreateWithOptions(context.Background(), "test note", "test content", "", false, false)
+			if err != nil {
+				t.Fatalf("failed to create test note: %v", err)
+			}
+
+			cmd := NewNoteCommand(handler).Create()
+			cmd.SetArgs([]string{"remove", "1"})
+			err = cmd.Execute()
+			if err != nil {
+				t.Errorf("note remove command failed: %v", err)
+			}
+		})
+	})
+
+	t.Run("Task Commands", func(t *testing.T) {
+		t.Run("list command - static", func(t *testing.T) {
+			handler, cleanup := createTestTaskHandler(t)
+			defer cleanup()
+
+			cmd := NewTaskCommand(handler).Create()
+			cmd.SetArgs([]string{"list", "--static"})
+			err := cmd.Execute()
+			if err != nil {
+				t.Errorf("task list command failed: %v", err)
+			}
+		})
+
+		t.Run("add command with valid args", func(t *testing.T) {
+			handler, cleanup := createTestTaskHandler(t)
+			defer cleanup()
+
+			cmd := NewTaskCommand(handler).Create()
+			cmd.SetArgs([]string{"add", "test task"})
+			err := cmd.Execute()
+			if err != nil {
+				t.Errorf("task add command failed: %v", err)
+			}
+		})
+
+		t.Run("projects command - static", func(t *testing.T) {
+			handler, cleanup := createTestTaskHandler(t)
+			defer cleanup()
+
+			cmd := NewTaskCommand(handler).Create()
+			cmd.SetArgs([]string{"projects", "--static"})
+			err := cmd.Execute()
+			if err != nil {
+				t.Errorf("task projects command failed: %v", err)
+			}
+		})
+
+		t.Run("tags command - static", func(t *testing.T) {
+			handler, cleanup := createTestTaskHandler(t)
+			defer cleanup()
+
+			cmd := NewTaskCommand(handler).Create()
+			cmd.SetArgs([]string{"tags", "--static"})
+			err := cmd.Execute()
+			if err != nil {
+				t.Errorf("task tags command failed: %v", err)
+			}
+		})
+
+		t.Run("contexts command - static", func(t *testing.T) {
+			handler, cleanup := createTestTaskHandler(t)
+			defer cleanup()
+
+			cmd := NewTaskCommand(handler).Create()
+			cmd.SetArgs([]string{"contexts", "--static"})
+			err := cmd.Execute()
+			if err != nil {
+				t.Errorf("task contexts command failed: %v", err)
+			}
+		})
+
+		t.Run("timesheet command", func(t *testing.T) {
+			handler, cleanup := createTestTaskHandler(t)
+			defer cleanup()
+
+			cmd := NewTaskCommand(handler).Create()
+			cmd.SetArgs([]string{"timesheet"})
+			err := cmd.Execute()
+			if err != nil {
+				t.Errorf("task timesheet command failed: %v", err)
 			}
 		})
 	})

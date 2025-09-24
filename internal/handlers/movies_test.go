@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"testing"
 	"time"
 
@@ -122,7 +123,6 @@ func TestMovieHandler(t *testing.T) {
 			handler := createTestMovieHandler(t)
 			defer handler.Close()
 
-			// Test with empty status (all movies)
 			err := handler.List(context.Background(), "")
 			if err != nil {
 				t.Errorf("Expected no error for listing all movies, got: %v", err)
@@ -162,18 +162,6 @@ func TestMovieHandler(t *testing.T) {
 			}
 		})
 
-		t.Run("Invalid ID", func(t *testing.T) {
-			handler := createTestMovieHandler(t)
-			defer handler.Close()
-
-			err := handler.ViewMovie(context.Background(), "invalid")
-			if err == nil {
-				t.Error("Expected error for invalid movie ID")
-			}
-			if err.Error() != "invalid movie ID: invalid" {
-				t.Errorf("Expected 'invalid movie ID: invalid', got: %v", err)
-			}
-		})
 	})
 
 	t.Run("Update", func(t *testing.T) {
@@ -207,40 +195,27 @@ func TestMovieHandler(t *testing.T) {
 		handler := createTestMovieHandler(t)
 		defer handler.Close()
 
-		err := handler.MarkWatched(context.Background(), 999)
+		err := handler.MarkWatched(context.Background(), "999")
 		if err == nil {
 			t.Error("Expected error for non-existent movie")
 		}
 	})
 
-	t.Run("Remove_MovieNotFound", func(t *testing.T) {
+	t.Run("RemoveMovie_MovieNotFound", func(t *testing.T) {
 		handler := createTestMovieHandler(t)
 		defer handler.Close()
 
-		err := handler.Remove(context.Background(), 999)
+		err := handler.Remove(context.Background(), "999")
 		if err == nil {
 			t.Error("Expected error for non-existent movie")
 		}
 	})
 
-	t.Run("UpdateMovieStatus_InvalidID", func(t *testing.T) {
+	t.Run("MarkWatched_InvalidID", func(t *testing.T) {
 		handler := createTestMovieHandler(t)
 		defer handler.Close()
 
-		err := handler.UpdateMovieStatus(context.Background(), "invalid", "watched")
-		if err == nil {
-			t.Error("Expected error for invalid movie ID")
-		}
-		if err.Error() != "invalid movie ID: invalid" {
-			t.Errorf("Expected 'invalid movie ID: invalid', got: %v", err)
-		}
-	})
-
-	t.Run("MarkMovieWatched_InvalidID", func(t *testing.T) {
-		handler := createTestMovieHandler(t)
-		defer handler.Close()
-
-		err := handler.MarkMovieWatched(context.Background(), "invalid")
+		err := handler.MarkWatched(context.Background(), "invalid")
 		if err == nil {
 			t.Error("Expected error for invalid movie ID")
 		}
@@ -253,7 +228,7 @@ func TestMovieHandler(t *testing.T) {
 		handler := createTestMovieHandler(t)
 		defer handler.Close()
 
-		err := handler.RemoveMovie(context.Background(), "invalid")
+		err := handler.Remove(context.Background(), "invalid")
 		if err == nil {
 			t.Error("Expected error for invalid movie ID")
 		}
@@ -286,31 +261,6 @@ func TestMovieHandler(t *testing.T) {
 		handler.printMovie(watchedMovie)
 	})
 
-	t.Run("SearchAndAddMovie", func(t *testing.T) {
-		handler := createTestMovieHandler(t)
-		defer handler.Close()
-
-		err := handler.SearchAndAddMovie(context.Background(), "", false)
-		if err == nil {
-			t.Error("Expected error for empty query")
-		}
-	})
-
-	t.Run("List Movies", func(t *testing.T) {
-		handler := createTestMovieHandler(t)
-		defer handler.Close()
-
-		err := handler.ListMovies(context.Background(), "")
-		if err != nil {
-			t.Errorf("Expected no error for listing all movies, got: %v", err)
-		}
-
-		err = handler.ListMovies(context.Background(), "invalid")
-		if err == nil {
-			t.Error("Expected error for invalid status")
-		}
-	})
-
 	t.Run("Integration", func(t *testing.T) {
 		t.Run("CreateAndRetrieve", func(t *testing.T) {
 			handler := createTestMovieHandler(t)
@@ -335,12 +285,12 @@ func TestMovieHandler(t *testing.T) {
 				t.Errorf("Failed to update movie status: %v", err)
 			}
 
-			err = handler.MarkWatched(context.Background(), id)
+			err = handler.MarkWatched(context.Background(), strconv.Itoa(int(id)))
 			if err != nil {
 				t.Errorf("Failed to mark movie as watched: %v", err)
 			}
 
-			err = handler.Remove(context.Background(), id)
+			err = handler.Remove(context.Background(), strconv.Itoa(int(id)))
 			if err != nil {
 				t.Errorf("Failed to remove movie: %v", err)
 			}
@@ -406,11 +356,11 @@ func TestMovieHandler(t *testing.T) {
 			},
 			{
 				name: "Mark non-existent movie as watched",
-				fn:   func() error { return handler.MarkWatched(ctx, nonExistentID) },
+				fn:   func() error { return handler.MarkWatched(ctx, strconv.Itoa(int(nonExistentID))) },
 			},
 			{
 				name: "Remove non-existent movie",
-				fn:   func() error { return handler.Remove(ctx, nonExistentID) },
+				fn:   func() error { return handler.Remove(ctx, strconv.Itoa(int(nonExistentID))) },
 			},
 		}
 
