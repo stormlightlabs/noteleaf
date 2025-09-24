@@ -20,6 +20,6 @@ ignore:
   - "**/*_test.go"
   - "**/testdata/**"
   - "**/vendor/**"
-  - "cmd/*.go"
+  - "cmd/main.go"
   - "internal/repo/test_utilities.go"
   - "internal/handlers/test_utilities.go"

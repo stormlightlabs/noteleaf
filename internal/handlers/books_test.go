@@ -104,47 +104,21 @@ func TestBookHandler(t *testing.T) {
 		})
 	})
 
-	t.Run("Search & Add", func(t *testing.T) {
+	t.Run("BookHandler instance methods", func(t *testing.T) {
 		_, cleanup := setupBookTest(t)
 		defer cleanup()
 
-		t.Run("fails with empty args", func(t *testing.T) {
+		handler, err := NewBookHandler()
+		if err != nil {
+			t.Fatalf("Failed to create handler: %v", err)
+		}
+		defer handler.Close()
+
+		t.Run("Search & Add", func(t *testing.T) {
 			ctx := context.Background()
-			args := []string{}
-
-			err := SearchAndAdd(ctx, args)
-			if err == nil {
-				t.Error("Expected error for empty args")
-			}
-
-			if !strings.Contains(err.Error(), "usage: book add") {
-				t.Errorf("Expected usage error, got: %v", err)
-			}
-		})
-
-		t.Run("fails with empty search", func(t *testing.T) {
-			ctx := context.Background()
-			args := []string{"-i"}
-
-			err := SearchAndAdd(ctx, args)
-			if err == nil {
-				t.Error("Expected error for empty search query")
-			}
-
-			if !strings.Contains(err.Error(), "search query cannot be empty") {
-				t.Errorf("Expected empty search query error, got: %v", err)
-			}
-		})
-
-		t.Run("with options", func(t *testing.T) {
-			_, cleanup := setupBookTest(t)
-			defer cleanup()
-
 			t.Run("fails with empty args", func(t *testing.T) {
-				ctx := context.Background()
 				args := []string{}
-
-				err := SearchAndAddWithOptions(ctx, args, false)
+				err := handler.SearchAndAddBook(ctx, args, false)
 				if err == nil {
 					t.Error("Expected error for empty args")
 				}
@@ -154,415 +128,344 @@ func TestBookHandler(t *testing.T) {
 				}
 			})
 
-			t.Run("handles search service errors", func(t *testing.T) {
+			t.Run("handles empty search", func(t *testing.T) {
+				args := []string{""}
+				err := handler.SearchAndAddBook(ctx, args, false)
+				if err != nil && !strings.Contains(err.Error(), "No books found") {
+					t.Errorf("Expected no error or 'No books found', got: %v", err)
+				}
+			})
+
+			t.Run("with options", func(t *testing.T) {
 				ctx := context.Background()
-				args := []string{"test", "book"}
-
-				err := SearchAndAddWithOptions(ctx, args, false)
-				if err == nil {
-					t.Error("Expected error due to mocked service")
-				}
-				if strings.Contains(err.Error(), "usage:") {
-					t.Error("Should not show usage error for valid args")
-				}
-			})
-
-		})
-	})
-
-	t.Run("List", func(t *testing.T) {
-		_, cleanup := setupBookTest(t)
-		defer cleanup()
-
-		ctx := context.Background()
-
-		handler, err := NewBookHandler()
-		if err != nil {
-			t.Fatalf("Failed to create handler: %v", err)
-		}
-		defer handler.Close()
-
-		_ = createTestBook(t, handler, ctx)
-
-		book2 := &models.Book{
-			Title:  "Reading Book",
-			Author: "Reading Author",
-			Status: "reading",
-			Added:  time.Now(),
-		}
-		id2, err := handler.repos.Books.Create(ctx, book2)
-		if err != nil {
-			t.Fatalf("Failed to create book2: %v", err)
-		}
-		book2.ID = id2
-
-		book3 := &models.Book{
-			Title:  "Finished Book",
-			Author: "Finished Author",
-			Status: "finished",
-			Added:  time.Now(),
-		}
-		id3, err := handler.repos.Books.Create(ctx, book3)
-		if err != nil {
-			t.Fatalf("Failed to create book3: %v", err)
-		}
-		book3.ID = id3
-
-		t.Run("lists queued books by default", func(t *testing.T) {
-			args := []string{}
-
-			err := ListBooks(ctx, args)
-			if err != nil {
-				t.Errorf("ListBooks failed: %v", err)
-			}
-		})
-
-		t.Run("filters by status - all", func(t *testing.T) {
-			args := []string{"all"}
-
-			err := ListBooks(ctx, args)
-			if err != nil {
-				t.Errorf("ListBooks with status all failed: %v", err)
-			}
-		})
-
-		t.Run("filters by status - reading", func(t *testing.T) {
-			args := []string{"reading"}
-
-			err := ListBooks(ctx, args)
-			if err != nil {
-				t.Errorf("ListBooks with status reading failed: %v", err)
-			}
-		})
-
-		t.Run("filters by status - finished", func(t *testing.T) {
-			args := []string{"finished"}
-
-			err := ListBooks(ctx, args)
-			if err != nil {
-				t.Errorf("ListBooks with status finished failed: %v", err)
-			}
-		})
-
-		t.Run("filters by status - queued", func(t *testing.T) {
-			args := []string{"queued"}
-
-			err := ListBooks(ctx, args)
-			if err != nil {
-				t.Errorf("ListBooks with status queued failed: %v", err)
-			}
-		})
-
-		t.Run("handles various flag formats", func(t *testing.T) {
-			statusVariants := [][]string{
-				{"--all"}, {"-a"},
-				{"--reading"}, {"-r"},
-				{"--finished"}, {"-f"},
-				{"--queued"}, {"-q"},
-			}
-
-			for _, args := range statusVariants {
-				err := ListBooks(ctx, args)
-				if err != nil {
-					t.Errorf("ListBooks with args %v failed: %v", args, err)
-				}
-			}
-		})
-	})
-
-	t.Run("Update", func(t *testing.T) {
-		t.Run("Update status", func(t *testing.T) {
-			_, cleanup := setupBookTest(t)
-			defer cleanup()
-
-			ctx := context.Background()
-
-			handler, err := NewBookHandler()
-			if err != nil {
-				t.Fatalf("Failed to create handler: %v", err)
-			}
-			defer handler.Close()
-
-			book := createTestBook(t, handler, ctx)
-
-			t.Run("updates book status successfully", func(t *testing.T) {
-				args := []string{strconv.FormatInt(book.ID, 10), "reading"}
-
-				err := UpdateBookStatus(ctx, args)
-				if err != nil {
-					t.Errorf("UpdateBookStatus failed: %v", err)
-				}
-
-				updatedBook, err := handler.repos.Books.Get(ctx, book.ID)
-				if err != nil {
-					t.Fatalf("Failed to get updated book: %v", err)
-				}
-
-				if updatedBook.Status != "reading" {
-					t.Errorf("Expected status 'reading', got '%s'", updatedBook.Status)
-				}
-
-				if updatedBook.Started == nil {
-					t.Error("Expected started time to be set")
-				}
-			})
-
-			t.Run("updates to finished status", func(t *testing.T) {
-				args := []string{strconv.FormatInt(book.ID, 10), "finished"}
-
-				err := UpdateBookStatus(ctx, args)
-				if err != nil {
-					t.Errorf("UpdateBookStatus failed: %v", err)
-				}
-
-				updatedBook, err := handler.repos.Books.Get(ctx, book.ID)
-				if err != nil {
-					t.Fatalf("Failed to get updated book: %v", err)
-				}
-
-				if updatedBook.Status != "finished" {
-					t.Errorf("Expected status 'finished', got '%s'", updatedBook.Status)
-				}
-
-				if updatedBook.Finished == nil {
-					t.Error("Expected finished time to be set")
-				}
-
-				if updatedBook.Progress != 100 {
-					t.Errorf("Expected progress 100, got %d", updatedBook.Progress)
-				}
-			})
-
-			t.Run("fails with insufficient arguments", func(t *testing.T) {
-				args := []string{strconv.FormatInt(book.ID, 10)}
-
-				err := UpdateBookStatus(ctx, args)
-				if err == nil {
-					t.Error("Expected error for insufficient arguments")
-				}
-
-				if !strings.Contains(err.Error(), "usage: book update") {
-					t.Errorf("Expected usage error, got: %v", err)
-				}
-			})
-
-			t.Run("fails with invalid book ID", func(t *testing.T) {
-				args := []string{"invalid-id", "reading"}
-
-				err := UpdateBookStatus(ctx, args)
-				if err == nil {
-					t.Error("Expected error for invalid book ID")
-				}
-
-				if !strings.Contains(err.Error(), "invalid book ID") {
-					t.Errorf("Expected invalid book ID error, got: %v", err)
-				}
-			})
-
-			t.Run("fails with invalid status", func(t *testing.T) {
-				args := []string{strconv.FormatInt(book.ID, 10), "invalid-status"}
-
-				err := UpdateBookStatus(ctx, args)
-				if err == nil {
-					t.Error("Expected error for invalid status")
-				}
-
-				if !strings.Contains(err.Error(), "invalid status") {
-					t.Errorf("Expected invalid status error, got: %v", err)
-				}
-			})
-
-			t.Run("fails with non-existent book ID", func(t *testing.T) {
-				args := []string{"99999", "reading"}
-
-				err := UpdateBookStatus(ctx, args)
-				if err == nil {
-					t.Error("Expected error for non-existent book ID")
-				}
-
-				if !strings.Contains(err.Error(), "failed to get book") {
-					t.Errorf("Expected book not found error, got: %v", err)
-				}
-			})
-
-			t.Run("validates all status options", func(t *testing.T) {
-				validStatuses := []string{"queued", "reading", "finished", "removed"}
-
-				for _, status := range validStatuses {
-					args := []string{strconv.FormatInt(book.ID, 10), status}
-
-					err := UpdateBookStatus(ctx, args)
-					if err != nil {
-						t.Errorf("UpdateBookStatus with status %s failed: %v", status, err)
-					}
-				}
-			})
-		})
-
-		t.Run("progress", func(t *testing.T) {
-			_, cleanup := setupBookTest(t)
-			defer cleanup()
-
-			ctx := context.Background()
-
-			handler, err := NewBookHandler()
-			if err != nil {
-				t.Fatalf("Failed to create handler: %v", err)
-			}
-			defer handler.Close()
-
-			book := createTestBook(t, handler, ctx)
-
-			t.Run("updates progress successfully", func(t *testing.T) {
-				args := []string{strconv.FormatInt(book.ID, 10), "50"}
-
-				err := UpdateBookProgress(ctx, args)
-				if err != nil {
-					t.Errorf("UpdateBookProgress failed: %v", err)
-				}
-
-				updatedBook, err := handler.repos.Books.Get(ctx, book.ID)
-				if err != nil {
-					t.Fatalf("Failed to get updated book: %v", err)
-				}
-
-				if updatedBook.Progress != 50 {
-					t.Errorf("Expected progress 50, got %d", updatedBook.Progress)
-				}
-
-				if updatedBook.Status != "reading" {
-					t.Errorf("Expected status 'reading', got '%s'", updatedBook.Status)
-				}
-
-				if updatedBook.Started == nil {
-					t.Error("Expected started time to be set")
-				}
-			})
-
-			t.Run("auto-completes book at 100%", func(t *testing.T) {
-				args := []string{strconv.FormatInt(book.ID, 10), "100"}
-
-				err := UpdateBookProgress(ctx, args)
-				if err != nil {
-					t.Errorf("UpdateBookProgress failed: %v", err)
-				}
-
-				updatedBook, err := handler.repos.Books.Get(ctx, book.ID)
-				if err != nil {
-					t.Fatalf("Failed to get updated book: %v", err)
-				}
-
-				if updatedBook.Progress != 100 {
-					t.Errorf("Expected progress 100, got %d", updatedBook.Progress)
-				}
-
-				if updatedBook.Status != "finished" {
-					t.Errorf("Expected status 'finished', got '%s'", updatedBook.Status)
-				}
-
-				if updatedBook.Finished == nil {
-					t.Error("Expected finished time to be set")
-				}
-			})
-
-			t.Run("resets to queued at 0%", func(t *testing.T) {
-				book.Status = "reading"
-				now := time.Now()
-				book.Started = &now
-				handler.repos.Books.Update(ctx, book)
-
-				args := []string{strconv.FormatInt(book.ID, 10), "0"}
-
-				err := UpdateBookProgress(ctx, args)
-				if err != nil {
-					t.Errorf("UpdateBookProgress failed: %v", err)
-				}
-
-				updatedBook, err := handler.repos.Books.Get(ctx, book.ID)
-				if err != nil {
-					t.Fatalf("Failed to get updated book: %v", err)
-				}
-
-				if updatedBook.Progress != 0 {
-					t.Errorf("Expected progress 0, got %d", updatedBook.Progress)
-				}
-
-				if updatedBook.Status != "queued" {
-					t.Errorf("Expected status 'queued', got '%s'", updatedBook.Status)
-				}
-
-				if updatedBook.Started != nil {
-					t.Error("Expected started time to be nil")
-				}
-			})
-
-			t.Run("fails with insufficient arguments", func(t *testing.T) {
-				args := []string{strconv.FormatInt(book.ID, 10)}
-
-				err := UpdateBookProgress(ctx, args)
-				if err == nil {
-					t.Error("Expected error for insufficient arguments")
-				}
-
-				if !strings.Contains(err.Error(), "usage: book progress") {
-					t.Errorf("Expected usage error, got: %v", err)
-				}
-			})
-
-			t.Run("fails with invalid book ID", func(t *testing.T) {
-				args := []string{"invalid-id", "50"}
-
-				err := UpdateBookProgress(ctx, args)
-				if err == nil {
-					t.Error("Expected error for invalid book ID")
-				}
-
-				if !strings.Contains(err.Error(), "invalid book ID") {
-					t.Errorf("Expected invalid book ID error, got: %v", err)
-				}
-			})
-
-			t.Run("fails with invalid progress percentage", func(t *testing.T) {
-				args := []string{strconv.FormatInt(book.ID, 10), "invalid-progress"}
-
-				err := UpdateBookProgress(ctx, args)
-				if err == nil {
-					t.Error("Expected error for invalid progress percentage")
-				}
-
-				if !strings.Contains(err.Error(), "invalid progress percentage") {
-					t.Errorf("Expected invalid progress percentage error, got: %v", err)
-				}
-			})
-
-			t.Run("fails with progress out of range", func(t *testing.T) {
-				testCases := []string{"-1", "101", "150"}
-
-				for _, progress := range testCases {
-					args := []string{strconv.FormatInt(book.ID, 10), progress}
-
-					err := UpdateBookProgress(ctx, args)
+				t.Run("fails with empty args", func(t *testing.T) {
+					args := []string{}
+					err := handler.SearchAndAddBook(ctx, args, false)
 					if err == nil {
-						t.Errorf("Expected error for progress %s", progress)
+						t.Error("Expected error for empty args")
 					}
 
-					if !strings.Contains(err.Error(), "progress must be between 0 and 100") {
-						t.Errorf("Expected range error for progress %s, got: %v", progress, err)
+					if !strings.Contains(err.Error(), "usage: book add") {
+						t.Errorf("Expected usage error, got: %v", err)
 					}
+				})
+
+				t.Run("handles search service errors", func(t *testing.T) {
+					args := []string{"test", "book"}
+					err := handler.SearchAndAddBook(ctx, args, false)
+					if err == nil {
+						t.Error("Expected error due to mocked service")
+					}
+					if strings.Contains(err.Error(), "usage:") {
+						t.Error("Should not show usage error for valid args")
+					}
+				})
+			})
+		})
+
+		t.Run("List", func(t *testing.T) {
+
+			ctx := context.Background()
+
+			_ = createTestBook(t, handler, ctx)
+
+			book2 := &models.Book{
+				Title:  "Reading Book",
+				Author: "Reading Author",
+				Status: "reading",
+				Added:  time.Now(),
+			}
+			id2, err := handler.repos.Books.Create(ctx, book2)
+			if err != nil {
+				t.Fatalf("Failed to create book2: %v", err)
+			}
+			book2.ID = id2
+
+			book3 := &models.Book{
+				Title:  "Finished Book",
+				Author: "Finished Author",
+				Status: "finished",
+				Added:  time.Now(),
+			}
+			id3, err := handler.repos.Books.Create(ctx, book3)
+			if err != nil {
+				t.Fatalf("Failed to create book3: %v", err)
+			}
+			book3.ID = id3
+
+			t.Run("lists queued books by default", func(t *testing.T) {
+				err := handler.ListBooks(ctx, "queued")
+				if err != nil {
+					t.Errorf("ListBooks failed: %v", err)
 				}
 			})
 
-			t.Run("fails with non-existent book ID", func(t *testing.T) {
-				args := []string{"99999", "50"}
+			t.Run("filters by status - all", func(t *testing.T) {
+				err := handler.ListBooks(ctx, "")
+				if err != nil {
+					t.Errorf("ListBooks with status all failed: %v", err)
+				}
+			})
 
-				err := UpdateBookProgress(ctx, args)
-				if err == nil {
-					t.Error("Expected error for non-existent book ID")
+			t.Run("filters by status - reading", func(t *testing.T) {
+				err := handler.ListBooks(ctx, "reading")
+				if err != nil {
+					t.Errorf("ListBooks with status reading failed: %v", err)
+				}
+			})
+
+			t.Run("filters by status - finished", func(t *testing.T) {
+				err := handler.ListBooks(ctx, "finished")
+				if err != nil {
+					t.Errorf("ListBooks with status finished failed: %v", err)
+				}
+			})
+
+			t.Run("filters by status - queued", func(t *testing.T) {
+				err := handler.ListBooks(ctx, "queued")
+				if err != nil {
+					t.Errorf("ListBooks with status queued failed: %v", err)
+				}
+			})
+
+			t.Run("handles various flag formats", func(t *testing.T) {
+				statusVariants := map[string]string{
+					"--all": "", "-a": "",
+					"--reading": "reading", "-r": "reading",
+					"--finished": "finished", "-f": "finished",
+					"--queued": "queued", "-q": "queued",
 				}
 
-				if !strings.Contains(err.Error(), "failed to get book") {
-					t.Errorf("Expected book not found error, got: %v", err)
+				for flag, status := range statusVariants {
+					err := handler.ListBooks(ctx, status)
+					if err != nil {
+						t.Errorf("ListBooks with flag %s (status %s) failed: %v", flag, status, err)
+					}
 				}
+			})
+		})
+
+		t.Run("Update", func(t *testing.T) {
+			t.Run("Update status", func(t *testing.T) {
+				ctx := context.Background()
+				book := createTestBook(t, handler, ctx)
+
+				t.Run("updates book status successfully", func(t *testing.T) {
+					err := handler.UpdateBookStatusByID(ctx, strconv.FormatInt(book.ID, 10), "reading")
+					if err != nil {
+						t.Errorf("UpdateBookStatusByID failed: %v", err)
+					}
+
+					updatedBook, err := handler.repos.Books.Get(ctx, book.ID)
+					if err != nil {
+						t.Fatalf("Failed to get updated book: %v", err)
+					}
+
+					if updatedBook.Status != "reading" {
+						t.Errorf("Expected status 'reading', got '%s'", updatedBook.Status)
+					}
+
+					if updatedBook.Started == nil {
+						t.Error("Expected started time to be set")
+					}
+				})
+
+				t.Run("updates to finished status", func(t *testing.T) {
+					err := handler.UpdateBookStatusByID(ctx, strconv.FormatInt(book.ID, 10), "finished")
+					if err != nil {
+						t.Errorf("UpdateBookStatusByID failed: %v", err)
+					}
+
+					updatedBook, err := handler.repos.Books.Get(ctx, book.ID)
+					if err != nil {
+						t.Fatalf("Failed to get updated book: %v", err)
+					}
+
+					if updatedBook.Status != "finished" {
+						t.Errorf("Expected status 'finished', got '%s'", updatedBook.Status)
+					}
+
+					if updatedBook.Finished == nil {
+						t.Error("Expected finished time to be set")
+					}
+
+					if updatedBook.Progress != 100 {
+						t.Errorf("Expected progress 100, got %d", updatedBook.Progress)
+					}
+				})
+
+				t.Run("fails with invalid book ID", func(t *testing.T) {
+					err := handler.UpdateBookStatusByID(ctx, "invalid-id", "reading")
+					if err == nil {
+						t.Error("Expected error for invalid book ID")
+					}
+
+					if !strings.Contains(err.Error(), "invalid book ID") {
+						t.Errorf("Expected invalid book ID error, got: %v", err)
+					}
+				})
+
+				t.Run("fails with invalid status", func(t *testing.T) {
+					err := handler.UpdateBookStatusByID(ctx, strconv.FormatInt(book.ID, 10), "invalid-status")
+					if err == nil {
+						t.Error("Expected error for invalid status")
+					}
+
+					if !strings.Contains(err.Error(), "invalid status") {
+						t.Errorf("Expected invalid status error, got: %v", err)
+					}
+				})
+
+				t.Run("fails with non-existent book ID", func(t *testing.T) {
+					err := handler.UpdateBookStatusByID(ctx, "99999", "reading")
+					if err == nil {
+						t.Error("Expected error for non-existent book ID")
+					}
+
+					if !strings.Contains(err.Error(), "failed to get book") {
+						t.Errorf("Expected book not found error, got: %v", err)
+					}
+				})
+
+				t.Run("validates all status options", func(t *testing.T) {
+					validStatuses := []string{"queued", "reading", "finished", "removed"}
+
+					for _, status := range validStatuses {
+						err := handler.UpdateBookStatusByID(ctx, strconv.FormatInt(book.ID, 10), status)
+						if err != nil {
+							t.Errorf("UpdateBookStatusByID with status %s failed: %v", status, err)
+						}
+					}
+				})
+			})
+
+			t.Run("progress", func(t *testing.T) {
+				_, cleanup := setupBookTest(t)
+				defer cleanup()
+
+				ctx := context.Background()
+
+				handler, err := NewBookHandler()
+				if err != nil {
+					t.Fatalf("Failed to create handler: %v", err)
+				}
+				defer handler.Close()
+
+				book := createTestBook(t, handler, ctx)
+
+				t.Run("updates progress successfully", func(t *testing.T) {
+					err := handler.UpdateBookProgressByID(ctx, strconv.FormatInt(book.ID, 10), 50)
+					if err != nil {
+						t.Errorf("UpdateBookProgressByID failed: %v", err)
+					}
+
+					updatedBook, err := handler.repos.Books.Get(ctx, book.ID)
+					if err != nil {
+						t.Fatalf("Failed to get updated book: %v", err)
+					}
+
+					if updatedBook.Progress != 50 {
+						t.Errorf("Expected progress 50, got %d", updatedBook.Progress)
+					}
+
+					if updatedBook.Status != "reading" {
+						t.Errorf("Expected status 'reading', got '%s'", updatedBook.Status)
+					}
+
+					if updatedBook.Started == nil {
+						t.Error("Expected started time to be set")
+					}
+				})
+
+				t.Run("auto-completes book at 100%", func(t *testing.T) {
+					err := handler.UpdateBookProgressByID(ctx, strconv.FormatInt(book.ID, 10), 100)
+					if err != nil {
+						t.Errorf("UpdateBookProgressByID failed: %v", err)
+					}
+
+					updatedBook, err := handler.repos.Books.Get(ctx, book.ID)
+					if err != nil {
+						t.Fatalf("Failed to get updated book: %v", err)
+					}
+
+					if updatedBook.Progress != 100 {
+						t.Errorf("Expected progress 100, got %d", updatedBook.Progress)
+					}
+
+					if updatedBook.Status != "finished" {
+						t.Errorf("Expected status 'finished', got '%s'", updatedBook.Status)
+					}
+
+					if updatedBook.Finished == nil {
+						t.Error("Expected finished time to be set")
+					}
+				})
+
+				t.Run("resets to queued at 0%", func(t *testing.T) {
+					book.Status = "reading"
+					now := time.Now()
+					book.Started = &now
+					handler.repos.Books.Update(ctx, book)
+
+					err := handler.UpdateBookProgressByID(ctx, strconv.FormatInt(book.ID, 10), 0)
+					if err != nil {
+						t.Errorf("UpdateBookProgressByID failed: %v", err)
+					}
+
+					updatedBook, err := handler.repos.Books.Get(ctx, book.ID)
+					if err != nil {
+						t.Fatalf("Failed to get updated book: %v", err)
+					}
+
+					if updatedBook.Progress != 0 {
+						t.Errorf("Expected progress 0, got %d", updatedBook.Progress)
+					}
+
+					if updatedBook.Status != "queued" {
+						t.Errorf("Expected status 'queued', got '%s'", updatedBook.Status)
+					}
+
+					if updatedBook.Started != nil {
+						t.Error("Expected started time to be nil")
+					}
+				})
+
+				t.Run("fails with invalid book ID", func(t *testing.T) {
+					err := handler.UpdateBookProgressByID(ctx, "invalid-id", 50)
+					if err == nil {
+						t.Error("Expected error for invalid book ID")
+					}
+
+					if !strings.Contains(err.Error(), "invalid book ID") {
+						t.Errorf("Expected invalid book ID error, got: %v", err)
+					}
+				})
+
+				t.Run("fails with progress out of range", func(t *testing.T) {
+					testCases := []int{-1, 101, 150}
+
+					for _, progress := range testCases {
+						err := handler.UpdateBookProgressByID(ctx, strconv.FormatInt(book.ID, 10), progress)
+						if err == nil {
+							t.Errorf("Expected error for progress %d", progress)
+						}
+
+						if !strings.Contains(err.Error(), "progress must be between 0 and 100") {
+							t.Errorf("Expected range error for progress %d, got: %v", progress, err)
+						}
+					}
+				})
+
+				t.Run("fails with non-existent book ID", func(t *testing.T) {
+					err := handler.UpdateBookProgressByID(ctx, "99999", 50)
+					if err == nil {
+						t.Error("Expected error for non-existent book ID")
+					}
+
+					if !strings.Contains(err.Error(), "failed to get book") {
+						t.Errorf("Expected book not found error, got: %v", err)
+					}
+				})
 			})
 		})
 	})
@@ -676,7 +579,7 @@ func TestBookHandler(t *testing.T) {
 				t.Errorf("Expected initial status 'queued', got '%s'", book.Status)
 			}
 
-			err = UpdateBookProgress(ctx, []string{strconv.FormatInt(book.ID, 10), "25"})
+			err = handler.UpdateBookProgressByID(ctx, strconv.FormatInt(book.ID, 10), 25)
 			if err != nil {
 				t.Errorf("Failed to update progress: %v", err)
 			}
@@ -690,7 +593,7 @@ func TestBookHandler(t *testing.T) {
 				t.Errorf("Expected status 'reading', got '%s'", updatedBook.Status)
 			}
 
-			err = UpdateBookProgress(ctx, []string{strconv.FormatInt(book.ID, 10), "100"})
+			err = handler.UpdateBookProgressByID(ctx, strconv.FormatInt(book.ID, 10), 100)
 			if err != nil {
 				t.Errorf("Failed to complete book: %v", err)
 			}
@@ -731,17 +634,17 @@ func TestBookHandler(t *testing.T) {
 
 			go func() {
 				time.Sleep(time.Millisecond * 10)
-				done <- ListBooks(ctx, []string{})
+				done <- handler.ListBooks(ctx, "")
 			}()
 
 			go func() {
 				time.Sleep(time.Millisecond * 15)
-				done <- UpdateBookProgress(ctx, []string{strconv.FormatInt(book.ID, 10), "50"})
+				done <- handler.UpdateBookProgressByID(ctx, strconv.FormatInt(book.ID, 10), 50)
 			}()
 
 			go func() {
 				time.Sleep(time.Millisecond * 20)
-				done <- UpdateBookStatus(ctx, []string{strconv.FormatInt(book.ID, 10), "finished"})
+				done <- handler.UpdateBookStatusByID(ctx, strconv.FormatInt(book.ID, 10), "finished")
 			}()
 
 			for i := range 3 {

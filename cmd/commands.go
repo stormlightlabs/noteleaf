@@ -1,12 +1,4 @@
 /*
-TODO: Implement movie addition
-TODO: Implement movie listing
-TODO: Implement movie watched status
-TODO: Implement movie removal
-TODO: Implement TV show addition
-TODO: Implement TV show listing
-TODO: Implement TV show watched status
-TODO: Implement TV show removal
 TODO: Implement config management
 */
 package main
@@ -16,85 +8,67 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/charmbracelet/log"
-
 	"github.com/spf13/cobra"
 	"github.com/stormlightlabs/noteleaf/internal/handlers"
-	"github.com/stormlightlabs/noteleaf/internal/ui"
 )
 
-func rootCmd() *cobra.Command {
-	root := &cobra.Command{
-		Use:   "noteleaf",
-		Long:  ui.Georgia.ColoredInViewport(),
-		Short: "A TaskWarrior-inspired CLI with notes, media queues and reading lists",
-		RunE: func(c *cobra.Command, args []string) error {
-			if len(args) == 0 {
-				return c.Help()
-			}
-
-			output := strings.Join(args, " ")
-			fmt.Println(output)
-			return nil
-		},
-	}
-
-	root.SetHelpCommand(&cobra.Command{Hidden: true})
-	cobra.EnableCommandSorting = false
-
-	root.AddGroup(&cobra.Group{ID: "core", Title: "Core Commands:"})
-	root.AddGroup(&cobra.Group{ID: "management", Title: "Management Commands:"})
-	return root
+// CommandGroup represents a group of related CLI commands
+type CommandGroup interface {
+	Create() *cobra.Command
 }
 
-func todoCmd() *cobra.Command {
-	root := &cobra.Command{Use: "todo", Aliases: []string{"task"}, Short: "task management"}
-
-	handler, err := handlers.NewTaskHandler()
-	if err != nil {
-		log.Fatalf("failed to create task handler: %v", err)
-	}
-
-	for _, init := range []func(*handlers.TaskHandler) *cobra.Command{
-		addTaskCmd, listTaskCmd, viewTaskCmd, updateTaskCmd, editTaskCmd,
-		deleteTaskCmd, taskProjectsCmd, taskTagsCmd, taskContextsCmd,
-		taskCompleteCmd, taskStartCmd, taskStopCmd, timesheetViewCmd,
-	} {
-		cmd := init(handler)
-		root.AddCommand(cmd)
-	}
-
-	return root
+// MovieCommand implements CommandGroup for movie-related commands
+type MovieCommand struct {
+	handler *handlers.MovieHandler
 }
 
-func mediaCmd() *cobra.Command {
-	cmd := &cobra.Command{Use: "media", Short: "Manage media queues (books, movies, TV shows)"}
-	for _, init := range []func() *cobra.Command{bookMediaCmd, movieMediaCmd, tvMediaCmd} {
-		cmd.AddCommand(init())
-	}
-	return cmd
+// NewMovieCommand creates a new MovieCommands with the given handler
+func NewMovieCommand(handler *handlers.MovieHandler) *MovieCommand {
+	return &MovieCommand{handler: handler}
 }
 
-func movieMediaCmd() *cobra.Command {
+func (c *MovieCommand) Create() *cobra.Command {
 	root := &cobra.Command{Use: "movie", Short: "Manage movie watch queue"}
 
-	root.AddCommand(&cobra.Command{
-		Use:   "add [title]",
-		Short: "Add movie to watch queue",
-		Args:  cobra.MinimumNArgs(1),
+	addCmd := &cobra.Command{
+		Use:   "add [search query...]",
+		Short: "Search and add movie to watch queue",
+		Long: `Search for movies and add them to your watch queue.
+
+By default, shows search results in a simple list format where you can select by number.
+Use the -i flag for an interactive interface with navigation keys.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			title := args[0]
-			fmt.Printf("Adding movie: %s\n", title)
-			return nil
+			if len(args) == 0 {
+				return fmt.Errorf("search query cannot be empty")
+			}
+			interactive, _ := cmd.Flags().GetBool("interactive")
+			query := strings.Join(args, " ")
+
+			return c.handler.SearchAndAddMovie(cmd.Context(), query, interactive)
 		},
-	})
+	}
+	addCmd.Flags().BoolP("interactive", "i", false, "Use interactive interface for movie selection")
+	root.AddCommand(addCmd)
 
 	root.AddCommand(&cobra.Command{
-		Use:   "list",
-		Short: "List movies in queue",
+		Use:   "list [--all|--watched|--queued]",
+		Short: "List movies in queue with status filtering",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Println("Listing movies...")
-			return nil
+			var status string
+			if len(args) > 0 {
+				switch args[0] {
+				case "--all":
+					status = ""
+				case "--watched":
+					status = "watched"
+				case "--queued":
+					status = "queued"
+				default:
+					return fmt.Errorf("invalid status filter: %s (use: --all, --watched, --queued)", args[0])
+				}
+			}
+
+			return c.handler.ListMovies(cmd.Context(), status)
 		},
 	})
 
@@ -104,8 +78,7 @@ func movieMediaCmd() *cobra.Command {
 		Aliases: []string{"seen"},
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Printf("Marking movie %s as watched\n", args[0])
-			return nil
+			return c.handler.MarkMovieWatched(cmd.Context(), args[0])
 		},
 	})
 
@@ -115,34 +88,76 @@ func movieMediaCmd() *cobra.Command {
 		Aliases: []string{"rm"},
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Printf("Removing movie %s from queue\n", args[0])
-			return nil
+			return c.handler.RemoveMovie(cmd.Context(), args[0])
 		},
 	})
 
 	return root
 }
 
-func tvMediaCmd() *cobra.Command {
+// TVCommand implements [CommandGroup] for TV show-related commands
+type TVCommand struct {
+	handler *handlers.TVHandler
+}
+
+// NewTVCommand creates a new [TVCommand] with the given handler
+func NewTVCommand(handler *handlers.TVHandler) *TVCommand {
+	return &TVCommand{handler: handler}
+}
+
+func (c *TVCommand) Create() *cobra.Command {
 	root := &cobra.Command{Use: "tv", Short: "Manage TV show watch queue"}
 
-	root.AddCommand(&cobra.Command{
-		Use:   "add [title]",
-		Short: "Add TV show to watch queue",
-		Args:  cobra.MinimumNArgs(1),
+	addCmd := &cobra.Command{
+		Use:   "add [search query...]",
+		Short: "Search and add TV show to watch queue",
+		Long: `Search for TV shows and add them to your watch queue.
+
+By default, shows search results in a simple list format where you can select by number.
+Use the -i flag for an interactive interface with navigation keys.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			title := args[0]
-			fmt.Printf("Adding TV show: %s\n", title)
-			return nil
+			if len(args) == 0 {
+				return fmt.Errorf("search query cannot be empty")
+			}
+			interactive, _ := cmd.Flags().GetBool("interactive")
+			query := strings.Join(args, " ")
+
+			return c.handler.SearchAndAddTV(cmd.Context(), query, interactive)
+		},
+	}
+	addCmd.Flags().BoolP("interactive", "i", false, "Use interactive interface for TV show selection")
+	root.AddCommand(addCmd)
+
+	root.AddCommand(&cobra.Command{
+		Use:   "list [--all|--queued|--watching|--watched]",
+		Short: "List TV shows in queue with status filtering",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			var status string
+			if len(args) > 0 {
+				switch args[0] {
+				case "--all":
+					status = ""
+				case "--queued":
+					status = "queued"
+				case "--watching":
+					status = "watching"
+				case "--watched":
+					status = "watched"
+				default:
+					return fmt.Errorf("invalid status filter: %s (use: --all, --queued, --watching, --watched)", args[0])
+				}
+			}
+
+			return c.handler.ListTVShows(cmd.Context(), status)
 		},
 	})
 
 	root.AddCommand(&cobra.Command{
-		Use:   "list",
-		Short: "List TV shows in queue",
+		Use:   "watching [id]",
+		Short: "Mark TV show as currently watching",
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Println("Listing TV shows...")
-			return nil
+			return c.handler.MarkTVShowWatching(cmd.Context(), args[0])
 		},
 	})
 
@@ -152,8 +167,7 @@ func tvMediaCmd() *cobra.Command {
 		Aliases: []string{"seen"},
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Printf("Marking TV show %s as watched\n", args[0])
-			return nil
+			return c.handler.MarkTVShowWatched(cmd.Context(), args[0])
 		},
 	})
 
@@ -163,15 +177,24 @@ func tvMediaCmd() *cobra.Command {
 		Aliases: []string{"rm"},
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Printf("Removing TV show %s from queue\n", args[0])
-			return nil
+			return c.handler.RemoveTVShow(cmd.Context(), args[0])
 		},
 	})
 
 	return root
 }
 
-func bookMediaCmd() *cobra.Command {
+// BookCommand implements CommandGroup for book-related commands
+type BookCommand struct {
+	handler *handlers.BookHandler
+}
+
+// NewBookCommand creates a new BookCommand with the given handler
+func NewBookCommand(handler *handlers.BookHandler) *BookCommand {
+	return &BookCommand{handler: handler}
+}
+
+func (c *BookCommand) Create() *cobra.Command {
 	root := &cobra.Command{Use: "book", Short: "Manage reading list"}
 
 	addCmd := &cobra.Command{
@@ -183,7 +206,7 @@ By default, shows search results in a simple list format where you can select by
 Use the -i flag for an interactive interface with navigation keys.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			interactive, _ := cmd.Flags().GetBool("interactive")
-			return handlers.SearchAndAddWithOptions(cmd.Context(), args, interactive)
+			return c.handler.SearchAndAddBook(cmd.Context(), args, interactive)
 		},
 	}
 	addCmd.Flags().BoolP("interactive", "i", false, "Use interactive interface for book selection")
@@ -193,7 +216,22 @@ Use the -i flag for an interactive interface with navigation keys.`,
 		Use:   "list [--all|--reading|--finished|--queued]",
 		Short: "Show reading queue with progress",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return handlers.ListBooks(cmd.Context(), args)
+			var status string
+			if len(args) > 0 {
+				switch args[0] {
+				case "--all":
+					status = ""
+				case "--reading":
+					status = "reading"
+				case "--finished":
+					status = "finished"
+				case "--queued":
+					status = "queued"
+				default:
+					return fmt.Errorf("invalid status filter: %s (use: --all, --reading, --finished, --queued)", args[0])
+				}
+			}
+			return c.handler.ListBooks(cmd.Context(), status)
 		},
 	})
 
@@ -202,7 +240,7 @@ Use the -i flag for an interactive interface with navigation keys.`,
 		Short: "Mark book as currently reading",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return handlers.UpdateBookStatus(cmd.Context(), []string{args[0], "reading"})
+			return c.handler.UpdateBookStatusByID(cmd.Context(), args[0], "reading")
 		},
 	})
 
@@ -212,7 +250,7 @@ Use the -i flag for an interactive interface with navigation keys.`,
 		Aliases: []string{"read"},
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return handlers.UpdateBookStatus(cmd.Context(), []string{args[0], "finished"})
+			return c.handler.UpdateBookStatusByID(cmd.Context(), args[0], "finished")
 		},
 	})
 
@@ -222,7 +260,7 @@ Use the -i flag for an interactive interface with navigation keys.`,
 		Aliases: []string{"rm"},
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return handlers.UpdateBookStatus(cmd.Context(), []string{args[0], "removed"})
+			return c.handler.UpdateBookStatusByID(cmd.Context(), args[0], "removed")
 		},
 	})
 
@@ -231,7 +269,11 @@ Use the -i flag for an interactive interface with navigation keys.`,
 		Short: "Update reading progress percentage (0-100)",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return handlers.UpdateBookProgress(cmd.Context(), args)
+			progress, err := strconv.Atoi(args[1])
+			if err != nil {
+				return fmt.Errorf("invalid progress percentage: %s", args[1])
+			}
+			return c.handler.UpdateBookProgressByID(cmd.Context(), args[0], progress)
 		},
 	})
 
@@ -240,20 +282,25 @@ Use the -i flag for an interactive interface with navigation keys.`,
 		Short: "Update book status (queued|reading|finished|removed)",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return handlers.UpdateBookStatus(cmd.Context(), args)
+			return c.handler.UpdateBookStatusByID(cmd.Context(), args[0], args[1])
 		},
 	})
 
 	return root
 }
 
-func noteCmd() *cobra.Command {
-	root := &cobra.Command{Use: "note", Short: "Manage notes"}
+// NoteCommand implements [CommandGroup] for note-related commands
+type NoteCommand struct {
+	handler *handlers.NoteHandler
+}
 
-	handler, err := handlers.NewNoteHandler()
-	if err != nil {
-		log.Fatalf("failed to instantiate note handler: %v", err)
-	}
+// NewNoteCommand creates a new NoteCommand with the given handler
+func NewNoteCommand(handler *handlers.NoteHandler) *NoteCommand {
+	return &NoteCommand{handler: handler}
+}
+
+func (c *NoteCommand) Create() *cobra.Command {
+	root := &cobra.Command{Use: "note", Short: "Manage notes"}
 
 	createCmd := &cobra.Command{
 		Use:     "create [title] [content...]",
@@ -271,11 +318,8 @@ func noteCmd() *cobra.Command {
 				content = strings.Join(args[1:], " ")
 			}
 
-			if err != nil {
-				return err
-			}
-			defer handler.Close()
-			return handler.Create(cmd.Context(), title, content, filePath, interactive)
+			defer c.handler.Close()
+			return c.handler.Create(cmd.Context(), title, content, filePath, interactive)
 		},
 	}
 	createCmd.Flags().BoolP("interactive", "i", false, "Open interactive editor")
@@ -298,12 +342,8 @@ func noteCmd() *cobra.Command {
 				}
 			}
 
-			handler, err := handlers.NewNoteHandler()
-			if err != nil {
-				return err
-			}
-			defer handler.Close()
-			return handler.List(cmd.Context(), false, archived, tags)
+			defer c.handler.Close()
+			return c.handler.List(cmd.Context(), false, archived, tags)
 		},
 	}
 	listCmd.Flags().BoolP("archived", "a", false, "Show archived notes")
@@ -320,12 +360,8 @@ func noteCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("invalid note ID: %s", args[0])
 			}
-			handler, err := handlers.NewNoteHandler()
-			if err != nil {
-				return err
-			}
-			defer handler.Close()
-			return handler.View(cmd.Context(), noteID)
+			defer c.handler.Close()
+			return c.handler.View(cmd.Context(), noteID)
 		},
 	})
 
@@ -338,12 +374,8 @@ func noteCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("invalid note ID: %s", args[0])
 			}
-			handler, err := handlers.NewNoteHandler()
-			if err != nil {
-				return err
-			}
-			defer handler.Close()
-			return handler.Edit(cmd.Context(), noteID)
+			defer c.handler.Close()
+			return c.handler.Edit(cmd.Context(), noteID)
 		},
 	})
 
@@ -357,76 +389,10 @@ func noteCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("invalid note ID: %s", args[0])
 			}
-			handler, err := handlers.NewNoteHandler()
-			if err != nil {
-				return err
-			}
-			defer handler.Close()
-			return handler.Delete(cmd.Context(), noteID)
+			defer c.handler.Close()
+			return c.handler.Delete(cmd.Context(), noteID)
 		},
 	})
 
 	return root
-}
-
-func statusCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "status",
-		Short: "Show application status and configuration",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return handlers.Status(cmd.Context(), args)
-		},
-	}
-}
-
-func resetCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "reset",
-		Short: "Reset the application (removes all data)",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return handlers.Reset(cmd.Context(), args)
-		},
-	}
-}
-
-func setupCmd() *cobra.Command {
-	handler, err := handlers.NewSeedHandler()
-	if err != nil {
-		log.Fatalf("failed to instantiate seed handler: %v", err)
-	}
-
-	root := &cobra.Command{
-		Use:   "setup",
-		Short: "Initialize and manage application setup",
-		RunE: func(c *cobra.Command, args []string) error {
-			return handlers.Setup(c.Context(), args)
-		},
-	}
-
-	seedCmd := &cobra.Command{
-		Use:   "seed",
-		Short: "Populate database with test data",
-		Long:  "Add sample tasks, books, and notes to the database for testing and demonstration purposes",
-		RunE: func(c *cobra.Command, args []string) error {
-			force, _ := c.Flags().GetBool("force")
-			return handler.Seed(c.Context(), force)
-		},
-	}
-	seedCmd.Flags().BoolP("force", "f", false, "Clear existing data and re-seed")
-
-	root.AddCommand(seedCmd)
-	return root
-}
-
-func confCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "config [key] [value]",
-		Short: "Manage configuration",
-		Args:  cobra.ExactArgs(2),
-		RunE: func(c *cobra.Command, args []string) error {
-			key, value := args[0], args[1]
-			fmt.Printf("Setting config %s = %s\n", key, value)
-			return nil
-		},
-	}
 }

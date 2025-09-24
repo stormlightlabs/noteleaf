@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"slices"
+	"strconv"
 	"time"
 
 	"github.com/stormlightlabs/noteleaf/internal/models"
@@ -53,55 +54,40 @@ func (h *BookHandler) Close() error {
 	return h.db.Close()
 }
 
-// SearchAndAdd searches for books and allows user to select and add to queue
-func SearchAndAdd(ctx context.Context, args []string) error {
-	handler, err := NewBookHandler()
-	if err != nil {
-		return fmt.Errorf("failed to initialize book handler: %w", err)
-	}
-	defer handler.Close()
+func (h *BookHandler) printBook(book *models.Book) {
+	fmt.Printf("[%d] %s", book.ID, book.Title)
 
-	return handler.searchAndAdd(ctx, args)
-}
-
-// SearchAndAddWithOptions searches for books with interactive option
-func SearchAndAddWithOptions(ctx context.Context, args []string, interactive bool) error {
-	handler, err := NewBookHandler()
-	if err != nil {
-		return fmt.Errorf("failed to initialize book handler: %w", err)
-	}
-	defer handler.Close()
-
-	return handler.searchAndAddWithOptions(ctx, args, interactive)
-}
-
-func (h *BookHandler) searchAndAdd(ctx context.Context, args []string) error {
-	if len(args) == 0 {
-		return fmt.Errorf("usage: book add <search query> [-i for interactive mode]")
+	if book.Author != "" {
+		fmt.Printf(" by %s", book.Author)
 	}
 
-	interactive := false
-	searchArgs := args
-	if len(args) > 0 && args[len(args)-1] == "-i" {
-		interactive = true
-		searchArgs = args[:len(args)-1]
+	if book.Status != "queued" {
+		fmt.Printf(" (%s)", book.Status)
 	}
 
-	if len(searchArgs) == 0 {
-		return fmt.Errorf("search query cannot be empty")
+	if book.Progress > 0 {
+		fmt.Printf(" [%d%%]", book.Progress)
 	}
 
-	query := searchArgs[0]
-	if len(searchArgs) > 1 {
-		for _, arg := range searchArgs[1:] {
-			query += " " + arg
+	if book.Rating > 0 {
+		fmt.Printf(" ★%.1f", book.Rating)
+	}
+
+	fmt.Println()
+
+	if book.Notes != "" {
+		notes := book.Notes
+		if len(notes) > 80 {
+			notes = notes[:77] + "..."
 		}
+		fmt.Printf("    %s\n", notes)
 	}
 
-	return h.searchAndAddWithOptions(ctx, searchArgs, interactive)
+	fmt.Println()
 }
 
-func (h *BookHandler) searchAndAddWithOptions(ctx context.Context, args []string, interactive bool) error {
+// SearchAndAddBook searches for books and allows user to select and add to queue
+func (h *BookHandler) SearchAndAddBook(ctx context.Context, args []string, interactive bool) error {
 	if len(args) == 0 {
 		return fmt.Errorf("usage: book add <search query>")
 	}
@@ -187,32 +173,8 @@ func (h *BookHandler) searchAndAddWithOptions(ctx context.Context, args []string
 	return nil
 }
 
-// ListBooks lists all books in the queue
-func ListBooks(ctx context.Context, args []string) error {
-	handler, err := NewBookHandler()
-	if err != nil {
-		return fmt.Errorf("failed to initialize book handler: %w", err)
-	}
-	defer handler.Close()
-
-	return handler.listBooks(ctx, args)
-}
-
-func (h *BookHandler) listBooks(ctx context.Context, args []string) error {
-	status := "queued"
-	if len(args) > 0 {
-		switch args[0] {
-		case "all", "--all", "-a":
-			status = ""
-		case "reading", "--reading", "-r":
-			status = "reading"
-		case "finished", "--finished", "-f":
-			status = "finished"
-		case "queued", "--queued", "-q":
-			status = "queued"
-		}
-	}
-
+// ListBooks lists all books with status filtering
+func (h *BookHandler) ListBooks(ctx context.Context, status string) error {
 	var books []*models.Book
 	var err error
 
@@ -252,30 +214,15 @@ func (h *BookHandler) listBooks(ctx context.Context, args []string) error {
 	return nil
 }
 
-func UpdateBookStatus(ctx context.Context, args []string) error {
-	handler, err := NewBookHandler()
+// UpdateBookStatusByID changes the status of a book
+func (h *BookHandler) UpdateBookStatusByID(ctx context.Context, id, status string) error {
+	bookID, err := strconv.ParseInt(id, 10, 64)
 	if err != nil {
-		return fmt.Errorf("failed to initialize book handler: %w", err)
-	}
-	defer handler.Close()
-
-	return handler.updateBookStatus(ctx, args)
-}
-
-func (h *BookHandler) updateBookStatus(ctx context.Context, args []string) error {
-	if len(args) < 2 {
-		return fmt.Errorf("usage: book update <id> <status>")
+		return fmt.Errorf("invalid book ID: %s", id)
 	}
 
-	var bookID int64
-	if _, err := fmt.Sscanf(args[0], "%d", &bookID); err != nil {
-		return fmt.Errorf("invalid book ID: %s", args[0])
-	}
-
-	status := args[1]
 	validStatuses := []string{"queued", "reading", "finished", "removed"}
-	valid := slices.Contains(validStatuses, status)
-	if !valid {
+	if !slices.Contains(validStatuses, status) {
 		return fmt.Errorf("invalid status: %s (valid: %v)", status, validStatuses)
 	}
 
@@ -303,30 +250,11 @@ func (h *BookHandler) updateBookStatus(ctx context.Context, args []string) error
 	return nil
 }
 
-// UpdateBookProgress updates a book's reading progress percentage
-func UpdateBookProgress(ctx context.Context, args []string) error {
-	handler, err := NewBookHandler()
+// UpdateBookProgressByID updates a book's reading progress percentage
+func (h *BookHandler) UpdateBookProgressByID(ctx context.Context, id string, progress int) error {
+	bookID, err := strconv.ParseInt(id, 10, 64)
 	if err != nil {
-		return fmt.Errorf("failed to initialize book handler: %w", err)
-	}
-	defer handler.Close()
-
-	return handler.updateBookProgress(ctx, args)
-}
-
-func (h *BookHandler) updateBookProgress(ctx context.Context, args []string) error {
-	if len(args) < 2 {
-		return fmt.Errorf("usage: book progress <id> <percentage>")
-	}
-
-	var bookID int64
-	if _, err := fmt.Sscanf(args[0], "%d", &bookID); err != nil {
-		return fmt.Errorf("invalid book ID: %s", args[0])
-	}
-
-	var progress int
-	if _, err := fmt.Sscanf(args[1], "%d", &progress); err != nil {
-		return fmt.Errorf("invalid progress percentage: %s", args[1])
+		return fmt.Errorf("invalid book ID: %s", id)
 	}
 
 	if progress < 0 || progress > 100 {
@@ -367,36 +295,4 @@ func (h *BookHandler) updateBookProgress(ctx context.Context, args []string) err
 	}
 	fmt.Println()
 	return nil
-}
-
-func (h *BookHandler) printBook(book *models.Book) {
-	fmt.Printf("[%d] %s", book.ID, book.Title)
-
-	if book.Author != "" {
-		fmt.Printf(" by %s", book.Author)
-	}
-
-	if book.Status != "queued" {
-		fmt.Printf(" (%s)", book.Status)
-	}
-
-	if book.Progress > 0 {
-		fmt.Printf(" [%d%%]", book.Progress)
-	}
-
-	if book.Rating > 0 {
-		fmt.Printf(" ★%.1f", book.Rating)
-	}
-
-	fmt.Println()
-
-	if book.Notes != "" {
-		notes := book.Notes
-		if len(notes) > 80 {
-			notes = notes[:77] + "..."
-		}
-		fmt.Printf("    %s\n", notes)
-	}
-
-	fmt.Println()
 }

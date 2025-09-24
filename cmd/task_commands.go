@@ -5,6 +5,31 @@ import (
 	"github.com/stormlightlabs/noteleaf/internal/handlers"
 )
 
+// TaskCommand implements CommandGroup for task-related commands
+type TaskCommand struct {
+	handler *handlers.TaskHandler
+}
+
+// NewTaskCommand creates a new TaskCommands with the given handler
+func NewTaskCommand(handler *handlers.TaskHandler) *TaskCommand {
+	return &TaskCommand{handler: handler}
+}
+
+func (c *TaskCommand) Create() *cobra.Command {
+	root := &cobra.Command{Use: "todo", Aliases: []string{"task"}, Short: "task management"}
+
+	for _, init := range []func(*handlers.TaskHandler) *cobra.Command{
+		addTaskCmd, listTaskCmd, viewTaskCmd, updateTaskCmd, editTaskCmd,
+		deleteTaskCmd, taskProjectsCmd, taskTagsCmd, taskContextsCmd,
+		taskCompleteCmd, taskStartCmd, taskStopCmd, timesheetViewCmd,
+	} {
+		cmd := init(c.handler)
+		root.AddCommand(cmd)
+	}
+
+	return root
+}
+
 func addTaskCmd(h *handlers.TaskHandler) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "add [description]",
