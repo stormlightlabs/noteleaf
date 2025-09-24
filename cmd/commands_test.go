@@ -260,7 +260,7 @@ func TestCommandGroup(t *testing.T) {
 
 			expectedSubcommands := []string{
 				"create [title] [content...]",
-				"list [--archived] [--tags=tag1,tag2]",
+				"list [--archived] [--static] [--tags=tag1,tag2]",
 				"read [note-id]",
 				"edit [note-id]",
 				"remove [note-id]",
@@ -353,4 +353,93 @@ func TestCommandGroup(t *testing.T) {
 		})
 	})
 
+}
+
+func TestCommandExecution(t *testing.T) {
+	t.Run("Movie Commands", func(t *testing.T) {
+		handler, cleanup := createTestMovieHandler(t)
+		defer cleanup()
+
+		t.Run("list command - default", func(t *testing.T) {
+			cmd := NewMovieCommand(handler).Create()
+			cmd.SetArgs([]string{"list"})
+			err := cmd.Execute()
+			if err != nil {
+				t.Errorf("movie list command failed: %v", err)
+			}
+		})
+
+		t.Run("add command with empty args", func(t *testing.T) {
+			cmd := NewMovieCommand(handler).Create()
+			cmd.SetArgs([]string{"add"})
+			err := cmd.Execute()
+			if err == nil {
+				t.Error("expected movie add command to fail with empty args")
+			}
+		})
+	})
+
+	t.Run("TV Commands", func(t *testing.T) {
+		handler, cleanup := createTestTVHandler(t)
+		defer cleanup()
+
+		t.Run("list command - default", func(t *testing.T) {
+			cmd := NewTVCommand(handler).Create()
+			cmd.SetArgs([]string{"list"})
+			err := cmd.Execute()
+			if err != nil {
+				t.Errorf("tv list command failed: %v", err)
+			}
+		})
+
+		t.Run("add command with empty args", func(t *testing.T) {
+			cmd := NewTVCommand(handler).Create()
+			cmd.SetArgs([]string{"add"})
+			err := cmd.Execute()
+			if err == nil {
+				t.Error("expected tv add command to fail with empty args")
+			}
+		})
+	})
+
+	t.Run("Book Commands", func(t *testing.T) {
+		handler, cleanup := createTestBookHandler(t)
+		defer cleanup()
+
+		t.Run("list command - default", func(t *testing.T) {
+			cmd := NewBookCommand(handler).Create()
+			cmd.SetArgs([]string{"list"})
+			err := cmd.Execute()
+			if err != nil {
+				t.Errorf("book list command failed: %v", err)
+			}
+		})
+	})
+
+	t.Run("Note Commands", func(t *testing.T) {
+
+		t.Run("create command - non-interactive", func(t *testing.T) {
+			handler, cleanup := createTestNoteHandler(t)
+			defer cleanup()
+
+			cmd := NewNoteCommand(handler).Create()
+			cmd.SetArgs([]string{"create", "test title", "test content"})
+			err := cmd.Execute()
+			if err != nil {
+				t.Errorf("note create command failed: %v", err)
+			}
+		})
+
+		t.Run("list command - static mode", func(t *testing.T) {
+			handler, cleanup := createTestNoteHandler(t)
+			defer cleanup()
+
+			cmd := NewNoteCommand(handler).Create()
+			cmd.SetArgs([]string{"list", "--static"})
+			err := cmd.Execute()
+			if err != nil {
+				t.Errorf("note list command failed: %v", err)
+			}
+		})
+	})
 }

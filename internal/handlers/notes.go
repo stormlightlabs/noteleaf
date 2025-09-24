@@ -57,6 +57,11 @@ func (h *NoteHandler) Close() error {
 
 // Create handles note creation with optional title, content, and file path
 func (h *NoteHandler) Create(ctx context.Context, title string, content string, filePath string, interactive bool) error {
+	return h.CreateWithOptions(ctx, title, content, filePath, interactive, false)
+}
+
+// CreateWithOptions handles note creation with additional options
+func (h *NoteHandler) CreateWithOptions(ctx context.Context, title string, content string, filePath string, interactive bool, promptEditor bool) error {
 	if interactive || (title == "" && content == "" && filePath == "") {
 		return h.createInteractive(ctx)
 	}
@@ -65,7 +70,7 @@ func (h *NoteHandler) Create(ctx context.Context, title string, content string, 
 		return h.createFromFile(ctx, filePath)
 	}
 
-	return h.createFromArgs(ctx, title, content)
+	return h.createFromArgsWithOptions(ctx, title, content, promptEditor)
 }
 
 func (h *NoteHandler) createInteractive(ctx context.Context) error {
@@ -175,6 +180,10 @@ func (h *NoteHandler) createFromFile(ctx context.Context, filePath string) error
 }
 
 func (h *NoteHandler) createFromArgs(ctx context.Context, title, content string) error {
+	return h.createFromArgsWithOptions(ctx, title, content, false)
+}
+
+func (h *NoteHandler) createFromArgsWithOptions(ctx context.Context, title, content string, promptEditor bool) error {
 	note := &models.Note{
 		Title:   title,
 		Content: content,
@@ -187,13 +196,15 @@ func (h *NoteHandler) createFromArgs(ctx context.Context, title, content string)
 
 	fmt.Printf("Created note: %s (ID: %d)\n", title, id)
 
-	editor := h.getEditor()
-	if editor != "" {
-		fmt.Print("Open in editor? [y/N]: ")
-		var response string
-		fmt.Scanln(&response)
-		if strings.ToLower(response) == "y" || strings.ToLower(response) == "yes" {
-			return h.Edit(ctx, id)
+	if promptEditor {
+		editor := h.getEditor()
+		if editor != "" {
+			fmt.Print("Open in editor? [y/N]: ")
+			var response string
+			fmt.Scanln(&response)
+			if strings.ToLower(response) == "y" || strings.ToLower(response) == "yes" {
+				return h.Edit(ctx, id)
+			}
 		}
 	}
 

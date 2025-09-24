@@ -308,6 +308,7 @@ func (c *NoteCommand) Create() *cobra.Command {
 		Aliases: []string{"new"},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			interactive, _ := cmd.Flags().GetBool("interactive")
+			editor, _ := cmd.Flags().GetBool("editor")
 			filePath, _ := cmd.Flags().GetString("file")
 
 			var title, content string
@@ -319,19 +320,21 @@ func (c *NoteCommand) Create() *cobra.Command {
 			}
 
 			defer c.handler.Close()
-			return c.handler.Create(cmd.Context(), title, content, filePath, interactive)
+			return c.handler.CreateWithOptions(cmd.Context(), title, content, filePath, interactive, editor)
 		},
 	}
 	createCmd.Flags().BoolP("interactive", "i", false, "Open interactive editor")
+	createCmd.Flags().BoolP("editor", "e", false, "Prompt to open note in editor after creation")
 	createCmd.Flags().StringP("file", "f", "", "Create note from markdown file")
 	root.AddCommand(createCmd)
 
 	listCmd := &cobra.Command{
-		Use:     "list [--archived] [--tags=tag1,tag2]",
+		Use:     "list [--archived] [--static] [--tags=tag1,tag2]",
 		Short:   "Opens interactive TUI browser for navigating and viewing notes",
 		Aliases: []string{"ls"},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			archived, _ := cmd.Flags().GetBool("archived")
+			static, _ := cmd.Flags().GetBool("static")
 			tagsStr, _ := cmd.Flags().GetString("tags")
 
 			var tags []string
@@ -343,10 +346,11 @@ func (c *NoteCommand) Create() *cobra.Command {
 			}
 
 			defer c.handler.Close()
-			return c.handler.List(cmd.Context(), false, archived, tags)
+			return c.handler.List(cmd.Context(), static, archived, tags)
 		},
 	}
 	listCmd.Flags().BoolP("archived", "a", false, "Show archived notes")
+	listCmd.Flags().BoolP("static", "s", false, "Show static list instead of interactive TUI")
 	listCmd.Flags().String("tags", "", "Filter by tags (comma-separated)")
 	root.AddCommand(listCmd)
 
