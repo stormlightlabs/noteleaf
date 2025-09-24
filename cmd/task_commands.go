@@ -149,12 +149,14 @@ func taskProjectsCmd(h *handlers.TaskHandler) *cobra.Command {
 		Aliases: []string{"proj"},
 		RunE: func(c *cobra.Command, args []string) error {
 			static, _ := c.Flags().GetBool("static")
+			todoTxt, _ := c.Flags().GetBool("todo-txt")
 
 			defer h.Close()
-			return h.ListProjects(c.Context(), static)
+			return h.ListProjects(c.Context(), static, todoTxt)
 		},
 	}
 	cmd.Flags().Bool("static", false, "Use static text output instead of interactive")
+	cmd.Flags().Bool("todo-txt", false, "Format output with +project prefix for todo.txt compatibility")
 
 	return cmd
 }
@@ -256,15 +258,17 @@ func taskContextsCmd(h *handlers.TaskHandler) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "contexts",
 		Short:   "List contexts (locations)",
-		Aliases: []string{"loc", "ctx", "locations"},
+		Aliases: []string{"con", "loc", "ctx", "locations"},
 		RunE: func(c *cobra.Command, args []string) error {
 			static, _ := c.Flags().GetBool("static")
+			todoTxt, _ := c.Flags().GetBool("todo-txt")
 
 			defer h.Close()
-			return h.ListContexts(c.Context(), static)
+			return h.ListContexts(c.Context(), static, todoTxt)
 		},
 	}
 	cmd.Flags().Bool("static", false, "Use static text output instead of interactive")
+	cmd.Flags().Bool("todo-txt", false, "Format output with @context prefix for todo.txt compatibility")
 	return cmd
 }
 

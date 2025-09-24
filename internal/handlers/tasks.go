@@ -505,14 +505,15 @@ func (h *TaskHandler) Done(ctx context.Context, args []string) error {
 }
 
 // ListProjects lists all projects with their task counts
-func (h *TaskHandler) ListProjects(ctx context.Context, static bool) error {
+func (h *TaskHandler) ListProjects(ctx context.Context, static bool, todoTxt ...bool) error {
+	useTodoTxt := len(todoTxt) > 0 && todoTxt[0]
 	if static {
-		return h.listProjectsStatic(ctx)
+		return h.listProjectsStatic(ctx, useTodoTxt)
 	}
-	return h.listProjectsInteractive(ctx)
+	return h.listProjectsInteractive(ctx, useTodoTxt)
 }
 
-func (h *TaskHandler) listProjectsStatic(ctx context.Context) error {
+func (h *TaskHandler) listProjectsStatic(ctx context.Context, todoTxt bool) error {
 	tasks, err := h.repos.Tasks.List(ctx, repo.TaskListOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to list tasks for projects: %w", err)
@@ -539,13 +540,18 @@ func (h *TaskHandler) listProjectsStatic(ctx context.Context) error {
 	fmt.Printf("Found %d project(s):\n\n", len(projects))
 	for _, project := range projects {
 		count := projectCounts[project]
-		fmt.Printf("%s (%d task%s)\n", project, count, pluralize(count))
+		if todoTxt {
+			fmt.Printf("+%s (%d task%s)\n", project, count, pluralize(count))
+		} else {
+			fmt.Printf("%s (%d task%s)\n", project, count, pluralize(count))
+		}
 	}
 
 	return nil
 }
 
-func (h *TaskHandler) listProjectsInteractive(ctx context.Context) error {
+// TODO: Add todo.txt format support to interactive mode
+func (h *TaskHandler) listProjectsInteractive(ctx context.Context, _ bool) error {
 	projectTable := ui.NewProjectListFromTable(h.repos.Tasks, nil, nil, false)
 	return projectTable.Browse(ctx)
 }
@@ -560,14 +566,15 @@ func (h *TaskHandler) ListTags(ctx context.Context, static bool) error {
 }
 
 // ListContexts lists all contexts with their task counts
-func (h *TaskHandler) ListContexts(ctx context.Context, static bool) error {
+func (h *TaskHandler) ListContexts(ctx context.Context, static bool, todoTxt ...bool) error {
+	useTodoTxt := len(todoTxt) > 0 && todoTxt[0]
 	if static {
-		return h.listContextsStatic(ctx)
+		return h.listContextsStatic(ctx, useTodoTxt)
 	}
-	return h.listContextsInteractive(ctx)
+	return h.listContextsInteractive(ctx, useTodoTxt)
 }
 
-func (h *TaskHandler) listContextsStatic(ctx context.Context) error {
+func (h *TaskHandler) listContextsStatic(ctx context.Context, todoTxt bool) error {
 	tasks, err := h.repos.Tasks.List(ctx, repo.TaskListOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to list tasks for contexts: %w", err)
@@ -594,15 +601,19 @@ func (h *TaskHandler) listContextsStatic(ctx context.Context) error {
 	fmt.Printf("Found %d context(s):\n\n", len(contexts))
 	for _, context := range contexts {
 		count := contextCounts[context]
-		fmt.Printf("%s (%d task%s)\n", context, count, pluralize(count))
+		if todoTxt {
+			fmt.Printf("@%s (%d task%s)\n", context, count, pluralize(count))
+		} else {
+			fmt.Printf("%s (%d task%s)\n", context, count, pluralize(count))
+		}
 	}
 
 	return nil
 }
 
-func (h *TaskHandler) listContextsInteractive(ctx context.Context) error {
+func (h *TaskHandler) listContextsInteractive(ctx context.Context, todoTxt bool) error {
 	fmt.Println("Interactive context listing not implemented yet - using static mode")
-	return h.listContextsStatic(ctx)
+	return h.listContextsStatic(ctx, todoTxt)
 }
 
 func (h *TaskHandler) listTagsStatic(ctx context.Context) error {
