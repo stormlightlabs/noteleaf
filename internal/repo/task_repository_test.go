@@ -42,6 +42,37 @@ func TestTaskRepository(t *testing.T) {
 		if task.Modified.IsZero() {
 			t.Error("Expected Modified timestamp to be set")
 		}
+
+		t.Run("Errors", func(t *testing.T) {
+			t.Run("when called with duplicate UUID", func(t *testing.T) {
+				task1 := CreateSampleTask()
+				task1.UUID = "duplicate-test-uuid"
+
+				_, err := repo.Create(ctx, task1)
+				if err != nil {
+					t.Fatalf("Failed to create first task: %v", err)
+				}
+
+				task2 := CreateSampleTask()
+				task2.UUID = "duplicate-test-uuid"
+
+				_, err = repo.Create(ctx, task2)
+				if err == nil {
+					t.Error("Expected error when creating task with duplicate UUID")
+				}
+			})
+
+			t.Run("when called with context cancellation", func(t *testing.T) {
+				cancelCtx, cancel := context.WithCancel(ctx)
+				cancel()
+
+				task := CreateSampleTask()
+				_, err := repo.Create(cancelCtx, task)
+				if err == nil {
+					t.Error("Expected error with cancelled context")
+				}
+			})
+		})
 	})
 
 	t.Run("Get Task", func(t *testing.T) {
@@ -124,6 +155,25 @@ func TestTaskRepository(t *testing.T) {
 		if updated.End == nil {
 			t.Error("Expected end time to be set")
 		}
+
+		t.Run("Update Task Error Cases", func(t *testing.T) {
+			t.Run("when called with context cancellation", func(t *testing.T) {
+				task := CreateSampleTask()
+				_, err := repo.Create(ctx, task)
+				if err != nil {
+					t.Fatalf("Failed to create task: %v", err)
+				}
+
+				cancelCtx, cancel := context.WithCancel(ctx)
+				cancel()
+
+				task.Description = "Updated"
+				err = repo.Update(cancelCtx, task)
+				if err == nil {
+					t.Error("Expected error with cancelled context")
+				}
+			})
+		})
 	})
 
 	t.Run("Delete Task", func(t *testing.T) {
@@ -277,6 +327,31 @@ func TestTaskRepository(t *testing.T) {
 				t.Errorf("Expected description %s, got %s", task1.Description, result.Description)
 			}
 		})
+
+		t.Run("GetByUUID with invalid UUID", func(t *testing.T) {
+			_, err := repo.GetByUUID(ctx, "invalid-uuid-format")
+			if err == nil {
+				t.Error("Expected error with invalid UUID format")
+			}
+		})
+
+		t.Run("GetByUUID with non-existent UUID", func(t *testing.T) {
+			nonExistentUUID := newUUID()
+			_, err := repo.GetByUUID(ctx, nonExistentUUID)
+			if err == nil {
+				t.Error("Expected error with non-existent UUID")
+			}
+		})
+
+		t.Run("GetByUUID with context cancellation", func(t *testing.T) {
+			cancelCtx, cancel := context.WithCancel(ctx)
+			cancel()
+
+			_, err := repo.GetByUUID(cancelCtx, task1.UUID)
+			if err == nil {
+				t.Error("Expected error with cancelled context")
+			}
+		})
 	})
 
 	t.Run("Count", func(t *testing.T) {
@@ -323,6 +398,16 @@ func TestTaskRepository(t *testing.T) {
 
 			if count < 1 {
 				t.Errorf("Expected at least 1 completed task, got %d", count)
+			}
+		})
+
+		t.Run("Count with context cancellation", func(t *testing.T) {
+			cancelCtx, cancel := context.WithCancel(ctx)
+			cancel()
+
+			_, err := repo.Count(cancelCtx, TaskListOptions{})
+			if err == nil {
+				t.Error("Expected error with cancelled context")
 			}
 		})
 	})
@@ -776,7 +861,6 @@ func TestTaskRepository_GetContexts(t *testing.T) {
 	repo := NewTaskRepository(db)
 	ctx := context.Background()
 
-	// Create tasks with different contexts
 	task1 := CreateSampleTask()
 	task1.Context = "work"
 	_, err := repo.Create(ctx, task1)

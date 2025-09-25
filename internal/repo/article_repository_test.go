@@ -423,6 +423,16 @@ func TestArticleRepository(t *testing.T) {
 			AssertNoError(t, err, "Failed to count articles")
 			AssertEqual(t, int64(0), count, "Expected 0 articles")
 		})
+
+		t.Run("Count with context cancellation", func(t *testing.T) {
+			cancelCtx, cancel := context.WithCancel(ctx)
+			cancel()
+
+			_, err := repo.Count(cancelCtx, nil)
+			if err == nil {
+				t.Error("Expected error with cancelled context")
+			}
+		})
 	})
 
 	t.Run("Validate", func(t *testing.T) {

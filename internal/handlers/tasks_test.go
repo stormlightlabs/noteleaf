@@ -1026,5 +1026,119 @@ func TestTaskHandler(t *testing.T) {
 				}
 			})
 		})
+
+		t.Run("contextListStaticMode", func(t *testing.T) {
+			oldStdout := os.Stdout
+			defer func() { os.Stdout = oldStdout }()
+
+			r, w, _ := os.Pipe()
+			os.Stdout = w
+
+			outputChan := make(chan string, 1)
+			go func() {
+				var buf bytes.Buffer
+				buf.ReadFrom(r)
+				outputChan <- buf.String()
+			}()
+
+			t.Run("lists contexts with tasks", func(t *testing.T) {
+				err := handler.listContextsStatic(ctx, false)
+				w.Close()
+				capturedOutput := <-outputChan
+
+				if err != nil {
+					t.Errorf("listContextsStatic should succeed: %v", err)
+				}
+				if !strings.Contains(capturedOutput, "test-context") {
+					t.Error("Output should contain 'test-context' context")
+				}
+			})
+
+			r, w, _ = os.Pipe()
+			os.Stdout = w
+			go func() {
+				var buf bytes.Buffer
+				buf.ReadFrom(r)
+				outputChan <- buf.String()
+			}()
+
+			t.Run("lists contexts with todo.txt format", func(t *testing.T) {
+				err := handler.listContextsStatic(ctx, true)
+				w.Close()
+				capturedOutput := <-outputChan
+
+				if err != nil {
+					t.Errorf("listContextsStatic with todoTxt should succeed: %v", err)
+				}
+				if !strings.Contains(capturedOutput, "@test-context") {
+					t.Error("Output should contain '@test-context' in todo.txt format")
+				}
+			})
+
+			t.Run("handles no contexts", func(t *testing.T) {
+				_, cleanup2 := setupTaskTest(t)
+				defer cleanup2()
+
+				handler2, err := NewTaskHandler()
+				if err != nil {
+					t.Fatalf("Failed to create handler: %v", err)
+				}
+				defer handler2.Close()
+
+				r, w, _ = os.Pipe()
+				os.Stdout = w
+				go func() {
+					var buf bytes.Buffer
+					buf.ReadFrom(r)
+					outputChan <- buf.String()
+				}()
+
+				err = handler2.listContextsStatic(ctx, false)
+				w.Close()
+				capturedOutput := <-outputChan
+
+				if err != nil {
+					t.Errorf("listContextsStatic with no contexts should succeed: %v", err)
+				}
+				if !strings.Contains(capturedOutput, "No contexts found") {
+					t.Error("Output should contain 'No contexts found'")
+				}
+			})
+
+			t.Run("handles repository error", func(t *testing.T) {
+				cancelCtx, cancel := context.WithCancel(ctx)
+				cancel()
+
+				err := handler.listContextsStatic(cancelCtx, false)
+				if err == nil {
+					t.Error("Expected error with cancelled context")
+				}
+				if !strings.Contains(err.Error(), "failed to list tasks for contexts") {
+					t.Errorf("Expected specific error message, got: %v", err)
+				}
+			})
+
+			t.Run("counts tasks per context correctly", func(t *testing.T) {
+				r, w, _ = os.Pipe()
+				os.Stdout = w
+				go func() {
+					var buf bytes.Buffer
+					buf.ReadFrom(r)
+					outputChan <- buf.String()
+				}()
+
+				err := handler.listContextsStatic(ctx, false)
+				w.Close()
+				capturedOutput := <-outputChan
+
+				if err != nil {
+					t.Errorf("listContextsStatic should succeed: %v", err)
+				}
+
+				if !strings.Contains(capturedOutput, "test-context (2 tasks)") {
+					t.Error("Output should show correct count for test-context context")
+				}
+			})
+		})
 	})
 }

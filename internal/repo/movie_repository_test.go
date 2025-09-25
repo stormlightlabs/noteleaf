@@ -228,5 +228,15 @@ func TestMovieRepository(t *testing.T) {
 			AssertNoError(t, err, "Failed to count high-rated movies")
 			AssertEqual(t, int64(2), count, "Expected 2 movies with rating >= 8.0")
 		})
+
+		t.Run("Count with context cancellation", func(t *testing.T) {
+			cancelCtx, cancel := context.WithCancel(ctx)
+			cancel()
+
+			_, err := repo.Count(cancelCtx, MovieListOptions{})
+			if err == nil {
+				t.Error("Expected error with cancelled context")
+			}
+		})
 	})
 }

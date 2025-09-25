@@ -461,5 +461,15 @@ func TestTVRepository(t *testing.T) {
 				t.Errorf("Expected 3 TV shows with rating >= 8.0, got %d", count)
 			}
 		})
+
+		t.Run("Count with context cancellation", func(t *testing.T) {
+			cancelCtx, cancel := context.WithCancel(ctx)
+			cancel()
+
+			_, err := repo.Count(cancelCtx, TVListOptions{})
+			if err == nil {
+				t.Error("Expected error with cancelled context")
+			}
+		})
 	})
 }

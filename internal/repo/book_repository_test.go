@@ -313,5 +313,15 @@ func TestBookRepository(t *testing.T) {
 			AssertNoError(t, err, "Failed to count high-rated books")
 			AssertEqual(t, int64(3), count, "Expected 3 books with rating >= 4.0")
 		})
+
+		t.Run("Count with context cancellation", func(t *testing.T) {
+			cancelCtx, cancel := context.WithCancel(ctx)
+			cancel()
+
+			_, err := repo.Count(cancelCtx, BookListOptions{})
+			if err == nil {
+				t.Error("Expected error with cancelled context")
+			}
+		})
 	})
 }
