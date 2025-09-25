@@ -3,13 +3,18 @@ package repo
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jaswdr/faker/v2"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stormlightlabs/noteleaf/internal/models"
 )
+
+var fake = faker.New()
 
 // CreateTestDB creates an in-memory SQLite database with the full schema for testing
 func CreateTestDB(t *testing.T) *sql.DB {
@@ -99,6 +104,18 @@ func CreateTestDB(t *testing.T) *sql.DB {
 			modified DATETIME DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
 		);
+
+		CREATE TABLE IF NOT EXISTS articles (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			url TEXT UNIQUE NOT NULL,
+			title TEXT NOT NULL,
+			author TEXT,
+			date TEXT,
+			markdown_path TEXT NOT NULL,
+			html_path TEXT NOT NULL,
+			created DATETIME DEFAULT CURRENT_TIMESTAMP,
+			modified DATETIME DEFAULT CURRENT_TIMESTAMP
+		);
 	`
 
 	if _, err := db.Exec(schema); err != nil {
@@ -186,6 +203,61 @@ func CreateSampleTimeEntry(taskID int64) *models.TimeEntry {
 	}
 }
 
+func CreateSampleArticle() *models.Article {
+	return &models.Article{
+		URL:          "https://example.com/test-article",
+		Title:        "Test Article",
+		Author:       "Test Author",
+		Date:         "2024-01-01",
+		MarkdownPath: "/path/test-article.md",
+		HTMLPath:     "/path/test-article.html",
+		Created:      time.Now(),
+		Modified:     time.Now(),
+	}
+}
+
+func fakeHTMLFile(f faker.Faker) string {
+	original := f.File().AbsoluteFilePath(2)
+	split := strings.Split(original, ".")
+	split[len(split)-1] = "html"
+
+	return strings.Join(split, ".")
+}
+
+func fakeMDFile(f faker.Faker) string {
+	original := f.File().AbsoluteFilePath(2)
+	split := strings.Split(original, ".")
+	split[len(split)-1] = "md"
+
+	return strings.Join(split, ".")
+}
+
+func FakeTime(f faker.Faker) time.Time {
+	return f.Time().Time(time.Now())
+}
+
+func CreateFakeArticle() *models.Article {
+	return &models.Article{
+		URL:          fake.Internet().URL(),
+		Title:        strings.Join(fake.Lorem().Words(3), " "),
+		Author:       fmt.Sprintf("%v %v", fake.Person().FirstName(), fake.Person().LastName()),
+		Date:         fake.Time().Time(time.Now()).Format("2006-01-02"),
+		MarkdownPath: fakeMDFile(fake),
+		HTMLPath:     fakeHTMLFile(fake),
+		Created:      time.Now(),
+		Modified:     time.Now(),
+	}
+}
+
+func CreateFakeArticles(count int) []*models.Article {
+	articles := make([]*models.Article, count)
+	for i := range count {
+		articles[i] = CreateFakeArticle()
+	}
+
+	return articles
+}
+
 // Test helpers for common operations
 func AssertNoError(t *testing.T, err error, msg string) {
 	t.Helper()
@@ -229,6 +301,13 @@ func AssertFalse(t *testing.T, condition bool, msg string) {
 	}
 }
 
+func AssertContains(t *testing.T, str, substr, msg string) {
+	t.Helper()
+	if !strings.Contains(str, substr) {
+		t.Fatalf("%s: expected string '%s' to contain '%s'", msg, str, substr)
+	}
+}
+
 // SetupTestData creates sample data in the database and returns the repositories
 func SetupTestData(t *testing.T, db *sql.DB) *Repositories {
 	ctx := context.Background()
@@ -239,9 +318,9 @@ func SetupTestData(t *testing.T, db *sql.DB) *Repositories {
 	task1.Description = "Sample Task 1"
 	task1.Status = "pending"
 	task1.Priority = "high"
-	
+
 	task2 := CreateSampleTask()
-	task2.Description = "Sample Task 2"  
+	task2.Description = "Sample Task 2"
 	task2.Status = "completed"
 	task2.Priority = "low"
 
@@ -257,8 +336,8 @@ func SetupTestData(t *testing.T, db *sql.DB) *Repositories {
 	book1 := CreateSampleBook()
 	book1.Title = "Sample Book 1"
 	book1.Status = "reading"
-	
-	book2 := CreateSampleBook() 
+
+	book2 := CreateSampleBook()
 	book2.Title = "Sample Book 2"
 	book2.Status = "finished"
 
@@ -267,14 +346,14 @@ func SetupTestData(t *testing.T, db *sql.DB) *Repositories {
 	book1.ID = bookID1
 
 	bookID2, err := repos.Books.Create(ctx, book2)
-	AssertNoError(t, err, "Failed to create sample book 2")  
+	AssertNoError(t, err, "Failed to create sample book 2")
 	book2.ID = bookID2
 
 	// Create sample movies
 	movie1 := CreateSampleMovie()
 	movie1.Title = "Sample Movie 1"
 	movie1.Status = "queued"
-	
+
 	movie2 := CreateSampleMovie()
 	movie2.Title = "Sample Movie 2"
 	movie2.Status = "watched"
@@ -291,7 +370,7 @@ func SetupTestData(t *testing.T, db *sql.DB) *Repositories {
 	tv1 := CreateSampleTVShow()
 	tv1.Title = "Sample TV Show 1"
 	tv1.Status = "queued"
-	
+
 	tv2 := CreateSampleTVShow()
 	tv2.Title = "Sample TV Show 2"
 	tv2.Status = "watching"
@@ -308,7 +387,7 @@ func SetupTestData(t *testing.T, db *sql.DB) *Repositories {
 	note1 := CreateSampleNote()
 	note1.Title = "Sample Note 1"
 	note1.Content = "Content for note 1"
-	
+
 	note2 := CreateSampleNote()
 	note2.Title = "Sample Note 2"
 	note2.Content = "Content for note 2"

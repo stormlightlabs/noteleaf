@@ -321,6 +321,9 @@ func TestRepositories(t *testing.T) {
 			if repos.Notes == nil {
 				t.Error("Notes repository should be initialized")
 			}
+			if repos.Articles == nil {
+				t.Error("Articles repository should be initialized")
+			}
 		})
 
 	})

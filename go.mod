@@ -15,12 +15,15 @@ require (
 	golang.org/x/time v0.12.0
 )
 
-require github.com/gomarkdown/markdown v0.0.0-20250810172220-2e2c11897d1a // indirect
+require (
+	github.com/gomarkdown/markdown v0.0.0-20250810172220-2e2c11897d1a
+	github.com/jaswdr/faker/v2 v2.8.0
+)
 
 require (
 	github.com/PuerkitoBio/goquery v1.10.3
 	github.com/andybalholm/cascadia v1.3.3 // indirect
-	github.com/antchfx/htmlquery v1.3.4 // indirect
+	github.com/antchfx/htmlquery v1.3.4
 	github.com/antchfx/xmlquery v1.4.4 // indirect
 	github.com/antchfx/xpath v1.3.3 // indirect
 	github.com/bits-and-blooms/bitset v1.22.0 // indirect

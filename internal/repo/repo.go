@@ -1,6 +1,14 @@
 package repo
 
-import "database/sql"
+import (
+	"database/sql"
+
+	"github.com/stormlightlabs/noteleaf/internal/models"
+)
+
+type Repository interface {
+	Validate(models.Model) error
+}
 
 // Repositories provides access to all resource repositories
 type Repositories struct {
@@ -10,9 +18,10 @@ type Repositories struct {
 	Books       *BookRepository
 	Notes       *NoteRepository
 	TimeEntries *TimeEntryRepository
+	Articles    *ArticleRepository
 }
 
-// NewRepositories creates a new set of repositories
+// NewRepositories creates a new set of [Repositories]
 func NewRepositories(db *sql.DB) *Repositories {
 	return &Repositories{
 		Tasks:       NewTaskRepository(db),
@@ -21,5 +30,6 @@ func NewRepositories(db *sql.DB) *Repositories {
 		Books:       NewBookRepository(db),
 		Notes:       NewNoteRepository(db),
 		TimeEntries: NewTimeEntryRepository(db),
+		Articles:    NewArticleRepository(db),
 	}
 }
