@@ -112,7 +112,7 @@ func createTestFields() []Field {
 	return []Field{
 		{Name: "name", Title: "Name", Width: 20},
 		{Name: "status", Title: "Status", Width: 12},
-		{Name: "priority", Title: "Priority", Width: 10, Formatter: func(v interface{}) string {
+		{Name: "priority", Title: "Priority", Width: 10, Formatter: func(v any) string {
 			return strings.ToUpper(fmt.Sprintf("%v", v))
 		}},
 		{Name: "project", Title: "Project", Width: 15},
@@ -252,7 +252,7 @@ func TestDataTable(t *testing.T) {
 			})
 
 			opts := DataOptions{
-				Filters: map[string]interface{}{
+				Filters: map[string]any{
 					"status": "active",
 				},
 			}
@@ -694,7 +694,7 @@ func TestDataTable(t *testing.T) {
 
 		t.Run("field formatters", func(t *testing.T) {
 			fields := []Field{
-				{Name: "priority", Title: "Priority", Width: 10, Formatter: func(v interface{}) string {
+				{Name: "priority", Title: "Priority", Width: 10, Formatter: func(v any) string {
 					return strings.ToUpper(fmt.Sprintf("%v", v))
 				}},
 			}
@@ -878,7 +878,7 @@ func TestDataTable(t *testing.T) {
 		t.Run("field without formatter", func(t *testing.T) {
 			field := Field{Name: "test"}
 
-			record := NewMockRecord(1, map[string]interface{}{
+			record := NewMockRecord(1, map[string]any{
 				"test": "value",
 			})
 
@@ -893,12 +893,12 @@ func TestDataTable(t *testing.T) {
 		t.Run("field with formatter", func(t *testing.T) {
 			field := Field{
 				Name: "test",
-				Formatter: func(v interface{}) string {
+				Formatter: func(v any) string {
 					return strings.ToUpper(fmt.Sprintf("%v", v))
 				},
 			}
 
-			record := NewMockRecord(1, map[string]interface{}{
+			record := NewMockRecord(1, map[string]any{
 				"test": "value",
 			})
 

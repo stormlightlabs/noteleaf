@@ -181,7 +181,7 @@ func ExtractTVSeriesMetadata(r io.Reader) (*TVSeries, error) {
 	var series TVSeries
 	found := false
 	doc.Find("script[type='application/ld+json']").Each(func(i int, s *goquery.Selection) {
-		var tmp map[string]interface{}
+		var tmp map[string]any
 		if err := json.Unmarshal([]byte(s.Text()), &tmp); err == nil {
 			if t, ok := tmp["@type"].(string); ok && t == "TVSeries" {
 				if err := json.Unmarshal([]byte(s.Text()), &series); err == nil {

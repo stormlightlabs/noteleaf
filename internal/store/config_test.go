@@ -14,7 +14,7 @@ func TestDefaultConfig(t *testing.T) {
 		t.Fatal("DefaultConfig should not return nil")
 	}
 
-	expectedDefaults := map[string]interface{}{
+	expectedDefaults := map[string]any{
 		"DateFormat":   "2006-01-02",
 		"ColorScheme":  "default",
 		"DefaultView":  "list",

@@ -481,6 +481,18 @@ func TestCommandExecution(t *testing.T) {
 				t.Error("expected movie remove command to fail with non-numeric ID")
 			}
 		})
+
+		t.Run("watched command", func(t *testing.T) {
+			handler, cleanup := createTestMovieHandler(t)
+			defer cleanup()
+
+			cmd := NewMovieCommand(handler).Create()
+			cmd.SetArgs([]string{"watched", "1"})
+			err := cmd.Execute()
+			if err == nil {
+				t.Error("expected movie watched command to fail with non-existent ID")
+			}
+		})
 	})
 
 	t.Run("TV Commands", func(t *testing.T) {
@@ -552,6 +564,30 @@ func TestCommandExecution(t *testing.T) {
 				t.Error("expected tv remove command to fail with non-numeric ID")
 			}
 		})
+
+		t.Run("watching command", func(t *testing.T) {
+			handler, cleanup := createTestTVHandler(t)
+			defer cleanup()
+
+			cmd := NewTVCommand(handler).Create()
+			cmd.SetArgs([]string{"watching", "1"})
+			err := cmd.Execute()
+			if err == nil {
+				t.Error("expected tv watching command to fail with non-existent ID")
+			}
+		})
+
+		t.Run("watched command", func(t *testing.T) {
+			handler, cleanup := createTestTVHandler(t)
+			defer cleanup()
+
+			cmd := NewTVCommand(handler).Create()
+			cmd.SetArgs([]string{"watched", "1"})
+			err := cmd.Execute()
+			if err == nil {
+				t.Error("expected tv watched command to fail with non-existent ID")
+			}
+		})
 	})
 
 	t.Run("Book Commands", func(t *testing.T) {
@@ -600,6 +636,42 @@ func TestCommandExecution(t *testing.T) {
 			err := cmd.Execute()
 			if err == nil {
 				t.Error("expected book update command to fail with invalid status")
+			}
+		})
+
+		t.Run("reading command", func(t *testing.T) {
+			cmd := NewBookCommand(handler).Create()
+			cmd.SetArgs([]string{"reading", "1"})
+			err := cmd.Execute()
+			if err == nil {
+				t.Error("expected book reading command to fail with non-existent ID")
+			}
+		})
+
+		t.Run("finished command", func(t *testing.T) {
+			cmd := NewBookCommand(handler).Create()
+			cmd.SetArgs([]string{"finished", "1"})
+			err := cmd.Execute()
+			if err == nil {
+				t.Error("expected book finished command to fail with non-existent ID")
+			}
+		})
+
+		t.Run("progress command", func(t *testing.T) {
+			cmd := NewBookCommand(handler).Create()
+			cmd.SetArgs([]string{"progress", "1", "50"})
+			err := cmd.Execute()
+			if err == nil {
+				t.Error("expected book progress command to fail with non-existent ID")
+			}
+		})
+
+		t.Run("progress command with invalid percentage", func(t *testing.T) {
+			cmd := NewBookCommand(handler).Create()
+			cmd.SetArgs([]string{"progress", "1", "invalid"})
+			err := cmd.Execute()
+			if err == nil {
+				t.Error("expected book progress command to fail with invalid percentage")
 			}
 		})
 	})
@@ -743,6 +815,42 @@ func TestCommandExecution(t *testing.T) {
 				t.Errorf("note remove command failed: %v", err)
 			}
 		})
+
+		t.Run("edit command with invalid ID", func(t *testing.T) {
+			handler, cleanup := createTestNoteHandler(t)
+			defer cleanup()
+
+			cmd := NewNoteCommand(handler).Create()
+			cmd.SetArgs([]string{"edit", "invalid"})
+			err := cmd.Execute()
+			if err == nil {
+				t.Error("expected note edit command to fail with invalid ID")
+			}
+		})
+
+		t.Run("remove command with invalid ID", func(t *testing.T) {
+			handler, cleanup := createTestNoteHandler(t)
+			defer cleanup()
+
+			cmd := NewNoteCommand(handler).Create()
+			cmd.SetArgs([]string{"remove", "invalid"})
+			err := cmd.Execute()
+			if err == nil {
+				t.Error("expected note remove command to fail with invalid ID")
+			}
+		})
+
+		t.Run("list command with static flag", func(t *testing.T) {
+			handler, cleanup := createTestNoteHandler(t)
+			defer cleanup()
+
+			cmd := NewNoteCommand(handler).Create()
+			cmd.SetArgs([]string{"list", "--static", "test query"})
+			err := cmd.Execute()
+			if err != nil {
+				t.Errorf("note list command with query failed: %v", err)
+			}
+		})
 	})
 
 	t.Run("Task Commands", func(t *testing.T) {
@@ -815,6 +923,90 @@ func TestCommandExecution(t *testing.T) {
 			err := cmd.Execute()
 			if err != nil {
 				t.Errorf("task timesheet command failed: %v", err)
+			}
+		})
+
+		t.Run("view command", func(t *testing.T) {
+			handler, cleanup := createTestTaskHandler(t)
+			defer cleanup()
+
+			cmd := NewTaskCommand(handler).Create()
+			cmd.SetArgs([]string{"view", "1"})
+			err := cmd.Execute()
+			if err == nil {
+				t.Error("expected task view command to fail with non-existent ID")
+			}
+		})
+
+		t.Run("update command", func(t *testing.T) {
+			handler, cleanup := createTestTaskHandler(t)
+			defer cleanup()
+
+			cmd := NewTaskCommand(handler).Create()
+			cmd.SetArgs([]string{"update", "1"})
+			err := cmd.Execute()
+			if err == nil {
+				t.Error("expected task update command to fail with non-existent ID")
+			}
+		})
+
+		t.Run("start command", func(t *testing.T) {
+			handler, cleanup := createTestTaskHandler(t)
+			defer cleanup()
+
+			cmd := NewTaskCommand(handler).Create()
+			cmd.SetArgs([]string{"start", "1"})
+			err := cmd.Execute()
+			if err == nil {
+				t.Error("expected task start command to fail with non-existent ID")
+			}
+		})
+
+		t.Run("stop command", func(t *testing.T) {
+			handler, cleanup := createTestTaskHandler(t)
+			defer cleanup()
+
+			cmd := NewTaskCommand(handler).Create()
+			cmd.SetArgs([]string{"stop", "1"})
+			err := cmd.Execute()
+			if err == nil {
+				t.Error("expected task stop command to fail with non-existent ID")
+			}
+		})
+
+		t.Run("edit command", func(t *testing.T) {
+			handler, cleanup := createTestTaskHandler(t)
+			defer cleanup()
+
+			cmd := NewTaskCommand(handler).Create()
+			cmd.SetArgs([]string{"edit", "1"})
+			err := cmd.Execute()
+			if err == nil {
+				t.Error("expected task edit command to fail with non-existent ID")
+			}
+		})
+
+		t.Run("delete command", func(t *testing.T) {
+			handler, cleanup := createTestTaskHandler(t)
+			defer cleanup()
+
+			cmd := NewTaskCommand(handler).Create()
+			cmd.SetArgs([]string{"delete", "1"})
+			err := cmd.Execute()
+			if err == nil {
+				t.Error("expected task delete command to fail with non-existent ID")
+			}
+		})
+
+		t.Run("done command", func(t *testing.T) {
+			handler, cleanup := createTestTaskHandler(t)
+			defer cleanup()
+
+			cmd := NewTaskCommand(handler).Create()
+			cmd.SetArgs([]string{"done", "1"})
+			err := cmd.Execute()
+			if err == nil {
+				t.Error("expected task done command to fail with non-existent ID")
 			}
 		})
 	})

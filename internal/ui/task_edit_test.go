@@ -484,3 +484,262 @@ func TestRenderPriorityField(t *testing.T) {
 		t.Error("Priority picker should show current mode")
 	}
 }
+
+// TestUncoveredPriorityModes tests all priority mode switch cases
+func TestUncoveredPriorityModes(t *testing.T) {
+	t.Run("Priority Mode Display Strings", func(t *testing.T) {
+		task := &models.Task{ID: 1, Priority: models.PriorityHigh}
+		model := createTestTaskEditModel(task)
+		model.mode = priorityPicker
+
+		// Test numeric mode
+		model.priorityMode = priorityModeNumeric
+		result := model.renderPriorityPicker()
+		if !strings.Contains(result, "Numeric") {
+			t.Error("Priority picker should show Numeric mode")
+		}
+
+		// Test legacy mode
+		model.priorityMode = priorityModeLegacy
+		result = model.renderPriorityPicker()
+		if !strings.Contains(result, "Legacy") {
+			t.Error("Priority picker should show Legacy mode")
+		}
+	})
+
+	t.Run("Priority Display Type Switches", func(t *testing.T) {
+		tests := []struct {
+			name         string
+			priority     string
+			expectedType string
+		}{
+			{"Numeric Priority", "3", "numeric"},
+			{"Legacy Priority A", "A", "legacy"},
+			{"Legacy Priority E", "E", "legacy"},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				task := &models.Task{ID: 1, Priority: tt.priority}
+
+				displayType := GetPriorityDisplayType(task.Priority)
+				if displayType != tt.expectedType {
+					t.Errorf("Expected display type %s for priority %s, got %s (task:%v)", tt.expectedType, tt.priority, displayType, task)
+				}
+			})
+		}
+	})
+}
+
+func TestUncoveredKeyboardNavigation(t *testing.T) {
+	t.Run("Status Edit Key Binding", func(t *testing.T) {
+		task := &models.Task{ID: 1, Status: models.StatusTodo}
+		model := createTestTaskEditModel(task)
+
+		msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}}
+		updatedModel, _ := model.Update(msg)
+		model = updatedModel.(taskEditModel)
+
+		if model.mode != statusPicker {
+			t.Error("Expected status picker mode when 's' key is pressed")
+		}
+	})
+
+	t.Run("Priority Edit Key Binding", func(t *testing.T) {
+		task := &models.Task{ID: 1}
+		model := createTestTaskEditModel(task)
+
+		msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'p'}}
+		updatedModel, _ := model.Update(msg)
+		model = updatedModel.(taskEditModel)
+
+		if model.mode != priorityPicker {
+			t.Error("Expected priority picker mode when 'p' key is pressed")
+		}
+	})
+
+	t.Run("Window Resize Handling", func(t *testing.T) {
+		task := &models.Task{ID: 1}
+		model := createTestTaskEditModel(task)
+
+		msg := tea.WindowSizeMsg{Width: 120, Height: 40}
+		updatedModel, _ := model.Update(msg)
+		model = updatedModel.(taskEditModel)
+
+		if model.opts.Width != 120 {
+			t.Errorf("Expected width to be updated to 120, got %d", model.opts.Width)
+		}
+	})
+
+	t.Run("Escape Key in Status Picker", func(t *testing.T) {
+		task := &models.Task{ID: 1}
+		model := createTestTaskEditModel(task)
+		model.mode = statusPicker
+
+		msg := tea.KeyMsg{Type: tea.KeyEsc}
+		updatedModel, _ := model.Update(msg)
+		model = updatedModel.(taskEditModel)
+
+		if model.mode != fieldNavigation {
+			t.Error("Expected to return to field navigation when escape is pressed in status picker")
+		}
+	})
+
+	t.Run("Escape Key in Priority Picker", func(t *testing.T) {
+		task := &models.Task{ID: 1}
+		model := createTestTaskEditModel(task)
+		model.mode = priorityPicker
+
+		msg := tea.KeyMsg{Type: tea.KeyEsc}
+		updatedModel, _ := model.Update(msg)
+		model = updatedModel.(taskEditModel)
+
+		if model.mode != fieldNavigation {
+			t.Error("Expected to return to field navigation when escape is pressed in priority picker")
+		}
+	})
+
+	t.Run("Navigation Keys in Status Picker", func(t *testing.T) {
+		task := &models.Task{ID: 1}
+		model := createTestTaskEditModel(task)
+		model.mode = statusPicker
+		model.statusIndex = 0
+
+		// Test down/right navigation
+		msg := tea.KeyMsg{Type: tea.KeyDown}
+		updatedModel, _ := model.Update(msg)
+		model = updatedModel.(taskEditModel)
+
+		if model.statusIndex != 1 {
+			t.Errorf("Expected status index to be 1, got %d", model.statusIndex)
+		}
+
+		// Test up/left navigation
+		msg = tea.KeyMsg{Type: tea.KeyUp}
+		updatedModel, _ = model.Update(msg)
+		model = updatedModel.(taskEditModel)
+
+		if model.statusIndex != 0 {
+			t.Errorf("Expected status index to be 0, got %d", model.statusIndex)
+		}
+	})
+
+	t.Run("Navigation Keys in Priority Picker", func(t *testing.T) {
+		task := &models.Task{ID: 1}
+		model := createTestTaskEditModel(task)
+		model.mode = priorityPicker
+		model.priorityIndex = 0
+
+		// Test down/right navigation
+		msg := tea.KeyMsg{Type: tea.KeyDown}
+		updatedModel, _ := model.Update(msg)
+		model = updatedModel.(taskEditModel)
+
+		if model.priorityIndex != 1 {
+			t.Errorf("Expected priority index to be 1, got %d", model.priorityIndex)
+		}
+
+		// Test up/left navigation
+		msg = tea.KeyMsg{Type: tea.KeyUp}
+		updatedModel, _ = model.Update(msg)
+		model = updatedModel.(taskEditModel)
+
+		if model.priorityIndex != 0 {
+			t.Errorf("Expected priority index to be 0, got %d", model.priorityIndex)
+		}
+	})
+}
+
+func TestUncoveredFieldSwitches(t *testing.T) {
+	t.Run("Field Entry Switch Cases", func(t *testing.T) {
+		task := &models.Task{ID: 1, Description: "Test", Project: "TestProject"}
+		model := createTestTaskEditModel(task)
+
+		model.currentField = 3
+		model.mode = textInput
+
+		msg := tea.KeyMsg{Type: tea.KeyEnter}
+		updatedModel, _ := model.Update(msg)
+		model = updatedModel.(taskEditModel)
+
+		if model.mode != fieldNavigation {
+			t.Error("Expected to return to field navigation after entering project field")
+		}
+	})
+
+	t.Run("Field Update Switch Cases", func(t *testing.T) {
+		task := &models.Task{ID: 1, Description: "Test", Project: "TestProject"}
+		model := createTestTaskEditModel(task)
+		model.currentField = 3
+		model.mode = textInput
+
+		model.projectInput.SetValue("Updated Project")
+
+		msg := tea.KeyMsg{Type: tea.KeyEnter}
+		updatedModel, _ := model.Update(msg)
+		model = updatedModel.(taskEditModel)
+
+		if model.task.Project != "Updated Project" {
+			t.Errorf("Expected project to be updated to 'Updated Project', got %s", model.task.Project)
+		}
+	})
+}
+
+func TestTaskFieldAccessors(t *testing.T) {
+	t.Run("Task Field Value Extraction", func(t *testing.T) {
+		now := time.Now()
+		task := &models.Task{
+			ID:          1,
+			Description: "Test",
+			Tags:        []string{"tag1", "tag2"},
+			Due:         &now,
+			Entry:       now,
+			Start:       &now,
+			End:         &now,
+		}
+
+		tests := []struct {
+			field    string
+			expected any
+		}{
+			{"due", task.Due},
+			{"entry", task.Entry},
+			{"start", task.Start},
+			{"end", task.End},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.field, func(t *testing.T) {
+				result := getTaskFieldValue(task, tt.field)
+				if result != tt.expected {
+					t.Errorf("Expected %v for field %s, got %v", tt.expected, tt.field, result)
+				}
+			})
+		}
+	})
+}
+
+func getTaskFieldValue(task *models.Task, field string) any {
+	switch field {
+	case "description":
+		return task.Description
+	case "status":
+		return task.Status
+	case "priority":
+		return task.Priority
+	case "project":
+		return task.Project
+	case "tags":
+		return task.Tags
+	case "due":
+		return task.Due
+	case "entry":
+		return task.Entry
+	case "start":
+		return task.Start
+	case "end":
+		return task.End
+	default:
+		return nil
+	}
+}
