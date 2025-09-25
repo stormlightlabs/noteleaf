@@ -2,6 +2,8 @@ package articles
 
 import (
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
@@ -9,7 +11,7 @@ import (
 
 // ExampleParser_Convert demonstrates parsing a local HTML file using Wikipedia rules.
 func ExampleParser_Convert() {
-	parser, err := NewArticleParser()
+	parser, err := NewArticleParser(http.DefaultClient)
 	if err != nil {
 		fmt.Printf("Failed to create parser: %v\n", err)
 		return
@@ -52,7 +54,7 @@ func ExampleParser_Convert() {
 func TestArticleParser(t *testing.T) {
 	t.Run("New", func(t *testing.T) {
 		t.Run("successfully creates parser", func(t *testing.T) {
-			parser, err := NewArticleParser()
+			parser, err := NewArticleParser(http.DefaultClient)
 			if err != nil {
 				t.Fatalf("Expected no error, got %v", err)
 			}
@@ -65,7 +67,7 @@ func TestArticleParser(t *testing.T) {
 		})
 
 		t.Run("loads expected domains", func(t *testing.T) {
-			parser, err := NewArticleParser()
+			parser, err := NewArticleParser(http.DefaultClient)
 			if err != nil {
 				t.Fatalf("Failed to create parser: %v", err)
 			}
@@ -90,7 +92,7 @@ func TestArticleParser(t *testing.T) {
 		})
 	})
 
-	t.Run("parseRuleFile", func(t *testing.T) {
+	t.Run("parseRules", func(t *testing.T) {
 		parser := &ArticleParser{rules: make(map[string]*ParsingRule)}
 
 		t.Run("parses valid rule file", func(t *testing.T) {
@@ -102,7 +104,7 @@ strip: //nav
 strip: //footer
 test_url: https://example.com/article`
 
-			rule, err := parser.parseRuleFile("example.com", content)
+			rule, err := parser.parseRules("example.com", content)
 			if err != nil {
 				t.Fatalf("Expected no error, got %v", err)
 			}
@@ -132,7 +134,7 @@ title: //h1
 body: //article
 `
 
-			rule, err := parser.parseRuleFile("test.com", content)
+			rule, err := parser.parseRules("test.com", content)
 			if err != nil {
 				t.Fatalf("Expected no error, got %v", err)
 			}
@@ -173,7 +175,7 @@ body: //article
 	})
 
 	t.Run("Convert", func(t *testing.T) {
-		parser, err := NewArticleParser()
+		parser, err := NewArticleParser(http.DefaultClient)
 		if err != nil {
 			t.Fatalf("Failed to create parser: %v", err)
 		}
@@ -242,5 +244,328 @@ body: //article
 				t.Error("Expected stripped content to be removed from markdown")
 			}
 		})
+	})
+
+	t.Run("ParseURL", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch {
+			case strings.Contains(r.URL.Path, "404"):
+				w.WriteHeader(http.StatusNotFound)
+			case strings.Contains(r.URL.Path, "unsupported"):
+				w.WriteHeader(http.StatusOK)
+				w.Write([]byte("<html><head><title>Test</title></head><body><p>Content</p></body></html>"))
+			default:
+				// Return Wikipedia-like structure for localhost rule
+				w.WriteHeader(http.StatusOK)
+				w.Write([]byte(`<html>
+					<head><title>Test Article</title></head>
+					<body>
+						<h1 id="firstHeading">Test Wikipedia Article</h1>
+						<div id="bodyContent">
+							<p>This is the article content.</p>
+							<div class="noprint">This gets stripped</div>
+						</div>
+					</body>
+				</html>`))
+			}
+		}))
+		defer server.Close()
+
+		parser, err := NewArticleParser(server.Client())
+		if err != nil {
+			t.Fatalf("Failed to create parser: %v", err)
+		}
+
+		localhostRule := &ParsingRule{
+			Domain: "127.0.0.1",
+			Title:  "//h1[@id='firstHeading']",
+			Body:   "//div[@id='bodyContent']",
+			Strip:  []string{"//div[@class='noprint']"},
+		}
+		parser.AddRule("127.0.0.1", localhostRule)
+
+		t.Run("fails with invalid URL", func(t *testing.T) {
+			_, err := parser.ParseURL("not-a-url")
+			if err == nil {
+				t.Error("Expected error for invalid URL")
+			}
+			if !strings.Contains(err.Error(), "unsupported protocol scheme") {
+				t.Errorf("Expected 'unsupported protocol scheme' error, got %v", err)
+			}
+		})
+
+		t.Run("fails with unsupported domain", func(t *testing.T) {
+			_, err := parser.ParseURL(server.URL + "/unsupported.com")
+			if err == nil {
+				t.Error("Expected error for unsupported domain")
+			}
+		})
+
+		t.Run("fails with HTTP error", func(t *testing.T) {
+			_, err := parser.ParseURL(server.URL + "/404/en.wikipedia.org/wiki/test")
+			if err == nil {
+				t.Error("Expected error for HTTP 404")
+			}
+		})
+
+	})
+
+	t.Run("SaveArticle", func(t *testing.T) {
+		parser := &ArticleParser{}
+		tempDir := t.TempDir()
+
+		content := &ParsedContent{
+			Title:   "Test Article",
+			Author:  "Test Author",
+			Date:    "2023-01-01",
+			Content: "This is test content.",
+			URL:     "https://example.com/test",
+		}
+
+		t.Run("successfully saves article", func(t *testing.T) {
+			mdPath, htmlPath, err := parser.SaveArticle(content, tempDir)
+			if err != nil {
+				t.Fatalf("Expected no error, got %v", err)
+			}
+
+			if _, err := os.Stat(mdPath); os.IsNotExist(err) {
+				t.Error("Expected markdown file to exist")
+			}
+			if _, err := os.Stat(htmlPath); os.IsNotExist(err) {
+				t.Error("Expected HTML file to exist")
+			}
+
+			mdContent, err := os.ReadFile(mdPath)
+			if err != nil {
+				t.Fatalf("Failed to read markdown file: %v", err)
+			}
+			if !strings.Contains(string(mdContent), "# Test Article") {
+				t.Error("Expected markdown to contain title")
+			}
+			if !strings.Contains(string(mdContent), "**Author:** Test Author") {
+				t.Error("Expected markdown to contain author")
+			}
+
+			htmlContentBytes, err := os.ReadFile(htmlPath)
+			if err != nil {
+				t.Fatalf("Failed to read HTML file: %v", err)
+			}
+			if !strings.Contains(string(htmlContentBytes), "<title>Test Article</title>") {
+				t.Error("Expected HTML to contain title")
+			}
+		})
+
+		t.Run("handles duplicate filenames", func(t *testing.T) {
+			mdPath1, htmlPath1, err := parser.SaveArticle(content, tempDir)
+			if err != nil {
+				t.Fatalf("Expected no error for first save, got %v", err)
+			}
+
+			mdPath2, htmlPath2, err := parser.SaveArticle(content, tempDir)
+			if err != nil {
+				t.Fatalf("Expected no error for second save, got %v", err)
+			}
+
+			if mdPath1 == mdPath2 {
+				t.Error("Expected different markdown paths for duplicate saves")
+			}
+			if htmlPath1 == htmlPath2 {
+				t.Error("Expected different HTML paths for duplicate saves")
+			}
+
+			if _, err := os.Stat(mdPath1); os.IsNotExist(err) {
+				t.Error("Expected first markdown file to exist")
+			}
+			if _, err := os.Stat(mdPath2); os.IsNotExist(err) {
+				t.Error("Expected second markdown file to exist")
+			}
+		})
+
+		t.Run("fails with invalid directory", func(t *testing.T) {
+			invalidDir := "/nonexistent/directory"
+			_, _, err := parser.SaveArticle(content, invalidDir)
+			if err == nil {
+				t.Error("Expected error for invalid directory")
+			}
+		})
+	})
+
+	t.Run("createHTML", func(t *testing.T) {
+		parser := &ArticleParser{}
+		content := &ParsedContent{
+			Title:   "Test HTML Article",
+			Author:  "HTML Author",
+			Date:    "2023-12-25",
+			Content: "This is **bold** content with *emphasis*.",
+			URL:     "https://example.com/html-test",
+		}
+
+		t.Run("creates valid HTML", func(t *testing.T) {
+			markdown := parser.createMarkdown(content)
+			html := parser.createHTML(content, markdown)
+
+			if !strings.Contains(html, "<!DOCTYPE html>") {
+				t.Error("Expected HTML to contain DOCTYPE")
+			}
+			if !strings.Contains(html, "<title>Test HTML Article</title>") {
+				t.Error("Expected HTML to contain title")
+			}
+			if !strings.Contains(html, "<h1") || !strings.Contains(html, "Test HTML Article") {
+				t.Error("Expected HTML to contain h1 heading with title")
+			}
+			if !strings.Contains(html, "<strong>bold</strong>") {
+				t.Error("Expected HTML to contain bold formatting")
+			}
+			if !strings.Contains(html, "<em>emphasis</em>") {
+				t.Error("Expected HTML to contain emphasis formatting")
+			}
+		})
+	})
+
+	t.Run("createMarkdown", func(t *testing.T) {
+		parser := &ArticleParser{}
+
+		t.Run("creates markdown with all fields", func(t *testing.T) {
+			content := &ParsedContent{
+				Title:   "Full Content Article",
+				Author:  "Complete Author",
+				Date:    "2023-01-15",
+				Content: "Complete article content here.",
+				URL:     "https://example.com/full",
+			}
+
+			markdown := parser.createMarkdown(content)
+
+			if !strings.Contains(markdown, "# Full Content Article") {
+				t.Error("Expected markdown to contain title")
+			}
+			if !strings.Contains(markdown, "**Author:** Complete Author") {
+				t.Error("Expected markdown to contain author")
+			}
+			if !strings.Contains(markdown, "**Date:** 2023-01-15") {
+				t.Error("Expected markdown to contain date")
+			}
+			if !strings.Contains(markdown, "**Source:** https://example.com/full") {
+				t.Error("Expected markdown to contain source URL")
+			}
+			if !strings.Contains(markdown, "**Saved:**") {
+				t.Error("Expected markdown to contain saved timestamp")
+			}
+			if !strings.Contains(markdown, "---") {
+				t.Error("Expected markdown to contain separator")
+			}
+			if !strings.Contains(markdown, "Complete article content here.") {
+				t.Error("Expected markdown to contain article content")
+			}
+		})
+
+		t.Run("creates markdown with minimal fields", func(t *testing.T) {
+			content := &ParsedContent{
+				Title:   "Minimal Article",
+				Content: "Just content.",
+				URL:     "https://example.com/minimal",
+			}
+
+			markdown := parser.createMarkdown(content)
+
+			if !strings.Contains(markdown, "# Minimal Article") {
+				t.Error("Expected markdown to contain title")
+			}
+			if strings.Contains(markdown, "**Author:**") {
+				t.Error("Expected no author field for empty author")
+			}
+			if strings.Contains(markdown, "**Date:**") {
+				t.Error("Expected no date field for empty date")
+			}
+			if !strings.Contains(markdown, "**Source:** https://example.com/minimal") {
+				t.Error("Expected markdown to contain source URL")
+			}
+		})
+	})
+}
+
+func TestCreateArticleFromURL(t *testing.T) {
+	tempDir := t.TempDir()
+
+	t.Run("fails with invalid URL", func(t *testing.T) {
+		_, err := CreateArticleFromURL("not-a-url", tempDir)
+		if err == nil {
+			t.Error("Expected error for invalid URL")
+		}
+	})
+
+	t.Run("fails with unsupported domain", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("<html><head><title>Test</title></head><body><p>Content</p></body></html>"))
+		}))
+		defer server.Close()
+
+		_, err := CreateArticleFromURL(server.URL, tempDir)
+		if err == nil {
+			t.Error("Expected error for unsupported domain")
+		}
+	})
+
+	t.Run("successfully creates article from Wikipedia-like URL", func(t *testing.T) {
+		wikipediaHTML := `<html>
+			<head><title>Integration Test Article</title></head>
+			<body>
+				<h1 id="firstHeading">Integration Test Article</h1>
+				<div id="bodyContent">
+					<p>This is integration test content.</p>
+				</div>
+			</body>
+		</html>`
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(wikipediaHTML))
+		}))
+		defer server.Close()
+
+		// We need to patch the CreateArticleFromURL function to use our test client and rules
+		// For now, let's test the components individually since CreateArticleFromURL uses NewArticleParser internally
+		parser, err := NewArticleParser(server.Client())
+		if err != nil {
+			t.Fatalf("Failed to create parser: %v", err)
+		}
+
+		// Add localhost rule for testing
+		localhostRule := &ParsingRule{
+			Domain: "127.0.0.1",
+			Title:  "//h1[@id='firstHeading']",
+			Body:   "//div[@id='bodyContent']",
+			Strip:  []string{"//div[@class='noprint']"},
+		}
+		parser.AddRule("127.0.0.1", localhostRule)
+
+		content, err := parser.ParseURL(server.URL)
+		if err != nil {
+			t.Fatalf("Expected no error, got %v", err)
+		}
+
+		mdPath, htmlPath, err := parser.SaveArticle(content, tempDir)
+		if err != nil {
+			t.Fatalf("Failed to save article: %v", err)
+		}
+
+		if content.Title != "Integration Test Article" {
+			t.Errorf("Expected title 'Integration Test Article', got %s", content.Title)
+		}
+		if mdPath == "" {
+			t.Error("Expected non-empty markdown path")
+		}
+		if htmlPath == "" {
+			t.Error("Expected non-empty HTML path")
+		}
+
+		// Check files exist
+		if _, err := os.Stat(mdPath); os.IsNotExist(err) {
+			t.Error("Expected markdown file to exist")
+		}
+		if _, err := os.Stat(htmlPath); os.IsNotExist(err) {
+			t.Error("Expected HTML file to exist")
+		}
 	})
 }

@@ -34,12 +34,13 @@ type ParsedContent struct {
 
 // ParsingRule represents XPath rules for extracting content from a specific domain
 type ParsingRule struct {
-	Domain   string
-	Title    string
-	Author   string
-	Date     string
-	Body     string
-	Strip    []string // XPath selectors for elements to remove
+	Domain string
+	Title  string
+	Author string
+	Date   string
+	Body   string
+	// XPath selectors for elements to remove
+	Strip    []string
 	TestURLs []string
 }
 
@@ -57,13 +58,15 @@ type Parser interface {
 
 // ArticleParser implements the Parser interface
 type ArticleParser struct {
-	rules map[string]*ParsingRule
+	rules  map[string]*ParsingRule
+	client *http.Client
 }
 
-// NewArticleParser creates a new ArticleParser with loaded rules
-func NewArticleParser() (*ArticleParser, error) {
+// NewArticleParser creates a new ArticleParser with the specified HTTP client and loaded rules
+func NewArticleParser(client *http.Client) (*ArticleParser, error) {
 	parser := &ArticleParser{
-		rules: make(map[string]*ParsingRule),
+		rules:  make(map[string]*ParsingRule),
+		client: client,
 	}
 
 	if err := parser.loadRules(); err != nil {
@@ -71,6 +74,11 @@ func NewArticleParser() (*ArticleParser, error) {
 	}
 
 	return parser, nil
+}
+
+// AddRule adds or replaces a parsing rule for a specific domain
+func (p *ArticleParser) AddRule(domain string, rule *ParsingRule) {
+	p.rules[domain] = rule
 }
 
 func (p *ArticleParser) loadRules() error {
@@ -91,7 +99,7 @@ func (p *ArticleParser) loadRules() error {
 			return fmt.Errorf("failed to read rule file %s: %w", entry.Name(), err)
 		}
 
-		rule, err := p.parseRuleFile(domain, string(content))
+		rule, err := p.parseRules(domain, string(content))
 		if err != nil {
 			return fmt.Errorf("failed to parse rule file %s: %w", entry.Name(), err)
 		}
@@ -102,7 +110,7 @@ func (p *ArticleParser) loadRules() error {
 	return nil
 }
 
-func (p *ArticleParser) parseRuleFile(domain, content string) (*ParsingRule, error) {
+func (p *ArticleParser) parseRules(domain, content string) (*ParsingRule, error) {
 	rule := &ParsingRule{Domain: domain, Strip: []string{}}
 	scanner := bufio.NewScanner(strings.NewReader(content))
 	for scanner.Scan() {
@@ -152,7 +160,7 @@ func (p *ArticleParser) ParseURL(urlStr string) (*ParsedContent, error) {
 
 	domain := parsedURL.Hostname()
 
-	resp, err := http.Get(urlStr)
+	resp, err := p.client.Get(urlStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch URL: %w", err)
 	}
@@ -362,7 +370,7 @@ func (p *ArticleParser) createHTML(content *ParsedContent, markdownContent strin
 
 // CreateArticleFromURL is a convenience function that parses a URL and creates an instance of [models.Article]
 func CreateArticleFromURL(url, dir string) (*models.Article, error) {
-	parser, err := NewArticleParser()
+	parser, err := NewArticleParser(http.DefaultClient)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create parser: %w", err)
 	}
