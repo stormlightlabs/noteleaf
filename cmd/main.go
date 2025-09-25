@@ -164,11 +164,17 @@ func main() {
 		log.Fatalf("failed to create book handler: %v", err)
 	}
 
+	articleHandler, err := handlers.NewArticleHandler()
+	if err != nil {
+		log.Fatalf("failed to create article handler: %v", err)
+	}
+
 	root := rootCmd()
 
 	coreGroups := []CommandGroup{
 		NewTaskCommand(taskHandler),
 		NewNoteCommand(noteHandler),
+		NewArticleCommand(articleHandler),
 	}
 
 	for _, group := range coreGroups {

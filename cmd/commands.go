@@ -26,7 +26,7 @@ type CommandGroup interface {
 	Create() *cobra.Command
 }
 
-// MovieCommand implements CommandGroup for movie-related commands
+// MovieCommand implements [CommandGroup] for movie-related commands
 type MovieCommand struct {
 	handler *handlers.MovieHandler
 }
@@ -193,7 +193,7 @@ Use the -i flag for an interactive interface with navigation keys.`,
 	return root
 }
 
-// BookCommand implements CommandGroup for book-related commands
+// BookCommand implements [CommandGroup] for book-related commands
 type BookCommand struct {
 	handler *handlers.BookHandler
 }
@@ -405,6 +405,103 @@ func (c *NoteCommand) Create() *cobra.Command {
 				return c.handler.Delete(cmd.Context(), noteID)
 			}
 		},
+	})
+
+	return root
+}
+
+// ArticleCommand implements [CommandGroup] for article-related commands
+type ArticleCommand struct {
+	handler *handlers.ArticleHandler
+}
+
+// NewArticleCommand creates a new ArticleCommand with the given handler
+func NewArticleCommand(handler *handlers.ArticleHandler) *ArticleCommand {
+	return &ArticleCommand{handler: handler}
+}
+
+func (c *ArticleCommand) Create() *cobra.Command {
+	root := &cobra.Command{Use: "article", Short: "Manage saved articles"}
+
+	addCmd := &cobra.Command{
+		Use:   "add <url>",
+		Short: "Parse and save article from URL",
+		Long: `Parse and save article content from a supported website.
+
+The article will be parsed using domain-specific XPath rules and saved
+as both Markdown and HTML files. Article metadata is stored in the database.`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+
+			defer c.handler.Close()
+			return c.handler.Add(cmd.Context(), args[0])
+		},
+	}
+	root.AddCommand(addCmd)
+
+	listCmd := &cobra.Command{
+		Use:     "list [query]",
+		Short:   "List saved articles",
+		Aliases: []string{"ls"},
+		Long: `List saved articles with optional filtering.
+
+Use query to filter by title, or use flags for more specific filtering.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			author, _ := cmd.Flags().GetString("author")
+			limit, _ := cmd.Flags().GetInt("limit")
+
+			var query string
+			if len(args) > 0 {
+				query = strings.Join(args, " ")
+			}
+
+			defer c.handler.Close()
+			return c.handler.List(cmd.Context(), query, author, limit)
+		},
+	}
+	listCmd.Flags().String("author", "", "Filter by author")
+	listCmd.Flags().IntP("limit", "l", 0, "Limit number of results (0 = no limit)")
+	root.AddCommand(listCmd)
+
+	viewCmd := &cobra.Command{
+		Use:     "view <id>",
+		Short:   "View article details and content preview",
+		Aliases: []string{"show"},
+		Args:    cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if articleID, err := parseID("article", args); err != nil {
+				return err
+			} else {
+				defer c.handler.Close()
+				return c.handler.View(cmd.Context(), articleID)
+			}
+		},
+	}
+	root.AddCommand(viewCmd)
+
+	removeCmd := &cobra.Command{
+		Use:     "remove <id>",
+		Short:   "Remove article and associated files",
+		Aliases: []string{"rm", "delete"},
+		Args:    cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if articleID, err := parseID("article", args); err != nil {
+				return err
+			} else {
+				defer c.handler.Close()
+				return c.handler.Remove(cmd.Context(), articleID)
+			}
+		},
+	}
+	root.AddCommand(removeCmd)
+
+	originalHelpFunc := root.HelpFunc()
+	root.SetHelpFunc(func(cmd *cobra.Command, args []string) {
+		originalHelpFunc(cmd, args)
+
+		fmt.Println()
+		defer c.handler.Close()
+		c.handler.Help()
 	})
 
 	return root

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stormlightlabs/noteleaf/internal/articles"
 	"github.com/stormlightlabs/noteleaf/internal/models"
 	"github.com/stormlightlabs/noteleaf/internal/store"
 )
@@ -244,6 +245,26 @@ func (ah AssertionHelpers) AssertNoteNotExists(t *testing.T, handler *HandlerTes
 	}
 }
 
+// AssertArticleExists checks that an article exists in the database
+func (ah AssertionHelpers) AssertArticleExists(t *testing.T, handler *ArticleTestHelper, id int64) {
+	t.Helper()
+	ctx := context.Background()
+	_, err := handler.repos.Articles.Get(ctx, id)
+	if err != nil {
+		t.Errorf("Article %d should exist but got error: %v", id, err)
+	}
+}
+
+// AssertArticleNotExists checks that an article does not exist in the database
+func (ah AssertionHelpers) AssertArticleNotExists(t *testing.T, handler *ArticleTestHelper, id int64) {
+	t.Helper()
+	ctx := context.Background()
+	_, err := handler.repos.Articles.Get(ctx, id)
+	if err == nil {
+		t.Errorf("Article %d should not exist but was found", id)
+	}
+}
+
 // EnvironmentTestHelper provides environment manipulation utilities for testing
 type EnvironmentTestHelper struct {
 	originalVars map[string]string
@@ -281,6 +302,30 @@ func (eth *EnvironmentTestHelper) RestoreEnv() {
 			os.Setenv(key, value)
 		}
 	}
+}
+
+// CreateTestDir creates a temporary test directory and sets up environment
+func (eth *EnvironmentTestHelper) CreateTestDir(t *testing.T) (string, error) {
+	tempDir, err := os.MkdirTemp("", "noteleaf-test-*")
+	if err != nil {
+		return "", err
+	}
+
+	eth.SetEnv("XDG_CONFIG_HOME", tempDir)
+
+	ctx := context.Background()
+	err = Setup(ctx, []string{})
+	if err != nil {
+		os.RemoveAll(tempDir)
+		return "", err
+	}
+
+	t.Cleanup(func() {
+		eth.RestoreEnv()
+		os.RemoveAll(tempDir)
+	})
+
+	return tempDir, nil
 }
 
 // Helper function to check if string contains substring (case-insensitive)
@@ -340,6 +385,101 @@ func (fth *FileTestHelper) Cleanup() {
 		os.Remove(file)
 	}
 	fth.tempFiles = nil
+}
+
+// ArticleTestHelper wraps ArticleHandler with test-specific functionality
+type ArticleTestHelper struct {
+	*ArticleHandler
+	tempDir string
+	cleanup func()
+}
+
+// NewArticleTestHelper creates an ArticleHandler with isolated test database
+func NewArticleTestHelper(t *testing.T) *ArticleTestHelper {
+	tempDir, err := os.MkdirTemp("", "noteleaf-article-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+
+	oldConfigHome := os.Getenv("XDG_CONFIG_HOME")
+	os.Setenv("XDG_CONFIG_HOME", tempDir)
+
+	cleanup := func() {
+		os.Setenv("XDG_CONFIG_HOME", oldConfigHome)
+		os.RemoveAll(tempDir)
+	}
+
+	ctx := context.Background()
+	err = Setup(ctx, []string{})
+	if err != nil {
+		cleanup()
+		t.Fatalf("Failed to setup database: %v", err)
+	}
+
+	handler, err := NewArticleHandler()
+	if err != nil {
+		cleanup()
+		t.Fatalf("Failed to create article handler: %v", err)
+	}
+
+	testHelper := &ArticleTestHelper{
+		ArticleHandler: handler,
+		tempDir:        tempDir,
+		cleanup:        cleanup,
+	}
+
+	t.Cleanup(func() {
+		testHelper.Close()
+		testHelper.cleanup()
+	})
+
+	return testHelper
+}
+
+// CreateTestArticle creates a test article and returns its ID
+func (ath *ArticleTestHelper) CreateTestArticle(t *testing.T, url, title, author, date string) int64 {
+	ctx := context.Background()
+
+	mdPath := filepath.Join(ath.tempDir, fmt.Sprintf("%s.md", title))
+	htmlPath := filepath.Join(ath.tempDir, fmt.Sprintf("%s.html", title))
+
+	mdContent := fmt.Sprintf("# %s\n\n**Author:** %s\n**Date:** %s\n\nTest content", title, author, date)
+	err := os.WriteFile(mdPath, []byte(mdContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test markdown file: %v", err)
+	}
+
+	htmlContent := fmt.Sprintf("<h1>%s</h1><p>Author: %s</p><p>Date: %s</p><p>Test content</p>", title, author, date)
+	err = os.WriteFile(htmlPath, []byte(htmlContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test HTML file: %v", err)
+	}
+
+	article := &models.Article{
+		URL:          url,
+		Title:        title,
+		Author:       author,
+		Date:         date,
+		MarkdownPath: mdPath,
+		HTMLPath:     htmlPath,
+		Created:      time.Now(),
+		Modified:     time.Now(),
+	}
+
+	id, err := ath.repos.Articles.Create(ctx, article)
+	if err != nil {
+		t.Fatalf("Failed to create test article: %v", err)
+	}
+	return id
+}
+
+// AddTestRule adds a parsing rule to the handler's parser for testing
+func (ath *ArticleTestHelper) AddTestRule(domain string, rule *articles.ParsingRule) {
+	if parser, ok := ath.parser.(*articles.ArticleParser); ok {
+		parser.AddRule(domain, rule)
+	} else {
+		panic("Could not cast parser to ArticleParser")
+	}
 }
 
 var Expect = AssertionHelpers{}

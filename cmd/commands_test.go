@@ -100,6 +100,19 @@ func createTestBookHandler(t *testing.T) (*handlers.BookHandler, func()) {
 	}
 }
 
+func createTestArticleHandler(t *testing.T) (*handlers.ArticleHandler, func()) {
+	cleanup := setupCommandTest(t)
+	handler, err := handlers.NewArticleHandler()
+	if err != nil {
+		cleanup()
+		t.Fatalf("Failed to create test article handler: %v", err)
+	}
+	return handler, func() {
+		handler.Close()
+		cleanup()
+	}
+}
+
 func findSubcommand(commands []string, target string) bool {
 	return slices.Contains(commands, target)
 }
@@ -121,11 +134,15 @@ func TestCommandGroup(t *testing.T) {
 		bookHandler, bookCleanup := createTestBookHandler(t)
 		defer bookCleanup()
 
+		articleHandler, articleCleanup := createTestArticleHandler(t)
+		defer articleCleanup()
+
 		var _ CommandGroup = NewTaskCommand(taskHandler)
 		var _ CommandGroup = NewMovieCommand(movieHandler)
 		var _ CommandGroup = NewTVCommand(tvHandler)
 		var _ CommandGroup = NewNoteCommand(noteHandler)
 		var _ CommandGroup = NewBookCommand(bookHandler)
+		var _ CommandGroup = NewArticleCommand(articleHandler)
 	})
 
 	t.Run("Create", func(t *testing.T) {
@@ -318,6 +335,39 @@ func TestCommandGroup(t *testing.T) {
 			}
 		})
 
+		t.Run("ArticleCommand", func(t *testing.T) {
+			handler, cleanup := createTestArticleHandler(t)
+			defer cleanup()
+
+			commands := NewArticleCommand(handler)
+			cmd := commands.Create()
+
+			if cmd == nil {
+				t.Fatal("Create returned nil")
+			}
+			if cmd.Use != "article" {
+				t.Errorf("Expected Use to be 'article', got '%s'", cmd.Use)
+			}
+			if cmd.Short != "Manage saved articles" {
+				t.Errorf("Expected Short to be 'Manage saved articles', got '%s'", cmd.Short)
+			}
+			if !cmd.HasSubCommands() {
+				t.Error("Expected command to have subcommands")
+			}
+
+			subcommands := cmd.Commands()
+			subcommandNames := make([]string, len(subcommands))
+			for i, subcmd := range subcommands {
+				subcommandNames[i] = subcmd.Use
+			}
+
+			for _, expected := range []string{"add <url>", "list [query]", "view <id>", "remove <id>"} {
+				if !findSubcommand(subcommandNames, expected) {
+					t.Errorf("Expected subcommand '%s' not found in %v", expected, subcommandNames)
+				}
+			}
+		})
+
 		t.Run("all command groups implement Create", func(t *testing.T) {
 			taskHandler, taskCleanup := createTestTaskHandler(t)
 			defer taskCleanup()
@@ -334,12 +384,16 @@ func TestCommandGroup(t *testing.T) {
 			bookHandler, bookCleanup := createTestBookHandler(t)
 			defer bookCleanup()
 
+			articleHandler, articleCleanup := createTestArticleHandler(t)
+			defer articleCleanup()
+
 			groups := []CommandGroup{
 				NewTaskCommand(taskHandler),
 				NewMovieCommand(movieHandler),
 				NewTVCommand(tvHandler),
 				NewNoteCommand(noteHandler),
 				NewBookCommand(bookHandler),
+				NewArticleCommand(articleHandler),
 			}
 
 			for i, group := range groups {
@@ -546,6 +600,83 @@ func TestCommandExecution(t *testing.T) {
 			err := cmd.Execute()
 			if err == nil {
 				t.Error("expected book update command to fail with invalid status")
+			}
+		})
+	})
+
+	t.Run("Article Commands", func(t *testing.T) {
+		handler, cleanup := createTestArticleHandler(t)
+		defer cleanup()
+
+		t.Run("list command - default", func(t *testing.T) {
+			cmd := NewArticleCommand(handler).Create()
+			cmd.SetArgs([]string{"list"})
+			err := cmd.Execute()
+			if err != nil {
+				t.Errorf("article list command failed: %v", err)
+			}
+		})
+
+		t.Run("help command", func(t *testing.T) {
+			cmd := NewArticleCommand(handler).Create()
+			cmd.SetArgs([]string{"help"})
+			err := cmd.Execute()
+			if err != nil {
+				t.Errorf("article help command failed: %v", err)
+			}
+		})
+
+		t.Run("add command with empty args", func(t *testing.T) {
+			cmd := NewArticleCommand(handler).Create()
+			cmd.SetArgs([]string{"add"})
+			err := cmd.Execute()
+			if err == nil {
+				t.Error("expected article add command to fail with empty args")
+			}
+		})
+
+		t.Run("add command with invalid URL", func(t *testing.T) {
+			cmd := NewArticleCommand(handler).Create()
+			cmd.SetArgs([]string{"add", "not-a-url"})
+			err := cmd.Execute()
+			if err == nil {
+				t.Error("expected article add command to fail with invalid URL")
+			}
+		})
+
+		t.Run("view command with non-existent article ID", func(t *testing.T) {
+			cmd := NewArticleCommand(handler).Create()
+			cmd.SetArgs([]string{"view", "999"})
+			err := cmd.Execute()
+			if err == nil {
+				t.Error("expected article view command to fail with non-existent ID")
+			}
+		})
+
+		t.Run("view command with non-numeric ID", func(t *testing.T) {
+			cmd := NewArticleCommand(handler).Create()
+			cmd.SetArgs([]string{"view", "invalid"})
+			err := cmd.Execute()
+			if err == nil {
+				t.Error("expected article view command to fail with non-numeric ID")
+			}
+		})
+
+		t.Run("remove command with non-existent article ID", func(t *testing.T) {
+			cmd := NewArticleCommand(handler).Create()
+			cmd.SetArgs([]string{"remove", "999"})
+			err := cmd.Execute()
+			if err == nil {
+				t.Error("expected article remove command to fail with non-existent ID")
+			}
+		})
+
+		t.Run("remove command with non-numeric ID", func(t *testing.T) {
+			cmd := NewArticleCommand(handler).Create()
+			cmd.SetArgs([]string{"remove", "invalid"})
+			err := cmd.Execute()
+			if err == nil {
+				t.Error("expected article remove command to fail with non-numeric ID")
 			}
 		})
 	})
