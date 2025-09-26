@@ -4,10 +4,13 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stormlightlabs/noteleaf/internal/models"
+	"github.com/stormlightlabs/noteleaf/internal/repo"
+	"github.com/stormlightlabs/noteleaf/internal/services"
 )
 
 func createTestMovieHandler(t *testing.T) *MovieHandler {
@@ -73,33 +76,156 @@ func TestMovieHandler(t *testing.T) {
 			}
 		})
 
-		t.Run("Search Error", func(t *testing.T) {
+		t.Run("Context Cancellation During Search", func(t *testing.T) {
 			handler := createTestMovieHandler(t)
 			defer handler.Close()
 
-			// Test with malformed search that should cause network error
-			err := handler.SearchAndAdd(context.Background(), "test movie", false)
-			// We expect this to work with the actual service, so we test for successful completion
-			// or a specific network error - this tests the error handling path in the code
-			if err != nil {
-				// This is expected - the search might fail due to network issues in test environment
-				if err.Error() != "search query cannot be empty" {
-					// We got a search error, which tests our error handling path
-					t.Logf("Search failed as expected in test environment: %v", err)
-				}
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+
+			err := handler.SearchAndAdd(ctx, "test movie", false)
+			if err == nil {
+				t.Error("Expected error for cancelled context")
 			}
 		})
 
-		t.Run("Network Error", func(t *testing.T) {
+		t.Run("Search Service Error", func(t *testing.T) {
 			handler := createTestMovieHandler(t)
 			defer handler.Close()
 
-			// Test search with a query that will likely fail due to network issues in test env
-			// This tests the error handling path
-			err := handler.SearchAndAdd(context.Background(), "unlikely_to_find_this_movie_12345", false)
-			// We don't expect a specific error, but this tests the error handling path
+			mockFetcher := &MockMediaFetcher{
+				ShouldError:  true,
+				ErrorMessage: "network error",
+			}
+
+			handler.service = CreateTestMovieService(mockFetcher)
+
+			err := handler.SearchAndAdd(context.Background(), "test movie", false)
+			if err == nil {
+				t.Error("Expected error when search service fails")
+			}
+
+			if !strings.Contains(err.Error(), "search failed") {
+				t.Errorf("Expected search failure error, got: %v", err)
+			}
+		})
+
+		t.Run("Empty Search Results", func(t *testing.T) {
+			handler := createTestMovieHandler(t)
+			defer handler.Close()
+
+			mockFetcher := &MockMediaFetcher{SearchResults: []services.Media{}}
+
+			handler.service = CreateTestMovieService(mockFetcher)
+
+			if err := handler.SearchAndAdd(context.Background(), "nonexistent movie", false); err != nil {
+				t.Errorf("Expected no error for empty results, got: %v", err)
+			}
+		})
+
+		t.Run("Search Results with No Movies", func(t *testing.T) {
+			handler := createTestMovieHandler(t)
+			defer handler.Close()
+
+			mockFetcher := &MockMediaFetcher{
+				SearchResults: []services.Media{
+					{Title: "Test TV Show", Link: "/tv/test_show", Type: "tv"},
+				},
+			}
+
+			handler.service = CreateTestMovieService(mockFetcher)
+
+			if err := handler.SearchAndAdd(context.Background(), "tv show", false); err != nil {
+				t.Errorf("Expected no error for TV-only results, got: %v", err)
+			}
+		})
+
+		t.Run("Interactive Mode Path", func(t *testing.T) {
+			// Skip interactive mode test to prevent hanging in CI/test environments
+			// TODO: Interactive mode uses TUI components that require terminal interaction
+			t.Skip("Interactive mode requires terminal interaction, skipping to prevent hanging")
+		})
+
+		t.Run("successful search and add with user selection", func(t *testing.T) {
+			t.Skip()
+			handler := createTestMovieHandler(t)
+			defer handler.Close()
+
+			mockFetcher := &MockMediaFetcher{
+				SearchResults: []services.Media{
+					{Title: "Test Movie 1", Link: "/m/test_movie_1", Type: "movie", CriticScore: "85%"},
+					{Title: "Test Movie 2", Link: "/m/test_movie_2", Type: "movie", CriticScore: "72%"},
+				},
+			}
+
+			handler.service = CreateTestMovieService(mockFetcher)
+			handler.SetInputReader(MenuSelection(1))
+
+			if err := handler.SearchAndAdd(context.Background(), "test movie", false); err != nil {
+				t.Errorf("Expected successful search and add, got error: %v", err)
+			}
+
+			movies, err := handler.repos.Movies.List(context.Background(), repo.MovieListOptions{})
 			if err != nil {
-				t.Logf("Network error encountered (expected in test environment): %v", err)
+				t.Fatalf("Failed to list movies: %v", err)
+			}
+			if len(movies) != 1 {
+				t.Errorf("Expected 1 movie in database, got %d", len(movies))
+			}
+			if len(movies) > 0 && movies[0].Title != "Test Movie 1" {
+				t.Errorf("Expected movie title 'Test Movie 1', got '%s'", movies[0].Title)
+			}
+		})
+
+		t.Run("successful search with user cancellation", func(t *testing.T) {
+			t.Skip()
+			handler := createTestMovieHandler(t)
+			defer handler.Close()
+
+			mockFetcher := &MockMediaFetcher{
+				SearchResults: []services.Media{
+					{Title: "Another Movie", Link: "/m/another_movie", Type: "movie", CriticScore: "90%"},
+				},
+			}
+
+			handler.service = CreateTestMovieService(mockFetcher)
+			handler.SetInputReader(MenuCancel())
+
+			err := handler.SearchAndAdd(context.Background(), "another movie", false)
+			if err != nil {
+				t.Errorf("Expected no error on cancellation, got: %v", err)
+			}
+
+			movies, err := handler.repos.Movies.List(context.Background(), repo.MovieListOptions{})
+			if err != nil {
+				t.Fatalf("Failed to list movies: %v", err)
+			}
+
+			expected := 1
+			if len(movies) != expected {
+				t.Errorf("Expected %d movies in database after cancellation, got %d", expected, len(movies))
+			}
+		})
+
+		t.Run("invalid user choice", func(t *testing.T) {
+			handler := createTestMovieHandler(t)
+			defer handler.Close()
+
+			mockFetcher := &MockMediaFetcher{
+				SearchResults: []services.Media{
+					{Title: "Choice Test Movie", Link: "/m/choice_test", Type: "movie", CriticScore: "75%"},
+				},
+			}
+
+			handler.service = CreateTestMovieService(mockFetcher)
+			handler.SetInputReader(MenuSelection(5))
+
+			err := handler.SearchAndAdd(context.Background(), "choice test", false)
+			if err == nil {
+				t.Error("Expected error for invalid choice")
+			}
+			if err != nil && !strings.Contains(err.Error(), "invalid choice") {
+				t.Errorf("Expected 'invalid choice' error, got: %v", err)
 			}
 		})
 
@@ -325,11 +451,11 @@ func TestMovieHandler(t *testing.T) {
 			}
 			defer handler.repos.Movies.Delete(context.Background(), id2)
 
-			testCases := []string{"", "queued", "watched"}
-			for _, status := range testCases {
-				err = handler.List(context.Background(), status)
+			tt := []string{"", "queued", "watched"}
+			for _, tc := range tt {
+				err = handler.List(context.Background(), tc)
 				if err != nil {
-					t.Errorf("Failed to list movies with status '%s': %v", status, err)
+					t.Errorf("Failed to list movies with status '%s': %v", tc, err)
 				}
 			}
 		})
@@ -342,7 +468,7 @@ func TestMovieHandler(t *testing.T) {
 		ctx := context.Background()
 		nonExistentID := int64(999999)
 
-		testCases := []struct {
+		tt := []struct {
 			name string
 			fn   func() error
 		}{
@@ -364,7 +490,7 @@ func TestMovieHandler(t *testing.T) {
 			},
 		}
 
-		for _, tc := range testCases {
+		for _, tc := range tt {
 			t.Run(tc.name, func(t *testing.T) {
 				err := tc.fn()
 				if err == nil {

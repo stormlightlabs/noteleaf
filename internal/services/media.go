@@ -6,22 +6,26 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
-	"github.com/gocolly/colly/v2"
 	"github.com/stormlightlabs/noteleaf/internal/models"
 	"golang.org/x/time/rate"
 )
 
+type MediaKind string
+
+const (
+	TVKind    MediaKind = "tv"
+	MovieKind MediaKind = "movie"
+)
+
 type Media struct {
-	Title string
-	Link  string
-	// "movie" or "tv"
-	Type           string
+	Title          string
+	Link           string
+	Type           MediaKind
 	CriticScore    string
 	CertifiedFresh bool
 }
@@ -95,13 +99,19 @@ type TVSeason struct {
 }
 
 type MovieService struct {
-	client  *http.Client
-	limiter *rate.Limiter
+	client   *http.Client
+	limiter  *rate.Limiter
+	fetcher  Fetchable
+	searcher Searchable
+	baseURL  string
 }
 
 type TVService struct {
-	client  *http.Client
-	limiter *rate.Limiter
+	client   *http.Client
+	limiter  *rate.Limiter
+	fetcher  Fetchable
+	searcher Searchable
+	baseURL  string
 }
 
 // ParseSearch parses Rotten Tomatoes search results HTML into Media entries.
@@ -126,17 +136,17 @@ func ParseSearch(r io.Reader) ([]Media, error) {
 
 			title := s.Find("a[slot='title']").Text()
 
-			var itemType string
+			var itemKind MediaKind
 			switch mediaType {
 			case "movie":
-				itemType = "movie"
+				itemKind = MovieKind
 			case "tvSeries":
-				itemType = "tv"
+				itemKind = TVKind
 			default:
 				if strings.HasPrefix(link, "/m/") {
-					itemType = "movie"
+					itemKind = MovieKind
 				} else if strings.HasPrefix(link, "/tv/") {
-					itemType = "tv"
+					itemKind = TVKind
 				}
 			}
 
@@ -153,7 +163,7 @@ func ParseSearch(r io.Reader) ([]Media, error) {
 			results = append(results, Media{
 				Title:          strings.TrimSpace(title),
 				Link:           link,
-				Type:           itemType,
+				Type:           itemKind,
 				CriticScore:    score,
 				CertifiedFresh: certified,
 			})
@@ -161,16 +171,6 @@ func ParseSearch(r io.Reader) ([]Media, error) {
 	})
 
 	return results, nil
-}
-
-// SearchRottenTomatoes fetches live search results for a query.
-var SearchRottenTomatoes = func(q string) ([]Media, error) {
-	searchURL := "https://www.rottentomatoes.com/search?search=" + url.QueryEscape(q)
-	html, err := FetchHTML(searchURL)
-	if err != nil {
-		return nil, err
-	}
-	return ParseSearch(strings.NewReader(html))
 }
 
 func ExtractTVSeriesMetadata(r io.Reader) (*TVSeries, error) {
@@ -269,49 +269,19 @@ func ExtractTVSeasonMetadata(r io.Reader) (*TVSeason, error) {
 	return &season, nil
 }
 
-var FetchHTML = func(url string) (string, error) {
-	var html string
-	c := colly.NewCollector(
-		colly.AllowedDomains("www.rottentomatoes.com", "rottentomatoes.com"),
-	)
-	c.OnResponse(func(r *colly.Response) { html = string(r.Body) })
-	if err := c.Visit(url); err != nil {
-		return "", err
-	}
-	return html, nil
-}
-
-var FetchTVSeries = func(url string) (*TVSeries, error) {
-	html, err := FetchHTML(url)
-	if err != nil {
-		return nil, err
-	}
-	return ExtractTVSeriesMetadata(strings.NewReader(html))
-}
-
-var FetchMovie = func(url string) (*Movie, error) {
-	html, err := FetchHTML(url)
-	if err != nil {
-		return nil, err
-	}
-	return ExtractMovieMetadata(strings.NewReader(html))
-}
-
-var FetchTVSeason = func(url string) (*TVSeason, error) {
-	html, err := FetchHTML(url)
-	if err != nil {
-		return nil, err
-	}
-	return ExtractTVSeasonMetadata(strings.NewReader(html))
-}
-
 // NewMovieService creates a new movie service with rate limiting
 func NewMovieService() *MovieService {
+	return NewMovieSrvWithOpts("https://www.rottentomatoes.com", &DefaultFetcher{}, &DefaultFetcher{})
+}
+
+// NewMovieSrvWithOpts creates a new movie service with custom dependencies (for testing)
+func NewMovieSrvWithOpts(baseURL string, fetcher Fetchable, searcher Searchable) *MovieService {
 	return &MovieService{
-		client: &http.Client{
-			Timeout: 30 * time.Second,
-		},
-		limiter: rate.NewLimiter(rate.Limit(requestsPerSecond), burstLimit),
+		client:   &http.Client{Timeout: 30 * time.Second},
+		limiter:  rate.NewLimiter(rate.Limit(requestsPerSecond), burstLimit),
+		baseURL:  baseURL,
+		fetcher:  fetcher,
+		searcher: searcher,
 	}
 }
 
@@ -321,7 +291,7 @@ func (s *MovieService) Search(ctx context.Context, query string, page, limit int
 		return nil, fmt.Errorf("rate limit wait failed: %w", err)
 	}
 
-	results, err := SearchRottenTomatoes(query)
+	results, err := s.searcher.Search(query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to search rotten tomatoes: %w", err)
 	}
@@ -340,7 +310,6 @@ func (s *MovieService) Search(ctx context.Context, query string, page, limit int
 		}
 	}
 
-	// Basic pagination approximation
 	start := (page - 1) * limit
 	end := start + limit
 	if start > len(movies) {
@@ -359,20 +328,20 @@ func (s *MovieService) Get(ctx context.Context, id string) (*models.Model, error
 		return nil, fmt.Errorf("rate limit wait failed: %w", err)
 	}
 
-	movieData, err := FetchMovie(id)
+	data, err := s.fetcher.MovieRequest(id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch movie: %w", err)
 	}
 
 	movie := &models.Movie{
-		Title:  movieData.Name,
+		Title:  data.Name,
 		Status: "queued",
 		Added:  time.Now(),
-		Notes:  movieData.Description,
+		Notes:  data.Description,
 	}
 
-	if movieData.DateCreated != "" {
-		if year, err := strconv.Atoi(strings.Split(movieData.DateCreated, "-")[0]); err == nil {
+	if data.DateCreated != "" {
+		if year, err := strconv.Atoi(strings.Split(data.DateCreated, "-")[0]); err == nil {
 			movie.Year = year
 		}
 	}
@@ -387,7 +356,7 @@ func (s *MovieService) Check(ctx context.Context) error {
 		return fmt.Errorf("rate limit wait failed: %w", err)
 	}
 
-	_, err := FetchHTML("https://www.rottentomatoes.com")
+	_, err := s.fetcher.MakeRequest(s.baseURL)
 	return err
 }
 
@@ -398,11 +367,17 @@ func (s *MovieService) Close() error {
 
 // NewTVService creates a new TV service with rate limiting
 func NewTVService() *TVService {
+	return NewTVServiceWithDeps("https://www.rottentomatoes.com", &DefaultFetcher{}, &DefaultFetcher{})
+}
+
+// NewTVServiceWithDeps creates a new TV service with custom dependencies (for testing)
+func NewTVServiceWithDeps(baseURL string, fetcher Fetchable, searcher Searchable) *TVService {
 	return &TVService{
-		client: &http.Client{
-			Timeout: 30 * time.Second,
-		},
-		limiter: rate.NewLimiter(rate.Limit(requestsPerSecond), burstLimit),
+		client:   &http.Client{Timeout: 30 * time.Second},
+		limiter:  rate.NewLimiter(rate.Limit(requestsPerSecond), burstLimit),
+		baseURL:  baseURL,
+		fetcher:  fetcher,
+		searcher: searcher,
 	}
 }
 
@@ -412,7 +387,7 @@ func (s *TVService) Search(ctx context.Context, query string, page, limit int) (
 		return nil, fmt.Errorf("rate limit wait failed: %w", err)
 	}
 
-	results, err := SearchRottenTomatoes(query)
+	results, err := s.searcher.Search(query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to search rotten tomatoes: %w", err)
 	}
@@ -449,7 +424,7 @@ func (s *TVService) Get(ctx context.Context, id string) (*models.Model, error) {
 		return nil, fmt.Errorf("rate limit wait failed: %w", err)
 	}
 
-	seriesData, err := FetchTVSeries(id)
+	seriesData, err := s.fetcher.TVRequest(id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch tv series: %w", err)
 	}
@@ -475,7 +450,7 @@ func (s *TVService) Check(ctx context.Context) error {
 		return fmt.Errorf("rate limit wait failed: %w", err)
 	}
 
-	_, err := FetchHTML("https://www.rottentomatoes.com")
+	_, err := s.fetcher.MakeRequest(s.baseURL)
 	return err
 }
 

@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/stormlightlabs/noteleaf/internal/models"
+	"github.com/stormlightlabs/noteleaf/internal/repo"
+	"github.com/stormlightlabs/noteleaf/internal/services"
 )
 
 func setupBookTest(t *testing.T) (string, func()) {
@@ -128,45 +130,199 @@ func TestBookHandler(t *testing.T) {
 				}
 			})
 
-			t.Run("handles empty search", func(t *testing.T) {
-				args := []string{""}
+			t.Run("context cancellation during search", func(t *testing.T) {
+				// Create cancelled context to test error handling
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+
+				args := []string{"test", "book"}
 				err := handler.SearchAndAdd(ctx, args, false)
-				if err != nil && !strings.Contains(err.Error(), "No books found") {
-					t.Errorf("Expected no error or 'No books found', got: %v", err)
+				if err == nil {
+					t.Error("Expected error for cancelled context")
 				}
 			})
 
-			t.Run("with options", func(t *testing.T) {
-				ctx := context.Background()
-				t.Run("fails with empty args", func(t *testing.T) {
-					args := []string{}
-					err := handler.SearchAndAdd(ctx, args, false)
-					if err == nil {
-						t.Error("Expected error for empty args")
-					}
+			t.Run("handles HTTP error responses", func(t *testing.T) {
+				mockServer := HTTPErrorMockServer(500, "Internal Server Error")
+				defer mockServer.Close()
 
-					if !strings.Contains(err.Error(), "usage: book add") {
-						t.Errorf("Expected usage error, got: %v", err)
-					}
-				})
+				handler.service = services.NewBookService(mockServer.URL())
 
-				t.Run("handles search service errors", func(t *testing.T) {
-					args := []string{"test", "book"}
-					err := handler.SearchAndAdd(ctx, args, false)
-					if err == nil {
-						t.Error("Expected error due to mocked service")
-					}
-					if strings.Contains(err.Error(), "usage:") {
-						t.Error("Should not show usage error for valid args")
-					}
-				})
+				args := []string{"test", "book"}
+				err := handler.SearchAndAdd(ctx, args, false)
+				if err == nil {
+					t.Error("Expected error for HTTP 500")
+				}
+
+				if !strings.Contains(err.Error(), "search failed") {
+					t.Errorf("Expected search failure error, got: %v", err)
+				}
 			})
+
+			t.Run("handles malformed JSON response", func(t *testing.T) {
+				mockServer := InvalidJSONMockServer()
+				defer mockServer.Close()
+
+				handler.service = services.NewBookService(mockServer.URL())
+
+				args := []string{"test", "book"}
+				err := handler.SearchAndAdd(ctx, args, false)
+				if err == nil {
+					t.Error("Expected error for malformed JSON")
+				}
+
+				if !strings.Contains(err.Error(), "search failed") {
+					t.Errorf("Expected search failure error, got: %v", err)
+				}
+			})
+
+			t.Run("handles empty search results", func(t *testing.T) {
+				emptyResponse := services.OpenLibrarySearchResponse{
+					NumFound: 0, Start: 0, Docs: []services.OpenLibrarySearchDoc{},
+				}
+
+				mockServer := JSONMockServer(emptyResponse)
+				defer mockServer.Close()
+
+				handler.service = services.NewBookService(mockServer.URL())
+
+				args := []string{"nonexistent", "book"}
+				err := handler.SearchAndAdd(ctx, args, false)
+				if err != nil {
+					t.Errorf("Expected no error for empty results, got: %v", err)
+				}
+			})
+
+			t.Run("handles network timeouts", func(t *testing.T) {
+				mockServer := TimeoutMockServer(5 * time.Second)
+				defer mockServer.Close()
+
+				handler.service = services.NewBookService(mockServer.URL())
+
+				ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+				defer cancel()
+
+				args := []string{"test", "book"}
+				err := handler.SearchAndAdd(ctx, args, false)
+				if err == nil {
+					t.Error("Expected error for timeout")
+				}
+			})
+
+			t.Run("handles context cancellation", func(t *testing.T) {
+				mockBooks := []MockBook{
+					{Key: "/works/OL123456W", Title: "Test Book", Authors: []string{"Author"}, Year: 2020},
+				}
+				mockResponse := MockOpenLibraryResponse(mockBooks)
+				mockServer := JSONMockServer(mockResponse)
+				defer mockServer.Close()
+
+				handler.service = services.NewBookService(mockServer.URL())
+
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+
+				args := []string{"test", "book"}
+				err := handler.SearchAndAdd(ctx, args, false)
+				if err == nil {
+					t.Error("Expected error for cancelled context")
+				}
+			})
+
+			t.Run("handles interactive mode", func(t *testing.T) {
+				// Skip interactive mode test to prevent hanging in CI/test environments
+				// TODO: Interactive mode uses TUI components that require terminal interaction
+				t.Skip("Interactive mode requires terminal interaction, skipping to prevent hanging")
+			})
+
+			t.Run("interactive mode path", func(t *testing.T) {
+				// Skip interactive mode test to prevent hanging in CI/test environments
+				// TODO: Interactive mode uses TUI components that require terminal interaction
+				t.Skip("Interactive mode requires terminal interaction, skipping to prevent hanging")
+			})
+
+			t.Run("successful search and add with user selection", func(t *testing.T) {
+				mockBooks := []MockBook{
+					{Key: "/works/OL123W", Title: "Test Book 1", Authors: []string{"Author 1"}, Year: 2020, Editions: 5, CoverID: 123},
+					{Key: "/works/OL456W", Title: "Test Book 2", Authors: []string{"Author 2"}, Year: 2021, Editions: 3, CoverID: 456},
+				}
+				mockResponse := MockOpenLibraryResponse(mockBooks)
+				mockServer := JSONMockServer(mockResponse)
+				defer mockServer.Close()
+
+				handler.service = services.NewBookService(mockServer.URL())
+				handler.SetInputReader(MenuSelection(1))
+
+				args := []string{"test", "search"}
+				err := handler.SearchAndAdd(ctx, args, false)
+				if err != nil {
+					t.Errorf("Expected successful search and add, got error: %v", err)
+				}
+
+				books, err := handler.repos.Books.List(ctx, repo.BookListOptions{})
+				if err != nil {
+					t.Fatalf("Failed to list books: %v", err)
+				}
+				if len(books) != 1 {
+					t.Errorf("Expected 1 book in database, got %d", len(books))
+				}
+				if len(books) > 0 && books[0].Title != "Test Book 1" {
+					t.Errorf("Expected book title 'Test Book 1', got '%s'", books[0].Title)
+				}
+			})
+
+			t.Run("successful search with user cancellation", func(t *testing.T) {
+				mockBooks := []MockBook{
+					{Key: "/works/OL789W", Title: "Another Book", Authors: []string{"Another Author"}, Year: 2022},
+				}
+				mockResponse := MockOpenLibraryResponse(mockBooks)
+				mockServer := JSONMockServer(mockResponse)
+				defer mockServer.Close()
+
+				handler.service = services.NewBookService(mockServer.URL())
+				handler.SetInputReader(MenuCancel())
+
+				args := []string{"another", "search"}
+				err := handler.SearchAndAdd(ctx, args, false)
+				if err != nil {
+					t.Errorf("Expected no error on cancellation, got: %v", err)
+				}
+
+				books, err := handler.repos.Books.List(ctx, repo.BookListOptions{})
+				if err != nil {
+					t.Fatalf("Failed to list books: %v", err)
+				}
+				expected := 1
+				if len(books) != expected {
+					t.Errorf("Expected %d books in database after cancellation, got %d", expected, len(books))
+				}
+			})
+
+			t.Run("invalid user choice", func(t *testing.T) {
+				mockBooks := []MockBook{
+					{Key: "/works/OL999W", Title: "Choice Test Book", Authors: []string{"Choice Author"}, Year: 2023},
+				}
+				mockResponse := MockOpenLibraryResponse(mockBooks)
+				mockServer := JSONMockServer(mockResponse)
+				defer mockServer.Close()
+
+				handler.service = services.NewBookService(mockServer.URL())
+				handler.SetInputReader(MenuSelection(5))
+
+				args := []string{"choice", "test"}
+				err := handler.SearchAndAdd(ctx, args, false)
+				if err == nil {
+					t.Error("Expected error for invalid choice")
+				}
+				if err != nil && !strings.Contains(err.Error(), "invalid choice") {
+					t.Errorf("Expected 'invalid choice' error, got: %v", err)
+				}
+			})
+
 		})
 
 		t.Run("List", func(t *testing.T) {
-
 			ctx := context.Background()
-
 			_ = createTestBook(t, handler, ctx)
 
 			book2 := &models.Book{
@@ -237,8 +393,7 @@ func TestBookHandler(t *testing.T) {
 				}
 
 				for flag, status := range statusVariants {
-					err := handler.List(ctx, status)
-					if err != nil {
+					if err := handler.List(ctx, status); err != nil {
 						t.Errorf("ListBooks with flag %s (status %s) failed: %v", flag, status, err)
 					}
 				}
@@ -251,8 +406,7 @@ func TestBookHandler(t *testing.T) {
 				book := createTestBook(t, handler, ctx)
 
 				t.Run("updates book status successfully", func(t *testing.T) {
-					err := handler.UpdateStatus(ctx, strconv.FormatInt(book.ID, 10), "reading")
-					if err != nil {
+					if err := handler.UpdateStatus(ctx, strconv.FormatInt(book.ID, 10), "reading"); err != nil {
 						t.Errorf("UpdateBookStatusByID failed: %v", err)
 					}
 
@@ -331,8 +485,7 @@ func TestBookHandler(t *testing.T) {
 					validStatuses := []string{"queued", "reading", "finished", "removed"}
 
 					for _, status := range validStatuses {
-						err := handler.UpdateStatus(ctx, strconv.FormatInt(book.ID, 10), status)
-						if err != nil {
+						if err := handler.UpdateStatus(ctx, strconv.FormatInt(book.ID, 10), status); err != nil {
 							t.Errorf("UpdateBookStatusByID with status %s failed: %v", status, err)
 						}
 					}

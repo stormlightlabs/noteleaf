@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"slices"
 	"strconv"
@@ -21,6 +22,7 @@ type BookHandler struct {
 	config  *store.Config
 	repos   *repo.Repositories
 	service *services.BookService
+	reader  io.Reader
 }
 
 // NewBookHandler creates a new book handler
@@ -52,6 +54,11 @@ func (h *BookHandler) Close() error {
 		return fmt.Errorf("failed to close service: %w", err)
 	}
 	return h.db.Close()
+}
+
+// SetInputReader sets the input reader
+func (h *BookHandler) SetInputReader(reader io.Reader) {
+	h.reader = reader
 }
 
 func (h *BookHandler) printBook(book *models.Book) {
@@ -142,8 +149,14 @@ func (h *BookHandler) SearchAndAdd(ctx context.Context, args []string, interacti
 	fmt.Print("\nEnter number to add (1-", len(results), "), or 0 to cancel: ")
 
 	var choice int
-	if _, err := fmt.Scanf("%d", &choice); err != nil {
-		return fmt.Errorf("invalid input")
+	if h.reader != nil {
+		if _, err := fmt.Fscanf(h.reader, "%d", &choice); err != nil {
+			return fmt.Errorf("invalid input")
+		}
+	} else {
+		if _, err := fmt.Scanf("%d", &choice); err != nil {
+			return fmt.Errorf("invalid input")
+		}
 	}
 
 	if choice == 0 {

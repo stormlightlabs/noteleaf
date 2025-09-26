@@ -45,15 +45,13 @@ type APIService interface {
 type BookService struct {
 	client  *http.Client
 	limiter *rate.Limiter
-	baseURL string // Allows configurable base URL for testing
+	baseURL string
 }
 
 // NewBookService creates a new book service with rate limiting
 func NewBookService(baseURL string) *BookService {
 	return &BookService{
-		client: &http.Client{
-			Timeout: 30 * time.Second,
-		},
+		client:  &http.Client{Timeout: 30 * time.Second},
 		limiter: rate.NewLimiter(rate.Limit(requestsPerSecond), burstLimit),
 		baseURL: baseURL,
 	}

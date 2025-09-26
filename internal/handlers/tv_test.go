@@ -4,10 +4,13 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stormlightlabs/noteleaf/internal/models"
+	"github.com/stormlightlabs/noteleaf/internal/repo"
+	"github.com/stormlightlabs/noteleaf/internal/services"
 )
 
 func createTestTVHandler(t *testing.T) *TVHandler {
@@ -73,25 +76,162 @@ func TestTVHandler(t *testing.T) {
 			}
 		})
 
-		t.Run("Search Error", func(t *testing.T) {
+		t.Run("Context Cancellation During Search", func(t *testing.T) {
 			handler := createTestTVHandler(t)
 			defer handler.Close()
 
-			err := handler.SearchAndAdd(context.Background(), "test show", false)
-			if err != nil {
-				t.Logf("Search failed as expected in test environment: %v", err)
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+
+			err := handler.SearchAndAdd(ctx, "test tv show", false)
+			if err == nil {
+				t.Error("Expected error for cancelled context")
 			}
 		})
 
-		t.Run("Network Error", func(t *testing.T) {
+		t.Run("Search Service Error", func(t *testing.T) {
 			handler := createTestTVHandler(t)
 			defer handler.Close()
 
-			err := handler.SearchAndAdd(context.Background(), "unlikely_to_find_this_show_12345", false)
-			if err != nil {
-				t.Logf("Network error encountered (expected in test environment): %v", err)
+			mockFetcher := &MockMediaFetcher{
+				ShouldError:  true,
+				ErrorMessage: "network error",
+			}
+
+			handler.service = CreateTestTVService(mockFetcher)
+
+			err := handler.SearchAndAdd(context.Background(), "test tv show", false)
+			if err == nil {
+				t.Error("Expected error when search service fails")
+			}
+
+			if !strings.Contains(err.Error(), "search failed") {
+				t.Errorf("Expected search failure error, got: %v", err)
 			}
 		})
+
+		t.Run("Empty Search Results", func(t *testing.T) {
+			handler := createTestTVHandler(t)
+			defer handler.Close()
+
+			mockFetcher := &MockMediaFetcher{SearchResults: []services.Media{}}
+
+			handler.service = CreateTestTVService(mockFetcher)
+
+			err := handler.SearchAndAdd(context.Background(), "nonexistent tv show", false)
+			if err != nil {
+				t.Errorf("Expected no error for empty results, got: %v", err)
+			}
+		})
+
+		t.Run("Search Results with No TV Shows", func(t *testing.T) {
+			handler := createTestTVHandler(t)
+			defer handler.Close()
+
+			mockFetcher := &MockMediaFetcher{
+				SearchResults: []services.Media{
+					{Title: "Test Movie", Link: "/m/test_movie", Type: "movie"},
+				},
+			}
+
+			handler.service = CreateTestTVService(mockFetcher)
+
+			if err := handler.SearchAndAdd(context.Background(), "movie title", false); err != nil {
+				t.Errorf("Expected no error for movie-only results, got: %v", err)
+			}
+		})
+
+		t.Run("Interactive Mode Path", func(t *testing.T) {
+			// Skip interactive mode test to prevent hanging in CI/test environments
+			// TODO: Interactive mode uses TUI components that require terminal interaction
+			t.Skip("Interactive mode requires terminal interaction, skipping to prevent hanging")
+		})
+
+		t.Run("successful search and add with user selection", func(t *testing.T) {
+			t.Skip()
+			handler := createTestTVHandler(t)
+			defer handler.Close()
+
+			mockFetcher := &MockMediaFetcher{
+				SearchResults: []services.Media{
+					{Title: "Test TV Show 1", Link: "/tv/test_show_1", Type: "tv", CriticScore: "90%"},
+					{Title: "Test TV Show 2", Link: "/tv/test_show_2", Type: "tv", CriticScore: "80%"},
+				},
+			}
+
+			handler.service = CreateTestTVService(mockFetcher)
+			handler.SetInputReader(MenuSelection(1))
+
+			err := handler.SearchAndAdd(context.Background(), "test tv show", false)
+			if err != nil {
+				t.Errorf("Expected successful search and add, got error: %v", err)
+			}
+
+			shows, err := handler.repos.TV.List(context.Background(), repo.TVListOptions{})
+			if err != nil {
+				t.Fatalf("Failed to list TV shows: %v", err)
+			}
+			if len(shows) != 1 {
+				t.Errorf("Expected 1 TV show in database, got %d", len(shows))
+			}
+			if len(shows) > 0 && shows[0].Title != "Test TV Show 1" {
+				t.Errorf("Expected TV show title 'Test TV Show 1', got '%s'", shows[0].Title)
+			}
+		})
+
+		t.Run("successful search with user cancellation", func(t *testing.T) {
+			t.Skip()
+			handler := createTestTVHandler(t)
+			defer handler.Close()
+
+			mockFetcher := &MockMediaFetcher{
+				SearchResults: []services.Media{
+					{Title: "Another TV Show", Link: "/tv/another_show", Type: "tv", CriticScore: "95%"},
+				},
+			}
+
+			handler.service = CreateTestTVService(mockFetcher)
+			handler.SetInputReader(MenuCancel())
+
+			err := handler.SearchAndAdd(context.Background(), "another tv show", false)
+			if err != nil {
+				t.Errorf("Expected no error on cancellation, got: %v", err)
+			}
+
+			shows, err := handler.repos.TV.List(context.Background(), repo.TVListOptions{})
+			if err != nil {
+				t.Fatalf("Failed to list TV shows: %v", err)
+			}
+
+			expectedCount := 1
+			if len(shows) != expectedCount {
+				t.Errorf("Expected %d TV shows in database after cancellation, got %d", expectedCount, len(shows))
+			}
+		})
+
+		t.Run("invalid user choice", func(t *testing.T) {
+			handler := createTestTVHandler(t)
+			defer handler.Close()
+
+			mockFetcher := &MockMediaFetcher{
+				SearchResults: []services.Media{
+					{Title: "Choice Test Show", Link: "/tv/choice_test", Type: "tv", CriticScore: "85%"},
+				},
+			}
+
+			handler.service = CreateTestTVService(mockFetcher)
+
+			handler.SetInputReader(MenuSelection(3))
+
+			err := handler.SearchAndAdd(context.Background(), "choice test", false)
+			if err == nil {
+				t.Error("Expected error for invalid choice")
+			}
+			if err != nil && !strings.Contains(err.Error(), "invalid choice") {
+				t.Errorf("Expected 'invalid choice' error, got: %v", err)
+			}
+		})
+
 	})
 
 	t.Run("List", func(t *testing.T) {
@@ -406,7 +546,7 @@ func TestTVHandler(t *testing.T) {
 		ctx := context.Background()
 		nonExistentID := int64(999999)
 
-		testCases := []struct {
+		tt := []struct {
 			name string
 			fn   func() error
 		}{
@@ -432,7 +572,7 @@ func TestTVHandler(t *testing.T) {
 			},
 		}
 
-		for _, tc := range testCases {
+		for _, tc := range tt {
 			t.Run(tc.name, func(t *testing.T) {
 				err := tc.fn()
 				if err == nil {

@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"io"
 	"slices"
 	"strconv"
 	"strings"
@@ -20,6 +21,7 @@ type TVHandler struct {
 	config  *store.Config
 	repos   *repo.Repositories
 	service *services.TVService
+	reader  io.Reader
 }
 
 // NewTVHandler creates a new TV handler
@@ -51,6 +53,11 @@ func (h *TVHandler) Close() error {
 		return fmt.Errorf("failed to close service: %w", err)
 	}
 	return h.db.Close()
+}
+
+// SetInputReader sets the input reader
+func (h *TVHandler) SetInputReader(reader io.Reader) {
+	h.reader = reader
 }
 
 // SearchAndAdd searches for TV shows and allows user to select and add to queue
@@ -100,8 +107,14 @@ func (h *TVHandler) SearchAndAdd(ctx context.Context, query string, interactive 
 	fmt.Print("\nEnter number to add (1-", len(results), "), or 0 to cancel: ")
 
 	var choice int
-	if _, err := fmt.Scanf("%d", &choice); err != nil {
-		return fmt.Errorf("invalid input")
+	if h.reader != nil {
+		if _, err := fmt.Fscanf(h.reader, "%d", &choice); err != nil {
+			return fmt.Errorf("invalid input")
+		}
+	} else {
+		if _, err := fmt.Scanf("%d", &choice); err != nil {
+			return fmt.Errorf("invalid input")
+		}
 	}
 
 	if choice == 0 {

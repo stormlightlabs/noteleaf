@@ -86,6 +86,22 @@ Tests avoid expensive operations in setup functions. Handler creation uses real 
 
 The single root test pattern allows for efficient resource management where setup costs can be amortized across multiple related test cases.
 
+## Interactive Component Testing
+
+Interactive components that use `fmt.Scanf` for user input require special testing infrastructure to prevent tests from hanging while waiting for stdin.
+
+### Testing Success Scenarios
+
+Interactive handlers should test both success and error paths:
+
+- **Valid user selections** - User chooses valid menu options
+- **Cancellation** - User chooses to cancel (option 0)
+- **Invalid choices** - User selects out-of-range options
+- **Empty results** - Search returns no results
+- **Network errors** - Service calls fail
+
+This ensures tests run reliably in automated environments while maintaining coverage of the non-interactive code paths.
+
 ## Errors
 
 Error coverage follows a systematic approach to identify and test failure scenarios:
@@ -95,3 +111,4 @@ Error coverage follows a systematic approach to identify and test failure scenar
 3. **Resource Exhaustion** - Database connection failures, memory limits
 4. **Constraint Violations** - Duplicate keys, foreign key failures
 5. **State Validation** - Testing functions with invalid system states
+6. **Interactive Input** - Invalid user choices, cancellation handling, input simulation errors
