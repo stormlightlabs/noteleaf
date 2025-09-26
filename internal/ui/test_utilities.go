@@ -329,7 +329,6 @@ func (ah *AssertionHelpers) AssertViewNotContains(t *testing.T, suite *TUITestSu
 
 var Expect = AssertionHelpers{}
 
-// Helper function to check if string contains substring
 func containsString(haystack, needle string) bool {
 	if needle == "" {
 		return true

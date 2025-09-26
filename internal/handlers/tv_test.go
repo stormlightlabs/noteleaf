@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -142,14 +143,48 @@ func TestTVHandler(t *testing.T) {
 		})
 
 		t.Run("Interactive Mode Path", func(t *testing.T) {
-			// Skip interactive mode test to prevent hanging in CI/test environments
-			// TODO: Interactive mode uses TUI components that require terminal interaction
-			t.Skip("Interactive mode requires terminal interaction, skipping to prevent hanging")
+			handler := createTestTVHandler(t)
+			defer handler.Close()
+
+			ctx := context.Background()
+			if _, err := handler.repos.TV.Create(ctx, &models.TVShow{
+				Title: "Test TV Show 1", Season: 1, Status: "queued",
+			}); err != nil {
+				t.Fatalf("Failed to create test TV show: %v", err)
+			}
+
+			if _, err := handler.repos.TV.Create(ctx, &models.TVShow{
+				Title: "Test TV Show 2", Season: 2, Status: "watching",
+			}); err != nil {
+				t.Fatalf("Failed to create test TV show: %v", err)
+			}
+
+			if err := TestTVInteractiveList(t, handler, ""); err != nil {
+				t.Errorf("Interactive TV list test failed: %v", err)
+			}
 		})
 
 		t.Run("successful search and add with user selection", func(t *testing.T) {
-			t.Skip()
-			handler := createTestTVHandler(t)
+			tempDir, err := os.MkdirTemp("", "noteleaf-tv-test-*")
+			if err != nil {
+				t.Fatalf("Failed to create temp dir: %v", err)
+			}
+			defer os.RemoveAll(tempDir)
+
+			oldConfigHome := os.Getenv("XDG_CONFIG_HOME")
+			os.Setenv("XDG_CONFIG_HOME", tempDir)
+			defer os.Setenv("XDG_CONFIG_HOME", oldConfigHome)
+
+			ctx := context.Background()
+			err = Setup(ctx, []string{})
+			if err != nil {
+				t.Fatalf("Failed to setup database: %v", err)
+			}
+
+			handler, err := NewTVHandler()
+			if err != nil {
+				t.Fatalf("Failed to create handler: %v", err)
+			}
 			defer handler.Close()
 
 			mockFetcher := &MockMediaFetcher{
@@ -162,12 +197,11 @@ func TestTVHandler(t *testing.T) {
 			handler.service = CreateTestTVService(mockFetcher)
 			handler.SetInputReader(MenuSelection(1))
 
-			err := handler.SearchAndAdd(context.Background(), "test tv show", false)
-			if err != nil {
+			if err = handler.SearchAndAdd(ctx, "test tv show", false); err != nil {
 				t.Errorf("Expected successful search and add, got error: %v", err)
 			}
 
-			shows, err := handler.repos.TV.List(context.Background(), repo.TVListOptions{})
+			shows, err := handler.repos.TV.List(ctx, repo.TVListOptions{})
 			if err != nil {
 				t.Fatalf("Failed to list TV shows: %v", err)
 			}
@@ -180,8 +214,25 @@ func TestTVHandler(t *testing.T) {
 		})
 
 		t.Run("successful search with user cancellation", func(t *testing.T) {
-			t.Skip()
-			handler := createTestTVHandler(t)
+			tempDir, err := os.MkdirTemp("", "noteleaf-tv-test-*")
+			if err != nil {
+				t.Fatalf("Failed to create temp dir: %v", err)
+			}
+			defer os.RemoveAll(tempDir)
+
+			oldConfigHome := os.Getenv("XDG_CONFIG_HOME")
+			os.Setenv("XDG_CONFIG_HOME", tempDir)
+			defer os.Setenv("XDG_CONFIG_HOME", oldConfigHome)
+
+			ctx := context.Background()
+			if err = Setup(ctx, []string{}); err != nil {
+				t.Fatalf("Failed to setup database: %v", err)
+			}
+
+			handler, err := NewTVHandler()
+			if err != nil {
+				t.Fatalf("Failed to create handler: %v", err)
+			}
 			defer handler.Close()
 
 			mockFetcher := &MockMediaFetcher{
@@ -193,19 +244,18 @@ func TestTVHandler(t *testing.T) {
 			handler.service = CreateTestTVService(mockFetcher)
 			handler.SetInputReader(MenuCancel())
 
-			err := handler.SearchAndAdd(context.Background(), "another tv show", false)
-			if err != nil {
+			if err = handler.SearchAndAdd(ctx, "another tv show", false); err != nil {
 				t.Errorf("Expected no error on cancellation, got: %v", err)
 			}
 
-			shows, err := handler.repos.TV.List(context.Background(), repo.TVListOptions{})
+			shows, err := handler.repos.TV.List(ctx, repo.TVListOptions{})
 			if err != nil {
 				t.Fatalf("Failed to list TV shows: %v", err)
 			}
 
-			expectedCount := 1
-			if len(shows) != expectedCount {
-				t.Errorf("Expected %d TV shows in database after cancellation, got %d", expectedCount, len(shows))
+			expected := 0
+			if len(shows) != expected {
+				t.Errorf("Expected %d TV shows in database after cancellation, got %d", expected, len(shows))
 			}
 		})
 

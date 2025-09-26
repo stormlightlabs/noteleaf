@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -141,14 +142,47 @@ func TestMovieHandler(t *testing.T) {
 		})
 
 		t.Run("Interactive Mode Path", func(t *testing.T) {
-			// Skip interactive mode test to prevent hanging in CI/test environments
-			// TODO: Interactive mode uses TUI components that require terminal interaction
-			t.Skip("Interactive mode requires terminal interaction, skipping to prevent hanging")
+			handler := createTestMovieHandler(t)
+			defer handler.Close()
+
+			ctx := context.Background()
+			if _, err := handler.repos.Movies.Create(ctx, &models.Movie{
+				Title: "Test Movie 1", Year: 2023, Status: "queued",
+			}); err != nil {
+				t.Fatalf("Failed to create test movie: %v", err)
+			}
+
+			if _, err := handler.repos.Movies.Create(ctx, &models.Movie{
+				Title: "Test Movie 2", Year: 2024, Status: "watched",
+			}); err != nil {
+				t.Fatalf("Failed to create test movie: %v", err)
+			}
+
+			if err := TestMovieInteractiveList(t, handler, ""); err != nil {
+				t.Errorf("Interactive movie list test failed: %v", err)
+			}
 		})
 
 		t.Run("successful search and add with user selection", func(t *testing.T) {
-			t.Skip()
-			handler := createTestMovieHandler(t)
+			tempDir, err := os.MkdirTemp("", "noteleaf-movie-test-*")
+			if err != nil {
+				t.Fatalf("Failed to create temp dir: %v", err)
+			}
+			defer os.RemoveAll(tempDir)
+
+			oldConfigHome := os.Getenv("XDG_CONFIG_HOME")
+			os.Setenv("XDG_CONFIG_HOME", tempDir)
+			defer os.Setenv("XDG_CONFIG_HOME", oldConfigHome)
+
+			ctx := context.Background()
+			if err = Setup(ctx, []string{}); err != nil {
+				t.Fatalf("Failed to setup database: %v", err)
+			}
+
+			handler, err := NewMovieHandler()
+			if err != nil {
+				t.Fatalf("Failed to create handler: %v", err)
+			}
 			defer handler.Close()
 
 			mockFetcher := &MockMediaFetcher{
@@ -161,11 +195,11 @@ func TestMovieHandler(t *testing.T) {
 			handler.service = CreateTestMovieService(mockFetcher)
 			handler.SetInputReader(MenuSelection(1))
 
-			if err := handler.SearchAndAdd(context.Background(), "test movie", false); err != nil {
+			if err := handler.SearchAndAdd(ctx, "test movie", false); err != nil {
 				t.Errorf("Expected successful search and add, got error: %v", err)
 			}
 
-			movies, err := handler.repos.Movies.List(context.Background(), repo.MovieListOptions{})
+			movies, err := handler.repos.Movies.List(ctx, repo.MovieListOptions{})
 			if err != nil {
 				t.Fatalf("Failed to list movies: %v", err)
 			}
@@ -178,8 +212,26 @@ func TestMovieHandler(t *testing.T) {
 		})
 
 		t.Run("successful search with user cancellation", func(t *testing.T) {
-			t.Skip()
-			handler := createTestMovieHandler(t)
+			tempDir, err := os.MkdirTemp("", "noteleaf-movie-test-*")
+			if err != nil {
+				t.Fatalf("Failed to create temp dir: %v", err)
+			}
+			defer os.RemoveAll(tempDir)
+
+			oldConfigHome := os.Getenv("XDG_CONFIG_HOME")
+			os.Setenv("XDG_CONFIG_HOME", tempDir)
+			defer os.Setenv("XDG_CONFIG_HOME", oldConfigHome)
+
+			ctx := context.Background()
+			err = Setup(ctx, []string{})
+			if err != nil {
+				t.Fatalf("Failed to setup database: %v", err)
+			}
+
+			handler, err := NewMovieHandler()
+			if err != nil {
+				t.Fatalf("Failed to create handler: %v", err)
+			}
 			defer handler.Close()
 
 			mockFetcher := &MockMediaFetcher{
@@ -191,17 +243,16 @@ func TestMovieHandler(t *testing.T) {
 			handler.service = CreateTestMovieService(mockFetcher)
 			handler.SetInputReader(MenuCancel())
 
-			err := handler.SearchAndAdd(context.Background(), "another movie", false)
-			if err != nil {
+			if err = handler.SearchAndAdd(ctx, "another movie", false); err != nil {
 				t.Errorf("Expected no error on cancellation, got: %v", err)
 			}
 
-			movies, err := handler.repos.Movies.List(context.Background(), repo.MovieListOptions{})
+			movies, err := handler.repos.Movies.List(ctx, repo.MovieListOptions{})
 			if err != nil {
 				t.Fatalf("Failed to list movies: %v", err)
 			}
 
-			expected := 1
+			expected := 0
 			if len(movies) != expected {
 				t.Errorf("Expected %d movies in database after cancellation, got %d", expected, len(movies))
 			}

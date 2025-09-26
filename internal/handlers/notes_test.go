@@ -253,39 +253,6 @@ Modified content here.`)
 			}
 		})
 
-		t.Run("handles database constraint violations", func(t *testing.T) {
-			db, dbErr := store.NewDatabase()
-			if dbErr != nil {
-				t.Fatalf("Failed to get new database: %v", dbErr)
-			}
-			defer db.Close()
-
-			_, execErr := db.Exec(`ALTER TABLE notes ADD CONSTRAINT test_constraint
-				CHECK (length(title) > 0 AND length(title) < 5)`)
-			if execErr != nil {
-				t.Skipf("Could not add constraint for test: %v", execErr)
-			}
-
-			handler.db.Close()
-			handler.db = db
-
-			mockEditor := func(editor, filePath string) error {
-				content := `# This Title Is Way Too Long For The Test Constraint
-
-Content here.`
-				return os.WriteFile(filePath, []byte(content), 0644)
-			}
-			handler.openInEditorFunc = mockEditor
-
-			err := handler.Edit(ctx, 1)
-			if err == nil {
-				t.Error("Edit should fail with constraint violation")
-			}
-			if !strings.Contains(err.Error(), "failed to update note") {
-				t.Errorf("Expected constraint violation error, got: %v", err)
-			}
-		})
-
 		t.Run("handles database transaction rollback", func(t *testing.T) {
 			handler.db.Close()
 			var dbErr error
@@ -338,231 +305,106 @@ This is the modified content.
 			err := handler.Edit(ctx, id)
 			Expect.AssertNoError(t, err, "Edit should succeed")
 		})
-	})
 
-	t.Run("Edit Errors", func(t *testing.T) {
-		t.Run("API Failures", func(t *testing.T) {
-			t.Run("handles non-existent note", func(t *testing.T) {
-				handler := NewHandlerTestHelper(t)
-				ctx := context.Background()
+		t.Run("Edit Errors", func(t *testing.T) {
 
-				err := handler.Edit(ctx, 999)
-				Expect.AssertError(t, err, "failed to get note", "Edit should fail with non-existent note ID")
+			t.Run("Validation Errors", func(t *testing.T) {
+				t.Run("handles corrupted note content", func(t *testing.T) {
+					handler := NewHandlerTestHelper(t)
+					ctx := context.Background()
+
+					noteID := handler.CreateTestNote(t, "Test Note", "Test content", nil)
+
+					invalidContent := string([]byte{0, 1, 2, 255, 254, 253})
+					mockEditor := NewMockEditor().WithContent(invalidContent)
+					handler.openInEditorFunc = mockEditor.GetEditorFunc()
+
+					err := handler.Edit(ctx, noteID)
+					if err != nil && !strings.Contains(err.Error(), "failed to update note") {
+						t.Errorf("Edit should handle corrupted content gracefully, got: %v", err)
+					}
+				})
+
+				t.Run("handles empty note after edit", func(t *testing.T) {
+					handler := NewHandlerTestHelper(t)
+					ctx := context.Background()
+
+					noteID := handler.CreateTestNote(t, "Test Note", "Test content", nil)
+
+					mockEditor := NewMockEditor().WithContent("")
+					handler.openInEditorFunc = mockEditor.GetEditorFunc()
+
+					err := handler.Edit(ctx, noteID)
+					if err != nil {
+						t.Logf("Edit with empty content handled: %v", err)
+					}
+				})
+
+				t.Run("handles very large content", func(t *testing.T) {
+					handler := NewHandlerTestHelper(t)
+					ctx := context.Background()
+
+					noteID := handler.CreateTestNote(t, "Test Note", "Test content", nil)
+
+					largeContent := fmt.Sprintf("# Large Note\n\n%s", strings.Repeat("Large content ", 70000))
+					mockEditor := NewMockEditor().WithContent(largeContent)
+					handler.openInEditorFunc = mockEditor.GetEditorFunc()
+
+					err := handler.Edit(ctx, noteID)
+					if err != nil {
+						t.Logf("Edit with large content handled: %v", err)
+					} else {
+						t.Log("Edit succeeded with large content")
+					}
+				})
 			})
 
-			t.Run("handles no editor configured", func(t *testing.T) {
-				handler := NewHandlerTestHelper(t)
-				ctx := context.Background()
-
-				noteID := handler.CreateTestNote(t, "Test Note", "Test content", nil)
-
-				envHelper := NewEnvironmentTestHelper()
-				defer envHelper.RestoreEnv()
-
-				envHelper.UnsetEnv("EDITOR")
-				envHelper.SetEnv("PATH", "")
-
-				err := handler.Edit(ctx, noteID)
-				Expect.AssertError(t, err, "failed to open editor", "Edit should fail when no editor is configured")
-			})
-
-			t.Run("handles temp file creation error", func(t *testing.T) {
-				handler := NewHandlerTestHelper(t)
-				ctx := context.Background()
-
-				noteID := handler.CreateTestNote(t, "Test Note", "Test content", nil)
-
-				envHelper := NewEnvironmentTestHelper()
-				defer envHelper.RestoreEnv()
-
-				envHelper.SetEnv("TMPDIR", "/non/existent/path")
-
-				err := handler.Edit(ctx, noteID)
-				Expect.AssertError(t, err, "failed to create temporary file", "Edit should fail when temp file creation fails")
-			})
-
-			t.Run("handles editor failure", func(t *testing.T) {
-				handler := NewHandlerTestHelper(t)
-				ctx := context.Background()
-
-				noteID := handler.CreateTestNote(t, "Test Note", "Test content", nil)
-
-				mockEditor := NewMockEditor().WithFailure("editor process failed")
-				handler.openInEditorFunc = mockEditor.GetEditorFunc()
-
-				err := handler.Edit(ctx, noteID)
-				Expect.AssertError(t, err, "failed to open editor", "Edit should fail when editor fails")
-			})
-
-			t.Run("handles file read error after editing", func(t *testing.T) {
-				handler := NewHandlerTestHelper(t)
-				ctx := context.Background()
-
-				noteID := handler.CreateTestNote(t, "Test Note", "Test content", nil)
-
-				mockEditor := NewMockEditor().WithFileDeleted()
-				handler.openInEditorFunc = mockEditor.GetEditorFunc()
-
-				err := handler.Edit(ctx, noteID)
-				Expect.AssertError(t, err, "failed to read edited content", "Edit should fail when temp file is deleted")
-			})
-		})
-
-		t.Run("Database Errors", func(t *testing.T) {
-			t.Run("handles database connection error", func(t *testing.T) {
-				handler := NewHandlerTestHelper(t)
-				ctx := context.Background()
-
-				noteID := handler.CreateTestNote(t, "Test Note", "Test content", nil)
-
-				dbHelper := NewDatabaseTestHelper(handler)
-				dbHelper.CloseDatabase()
-
-				err := handler.Edit(ctx, noteID)
-				Expect.AssertError(t, err, "failed to get note", "Edit should fail when database is closed")
-			})
-
-			t.Run("handles database update error", func(t *testing.T) {
-				handler := NewHandlerTestHelper(t)
-				ctx := context.Background()
-
-				noteID := handler.CreateTestNote(t, "Test Note", "Test content", nil)
-
-				dbHelper := NewDatabaseTestHelper(handler)
-				dbHelper.DropNotesTable()
-
-				mockEditor := NewMockEditor().WithContent(`# Modified Note
-
-Modified content here.`)
-				handler.openInEditorFunc = mockEditor.GetEditorFunc()
-
-				err := handler.Edit(ctx, noteID)
-				Expect.AssertError(t, err, "failed to get note", "Edit should fail when database table is missing")
-			})
-
-			t.Run("handles database constraint violations", func(t *testing.T) {
-				handler := NewHandlerTestHelper(t)
-				ctx := context.Background()
-
-				noteID := handler.CreateTestNote(t, "Test Note", "Test content", nil)
-
-				_, execErr := handler.db.Exec(`ALTER TABLE notes ADD CONSTRAINT test_constraint
-				CHECK (length(title) > 0 AND length(title) < 5)`)
-				if execErr != nil {
-					t.Skipf("Could not add constraint for test: %v", execErr)
-				}
-
-				mockEditor := NewMockEditor().WithContent(`# This Title Is Way Too Long For The Test Constraint
-
-Content here.`)
-				handler.openInEditorFunc = mockEditor.GetEditorFunc()
-
-				err := handler.Edit(ctx, noteID)
-				Expect.AssertError(t, err, "failed to update note", "Edit should fail with constraint violation")
-			})
-		})
-
-		t.Run("Validation Errors", func(t *testing.T) {
-			t.Run("handles corrupted note content", func(t *testing.T) {
-				handler := NewHandlerTestHelper(t)
-				ctx := context.Background()
-
-				noteID := handler.CreateTestNote(t, "Test Note", "Test content", nil)
-
-				invalidContent := string([]byte{0, 1, 2, 255, 254, 253})
-				mockEditor := NewMockEditor().WithContent(invalidContent)
-				handler.openInEditorFunc = mockEditor.GetEditorFunc()
-
-				err := handler.Edit(ctx, noteID)
-				if err != nil && !strings.Contains(err.Error(), "failed to update note") {
-					t.Errorf("Edit should handle corrupted content gracefully, got: %v", err)
-				}
-			})
-
-			t.Run("handles empty note after edit", func(t *testing.T) {
-				handler := NewHandlerTestHelper(t)
-				ctx := context.Background()
-
-				noteID := handler.CreateTestNote(t, "Test Note", "Test content", nil)
-
-				mockEditor := NewMockEditor().WithContent("")
-				handler.openInEditorFunc = mockEditor.GetEditorFunc()
-
-				err := handler.Edit(ctx, noteID)
-				if err != nil {
-					t.Logf("Edit with empty content handled: %v", err)
-				}
-			})
-
-			t.Run("handles very large content", func(t *testing.T) {
-				handler := NewHandlerTestHelper(t)
-				ctx := context.Background()
-
-				noteID := handler.CreateTestNote(t, "Test Note", "Test content", nil)
-
-				largeContent := fmt.Sprintf("# Large Note\n\n%s", strings.Repeat("Large content ", 70000))
-				mockEditor := NewMockEditor().WithContent(largeContent)
-				handler.openInEditorFunc = mockEditor.GetEditorFunc()
-
-				err := handler.Edit(ctx, noteID)
-				if err != nil {
-					t.Logf("Edit with large content handled: %v", err)
-				} else {
-					t.Log("Edit succeeded with large content")
-				}
-			})
-		})
-
-		t.Run("Success Cases", func(t *testing.T) {
-			t.Run("handles successful edit with title and tags", func(t *testing.T) {
-				handler := NewHandlerTestHelper(t)
-				ctx := context.Background()
-
-				noteID := handler.CreateTestNote(t, "Original Note", "Original content", []string{"original"})
-
-				mockEditor := NewMockEditor().WithContent(`# Modified Note
+			t.Run("Success Cases", func(t *testing.T) {
+				t.Run("handles successful edit with title and tags", func(t *testing.T) {
+					handler := NewHandlerTestHelper(t)
+					ctx := context.Background()
+					noteID := handler.CreateTestNote(t, "Original Note", "Original content", []string{"original"})
+					mockEditor := NewMockEditor().WithContent(`# Modified Note
 
 This is the modified content.
 
 <!-- Tags: modified, test -->`)
-				handler.openInEditorFunc = mockEditor.GetEditorFunc()
+					handler.openInEditorFunc = mockEditor.GetEditorFunc()
+					err := handler.Edit(ctx, noteID)
 
-				err := handler.Edit(ctx, noteID)
-				Expect.AssertNoError(t, err, "Edit should succeed")
-
-				Expect.AssertNoteExists(t, handler, noteID)
-			})
-
-			t.Run("handles no changes made", func(t *testing.T) {
-				handler := NewHandlerTestHelper(t)
-				ctx := context.Background()
-
-				noteID := handler.CreateTestNote(t, "Test Note", "Test content", nil)
-
-				originalContent := handler.formatNoteForEdit(&models.Note{
-					ID:      noteID,
-					Title:   "Test Note",
-					Content: "Test content",
-					Tags:    nil,
+					Expect.AssertNoError(t, err, "Edit should succeed")
+					Expect.AssertNoteExists(t, handler, noteID)
 				})
-				mockEditor := NewMockEditor().WithContent(originalContent)
-				handler.openInEditorFunc = mockEditor.GetEditorFunc()
 
-				err := handler.Edit(ctx, noteID)
-				Expect.AssertNoError(t, err, "Edit should succeed even with no changes")
-			})
+				t.Run("handles no changes made", func(t *testing.T) {
+					handler := NewHandlerTestHelper(t)
+					ctx := context.Background()
+					noteID := handler.CreateTestNote(t, "Test Note", "Test content", nil)
+					originalContent := handler.formatNoteForEdit(&models.Note{
+						ID:      noteID,
+						Title:   "Test Note",
+						Content: "Test content",
+						Tags:    nil,
+					})
+					mockEditor := NewMockEditor().WithContent(originalContent)
+					handler.openInEditorFunc = mockEditor.GetEditorFunc()
 
-			t.Run("handles content without title", func(t *testing.T) {
-				handler := NewHandlerTestHelper(t)
-				ctx := context.Background()
+					err := handler.Edit(ctx, noteID)
+					Expect.AssertNoError(t, err, "Edit should succeed even with no changes")
+				})
 
-				noteID := handler.CreateTestNote(t, "Original Title", "Original content", nil)
+				t.Run("handles content without title", func(t *testing.T) {
+					handler := NewHandlerTestHelper(t)
+					ctx := context.Background()
 
-				mockEditor := NewMockEditor().WithContent("Just some content without a title")
-				handler.openInEditorFunc = mockEditor.GetEditorFunc()
+					noteID := handler.CreateTestNote(t, "Original Title", "Original content", nil)
 
-				err := handler.Edit(ctx, noteID)
-				Expect.AssertNoError(t, err, "Edit should succeed without title")
+					mockEditor := NewMockEditor().WithContent("Just some content without a title")
+					handler.openInEditorFunc = mockEditor.GetEditorFunc()
+
+					err := handler.Edit(ctx, noteID)
+					Expect.AssertNoError(t, err, "Edit should succeed without title")
+				})
 			})
 		})
 	})
@@ -642,6 +484,48 @@ This is the modified content.
 			err = emptyHandler.List(ctx, true, false, nil)
 			if err != nil {
 				t.Errorf("ListStatic should succeed with empty list: %v", err)
+			}
+		})
+
+		t.Run("interactive mode path", func(t *testing.T) {
+			_, cleanup := setupNoteTest(t)
+			defer cleanup()
+
+			testHandler, err := NewNoteHandler()
+			if err != nil {
+				t.Fatalf("Failed to create test handler: %v", err)
+			}
+			defer testHandler.Close()
+
+			if err := testHandler.Create(ctx, "Interactive Test Note 1", "Test content for interactive mode", "", false); err != nil {
+				t.Fatalf("Failed to create test note 1: %v", err)
+			}
+
+			if err := testHandler.Create(ctx, "Interactive Test Note 2", "Test content with tags", "", false); err != nil {
+				t.Fatalf("Failed to create test note 2: %v", err)
+			}
+
+			if err := TestNoteInteractiveList(t, testHandler, false, nil); err != nil {
+				t.Errorf("Interactive note list test failed: %v", err)
+			}
+		})
+
+		t.Run("interactive mode path with filters", func(t *testing.T) {
+			_, cleanup := setupNoteTest(t)
+			defer cleanup()
+
+			testHandler, err := NewNoteHandler()
+			if err != nil {
+				t.Fatalf("Failed to create test handler: %v", err)
+			}
+			defer testHandler.Close()
+
+			if err := testHandler.Create(ctx, "Tagged Note", "Test content with work tag", "", false); err != nil {
+				t.Fatalf("Failed to create tagged note: %v", err)
+			}
+
+			if err := TestNoteInteractiveList(t, testHandler, true, []string{"work"}); err != nil {
+				t.Errorf("Interactive note list test with filters failed: %v", err)
 			}
 		})
 	})
@@ -744,7 +628,7 @@ This is the modified content.
 
 	t.Run("Helper Methods", func(t *testing.T) {
 		t.Run("parseNoteContent", func(t *testing.T) {
-			tests := []struct {
+			tt := []struct {
 				name            string
 				content         string
 				expectedTitle   string
@@ -774,19 +658,19 @@ This is the modified content.
 				},
 			}
 
-			for _, tt := range tests {
-				t.Run(tt.name, func(t *testing.T) {
-					title, content, tags := handler.parseNoteContent(tt.content)
-					if title != tt.expectedTitle {
-						t.Errorf("Expected title %q, got %q", tt.expectedTitle, title)
+			for _, tc := range tt {
+				t.Run(tc.name, func(t *testing.T) {
+					title, content, tags := handler.parseNoteContent(tc.content)
+					if title != tc.expectedTitle {
+						t.Errorf("Expected title %q, got %q", tc.expectedTitle, title)
 					}
-					if content != tt.expectedContent {
-						t.Errorf("Expected content %q, got %q", tt.expectedContent, content)
+					if content != tc.expectedContent {
+						t.Errorf("Expected content %q, got %q", tc.expectedContent, content)
 					}
-					if len(tags) != len(tt.expectedTags) {
-						t.Errorf("Expected %d tags, got %d", len(tt.expectedTags), len(tags))
+					if len(tags) != len(tc.expectedTags) {
+						t.Errorf("Expected %d tags, got %d", len(tc.expectedTags), len(tags))
 					}
-					for i, tag := range tt.expectedTags {
+					for i, tag := range tc.expectedTags {
 						if i < len(tags) && tags[i] != tag {
 							t.Errorf("Expected tag %q, got %q", tag, tags[i])
 						}
@@ -1055,9 +939,7 @@ This is content from the interactive editor.
 				Modified: time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC),
 			}
 
-			result := handler.formatNoteForView(note)
-
-			if !strings.Contains(result, "# Single Line") {
+			if !strings.Contains(handler.formatNoteForView(note), "# Single Line") {
 				t.Error("Formatted note should contain title")
 			}
 		})

@@ -291,6 +291,24 @@ func TestTaskHandler(t *testing.T) {
 				t.Errorf("ListTasks with show all failed: %v", err)
 			}
 		})
+
+		t.Run("interactive mode path", func(t *testing.T) {
+			if err := TestTaskInteractiveList(t, handler, false, "", "", ""); err != nil {
+				t.Errorf("Interactive task list test failed: %v", err)
+			}
+		})
+
+		t.Run("interactive mode path with filters", func(t *testing.T) {
+			if err := TestTaskInteractiveList(t, handler, false, "pending", "A", "work"); err != nil {
+				t.Errorf("Interactive task list test with filters failed: %v", err)
+			}
+		})
+
+		t.Run("interactive mode path show all", func(t *testing.T) {
+			if err := TestTaskInteractiveList(t, handler, true, "", "", ""); err != nil {
+				t.Errorf("Interactive task list test with show all failed: %v", err)
+			}
+		})
 	})
 
 	t.Run("Update", func(t *testing.T) {

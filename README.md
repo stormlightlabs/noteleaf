@@ -21,18 +21,3 @@ A note, task & time management CLI built with Golang & Charm.sh libs. Inspired b
 ## Development
 
 Requires Go v1.24+
-
-### Testing
-
-#### Handlers
-
-The command handlers (`cmd/handlers/`) use a multi-layered testing approach for happy and error paths:
-
-- Environment Isolation
-    - Tests manipulate environment variables to simulate configuration failures
-- File System Simulation
-    - By creating temporary directories with controlled permissions, tests verify that handlers properly handle file system errors like read-only directories, missing files, and permission denied scenarios.
-- Data Corruption Testing
-    - Tests intentionally corrupt database schemas and configuration files to ensure handlers detect and report data integrity issues.
-- Table-Driven Error Testing
-    - Systematic testing of multiple error scenarios using structured test tables

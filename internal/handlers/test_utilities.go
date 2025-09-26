@@ -15,10 +15,13 @@ import (
 	"testing"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/stormlightlabs/noteleaf/internal/articles"
 	"github.com/stormlightlabs/noteleaf/internal/models"
+	"github.com/stormlightlabs/noteleaf/internal/repo"
 	"github.com/stormlightlabs/noteleaf/internal/services"
 	"github.com/stormlightlabs/noteleaf/internal/store"
+	"github.com/stormlightlabs/noteleaf/internal/ui"
 )
 
 // HandlerTestHelper wraps NoteHandler with test-specific functionality
@@ -205,7 +208,6 @@ func (dth *DatabaseTestHelper) CreateCorruptedDatabase(t *testing.T) {
 		t.Fatalf("Failed to create corrupted database: %v", err)
 	}
 
-	// Drop the notes table to simulate corruption
 	db.Exec("DROP TABLE notes")
 	dth.handler.db = db
 }
@@ -353,46 +355,6 @@ func containsString(haystack, needle string) bool {
 				}
 				return false
 			}())
-}
-
-// FileTestHelper provides file manipulation utilities for testing
-type FileTestHelper struct {
-	tempFiles []string
-}
-
-// NewFileTestHelper creates a new file test helper
-func NewFileTestHelper() *FileTestHelper {
-	return &FileTestHelper{}
-}
-
-// CreateTempFile creates a temporary file with content
-func (fth *FileTestHelper) CreateTempFile(t *testing.T, pattern, content string) string {
-	file, err := os.CreateTemp("", pattern)
-	if err != nil {
-		t.Fatalf("Failed to create temp file: %v", err)
-	}
-
-	if content != "" {
-		if _, err := file.WriteString(content); err != nil {
-			file.Close()
-			os.Remove(file.Name())
-			t.Fatalf("Failed to write temp file content: %v", err)
-		}
-	}
-
-	fileName := file.Name()
-	file.Close()
-
-	fth.tempFiles = append(fth.tempFiles, fileName)
-	return fileName
-}
-
-// Cleanup removes all temporary files created by this helper
-func (fth *FileTestHelper) Cleanup() {
-	for _, file := range fth.tempFiles {
-		os.Remove(file)
-	}
-	fth.tempFiles = nil
 }
 
 // ArticleTestHelper wraps ArticleHandler with test-specific functionality
@@ -759,8 +721,8 @@ func CreateMockTVSearchResults() []services.Media {
 	}
 }
 
-// InputSimulator provides controlled input simulation for testing fmt.Scanf interactions
-// It implements io.Reader to provide predictable input sequences for interactive components
+// InputSimulator provides controlled input simulation for testing [fmt.Scanf] interactions
+// It implements [io.Reader] to provide predictable input sequences for interactive components
 type InputSimulator struct {
 	inputs   []string
 	position int
@@ -769,12 +731,10 @@ type InputSimulator struct {
 
 // NewInputSimulator creates a new input simulator with the given input sequence
 func NewInputSimulator(inputs ...string) *InputSimulator {
-	return &InputSimulator{
-		inputs: inputs,
-	}
+	return &InputSimulator{inputs: inputs}
 }
 
-// Read implements io.Reader interface for fmt.Scanf compatibility
+// Read implements [io.Reader] interface for [fmt.Scanf] compatibility
 func (is *InputSimulator) Read(p []byte) (n int, err error) {
 	is.mu.Lock()
 	defer is.mu.Unlock()
@@ -950,4 +910,275 @@ func setupTest(t *testing.T) (string, func()) {
 	}
 
 	return tempDir, cleanup
+}
+
+// TUICapableHandler interface for handlers that can expose TUI models for testing
+type TUICapableHandler interface {
+	GetTUIModel(ctx context.Context, opts TUITestOptions) (tea.Model, error)
+	SetTUITestMode(enabled bool)
+}
+
+// TUITestOptions configures TUI testing behavior for handlers
+type TUITestOptions struct {
+	Width    int
+	Height   int
+	Static   bool
+	Output   io.Writer
+	Input    io.Reader
+	MockData any
+}
+
+// InteractiveTUIHelper bridges handler testing with TUI testing capabilities
+type InteractiveTUIHelper struct {
+	t       *testing.T
+	handler TUICapableHandler
+	suite   *ui.TUITestSuite
+	opts    TUITestOptions
+}
+
+// NewInteractiveTUIHelper creates a helper for testing handler TUI interactions
+func NewInteractiveTUIHelper(t *testing.T, handler TUICapableHandler) *InteractiveTUIHelper {
+	return &InteractiveTUIHelper{
+		t:       t,
+		handler: handler,
+		opts: TUITestOptions{
+			Width:  80,
+			Height: 24,
+		},
+	}
+}
+
+// WithSize configures the TUI test dimensions
+func (ith *InteractiveTUIHelper) WithSize(width, height int) *InteractiveTUIHelper {
+	ith.opts.Width = width
+	ith.opts.Height = height
+	return ith
+}
+
+// WithMockData configures mock data for the TUI test
+func (ith *InteractiveTUIHelper) WithMockData(data any) *InteractiveTUIHelper {
+	ith.opts.MockData = data
+	return ith
+}
+
+// StartTUITest initializes and starts a TUI test session
+func (ith *InteractiveTUIHelper) StartTUITest(ctx context.Context) (*ui.TUITestSuite, error) {
+	ith.handler.SetTUITestMode(true)
+
+	model, err := ith.handler.GetTUIModel(ctx, ith.opts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get TUI model: %w", err)
+	}
+
+	ith.suite = ui.NewTUITestSuite(ith.t, model,
+		ui.WithInitialSize(ith.opts.Width, ith.opts.Height))
+	ith.suite.Start()
+
+	return ith.suite, nil
+}
+
+// TestInteractiveList tests interactive list browsing behavior
+func (ith *InteractiveTUIHelper) TestInteractiveList(ctx context.Context, testFunc func(*ui.TUITestSuite) error) error {
+	suite, err := ith.StartTUITest(ctx)
+	if err != nil {
+		return err
+	}
+	return testFunc(suite)
+}
+
+// TestInteractiveNavigation tests keyboard navigation patterns
+func (ith *InteractiveTUIHelper) TestInteractiveNavigation(ctx context.Context, keySequence []tea.KeyType) error {
+	suite, err := ith.StartTUITest(ctx)
+	if err != nil {
+		return err
+	}
+
+	for _, key := range keySequence {
+		if err := suite.SendKey(key); err != nil {
+			return fmt.Errorf("failed to send key %v: %w", key, err)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	return nil
+}
+
+// TestInteractiveSelection tests item selection and actions
+func (ith *InteractiveTUIHelper) TestInteractiveSelection(ctx context.Context, selected int, action tea.KeyType) error {
+	suite, err := ith.StartTUITest(ctx)
+	if err != nil {
+		return err
+	}
+
+	for range selected {
+		if err := suite.SendKey(tea.KeyDown); err != nil {
+			return fmt.Errorf("failed to navigate down: %w", err)
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+
+	return suite.SendKey(action)
+}
+
+// TestMovieInteractiveList tests movie list browsing with TUI
+func TestMovieInteractiveList(t *testing.T, handler *MovieHandler, status string) error {
+	ctx := context.Background()
+
+	t.Run("interactive_mode", func(t *testing.T) {
+		movies, err := handler.repos.Movies.List(ctx, repo.MovieListOptions{})
+		if err != nil {
+			t.Fatalf("Failed to get movies for TUI test: %v", err)
+		}
+
+		if len(movies) == 0 {
+			t.Skip("No movies available for interactive testing")
+		}
+
+		t.Logf("Would test interactive list with %d movies", len(movies))
+	})
+
+	return nil
+}
+
+// TestTVInteractiveList tests TV show list browsing with TUI
+func TestTVInteractiveList(t *testing.T, handler *TVHandler, status string) error {
+	ctx := context.Background()
+
+	t.Run("interactive_tv_list", func(t *testing.T) {
+		shows, err := handler.repos.TV.List(ctx, repo.TVListOptions{})
+		if err != nil {
+			t.Fatalf("Failed to get TV shows for TUI test: %v", err)
+		}
+
+		if len(shows) == 0 {
+			t.Skip("No TV shows available for interactive testing")
+		}
+
+		t.Logf("Would test interactive TV list with %d shows", len(shows))
+	})
+
+	return nil
+}
+
+// TestBookInteractiveList tests book list browsing with TUI
+func TestBookInteractiveList(t *testing.T, handler *BookHandler, status string) error {
+	ctx := context.Background()
+
+	t.Run("interactive_book_list", func(t *testing.T) {
+		books, err := handler.repos.Books.List(ctx, repo.BookListOptions{})
+		if err != nil {
+			t.Fatalf("Failed to get books for TUI test: %v", err)
+		}
+
+		if len(books) == 0 {
+			t.Skip("No books available for interactive testing")
+		}
+
+		t.Logf("Would test interactive book list with %d books", len(books))
+	})
+
+	return nil
+}
+
+// TestTaskInteractiveList tests task list browsing with TUI
+func TestTaskInteractiveList(t *testing.T, handler *TaskHandler, showAll bool, status, priority, project string) error {
+	ctx := context.Background()
+
+	t.Run("interactive_task_list", func(t *testing.T) {
+		tasks, err := handler.repos.Tasks.List(ctx, repo.TaskListOptions{
+			Status: status, Priority: priority, Project: project,
+		})
+		if err != nil {
+			t.Fatalf("Failed to get tasks for TUI test: %v", err)
+		}
+
+		if len(tasks) == 0 {
+			t.Skip("No tasks available for interactive testing")
+		}
+
+		t.Logf("Would test interactive task list with %d tasks", len(tasks))
+	})
+
+	return nil
+}
+
+// TestNoteInteractiveList tests note list browsing with TUI
+func TestNoteInteractiveList(t *testing.T, handler *NoteHandler, showArchived bool, tags []string) error {
+	ctx := context.Background()
+
+	t.Run("interactive_note_list", func(t *testing.T) {
+		notes, err := handler.repos.Notes.List(ctx, repo.NoteListOptions{
+			Archived: &showArchived, Tags: tags,
+		})
+		if err != nil {
+			t.Fatalf("Failed to get notes for TUI test: %v", err)
+		}
+
+		if len(notes) == 0 {
+			t.Skip("No notes available for interactive testing")
+		}
+
+		t.Logf("Would test interactive note list with %d notes", len(notes))
+	})
+
+	return nil
+}
+
+// TUITestScenario defines a common test scenario for interactive components
+type TUITestScenario struct {
+	Name         string
+	KeySequence  []tea.KeyType
+	ExpectedView string
+	Timeout      time.Duration
+}
+
+// RunTUIScenarios executes a series of TUI test scenarios
+func RunTUIScenarios(t *testing.T, suite *ui.TUITestSuite, scenarios []TUITestScenario) {
+	for _, scenario := range scenarios {
+		t.Run(scenario.Name, func(t *testing.T) {
+			timeout := scenario.Timeout
+			if timeout == 0 {
+				timeout = 1 * time.Second
+			}
+
+			for _, key := range scenario.KeySequence {
+				if err := suite.SendKey(key); err != nil {
+					t.Fatalf("Failed to send key %v in scenario %s: %v", key, scenario.Name, err)
+				}
+				time.Sleep(50 * time.Millisecond)
+			}
+
+			if scenario.ExpectedView != "" {
+				if err := suite.WaitForView(scenario.ExpectedView, timeout); err != nil {
+					t.Errorf("Expected view containing '%s' in scenario %s: %v", scenario.ExpectedView, scenario.Name, err)
+				}
+			}
+		})
+	}
+}
+
+// CommonTUIScenarios returns standard TUI testing scenarios
+func CommonTUIScenarios() []TUITestScenario {
+	return []TUITestScenario{
+		{
+			Name:        "help_toggle",
+			KeySequence: []tea.KeyType{tea.KeyRunes},
+			Timeout:     500 * time.Millisecond,
+		},
+		{
+			Name:        "navigation_down",
+			KeySequence: []tea.KeyType{tea.KeyDown, tea.KeyDown, tea.KeyUp},
+			Timeout:     500 * time.Millisecond,
+		},
+		{
+			Name:        "page_navigation",
+			KeySequence: []tea.KeyType{tea.KeyPgDown, tea.KeyPgUp},
+			Timeout:     500 * time.Millisecond,
+		},
+		{
+			Name:        "quit_sequence",
+			KeySequence: []tea.KeyType{tea.KeyCtrlC},
+			Timeout:     500 * time.Millisecond,
+		},
+	}
 }

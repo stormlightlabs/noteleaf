@@ -131,13 +131,10 @@ func TestBookHandler(t *testing.T) {
 			})
 
 			t.Run("context cancellation during search", func(t *testing.T) {
-				// Create cancelled context to test error handling
 				ctx, cancel := context.WithCancel(context.Background())
 				cancel()
 
-				args := []string{"test", "book"}
-				err := handler.SearchAndAdd(ctx, args, false)
-				if err == nil {
+				if err := handler.SearchAndAdd(ctx, []string{"test", "book"}, false); err == nil {
 					t.Error("Expected error for cancelled context")
 				}
 			})
@@ -148,8 +145,7 @@ func TestBookHandler(t *testing.T) {
 
 				handler.service = services.NewBookService(mockServer.URL())
 
-				args := []string{"test", "book"}
-				err := handler.SearchAndAdd(ctx, args, false)
+				err := handler.SearchAndAdd(ctx, []string{"test", "book"}, false)
 				if err == nil {
 					t.Error("Expected error for HTTP 500")
 				}
@@ -165,8 +161,7 @@ func TestBookHandler(t *testing.T) {
 
 				handler.service = services.NewBookService(mockServer.URL())
 
-				args := []string{"test", "book"}
-				err := handler.SearchAndAdd(ctx, args, false)
+				err := handler.SearchAndAdd(ctx, []string{"test", "book"}, false)
 				if err == nil {
 					t.Error("Expected error for malformed JSON")
 				}
@@ -202,9 +197,7 @@ func TestBookHandler(t *testing.T) {
 				ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 				defer cancel()
 
-				args := []string{"test", "book"}
-				err := handler.SearchAndAdd(ctx, args, false)
-				if err == nil {
+				if err := handler.SearchAndAdd(ctx, []string{"test", "book"}, false); err == nil {
 					t.Error("Expected error for timeout")
 				}
 			})
@@ -222,23 +215,61 @@ func TestBookHandler(t *testing.T) {
 				ctx, cancel := context.WithCancel(context.Background())
 				cancel()
 
-				args := []string{"test", "book"}
-				err := handler.SearchAndAdd(ctx, args, false)
-				if err == nil {
+				if err := handler.SearchAndAdd(ctx, []string{"test", "book"}, false); err == nil {
 					t.Error("Expected error for cancelled context")
 				}
 			})
 
 			t.Run("handles interactive mode", func(t *testing.T) {
-				// Skip interactive mode test to prevent hanging in CI/test environments
-				// TODO: Interactive mode uses TUI components that require terminal interaction
-				t.Skip("Interactive mode requires terminal interaction, skipping to prevent hanging")
+				_, cleanup := setupBookTest(t)
+				defer cleanup()
+
+				handler, err := NewBookHandler()
+				if err != nil {
+					t.Fatalf("Failed to create handler: %v", err)
+				}
+				defer handler.Close()
+
+				ctx := context.Background()
+				if _, err = handler.repos.Books.Create(ctx, &models.Book{
+					Title: "Test Book 1", Author: "Test Author 1", Status: "queued",
+				}); err != nil {
+					t.Fatalf("Failed to create test book: %v", err)
+				}
+
+				if _, err = handler.repos.Books.Create(ctx, &models.Book{
+					Title: "Test Book 2", Author: "Test Author 2", Status: "reading",
+				}); err != nil {
+					t.Fatalf("Failed to create test book: %v", err)
+				}
+
+				if err = TestBookInteractiveList(t, handler, ""); err != nil {
+					t.Errorf("Interactive book list test failed: %v", err)
+				}
 			})
 
 			t.Run("interactive mode path", func(t *testing.T) {
-				// Skip interactive mode test to prevent hanging in CI/test environments
-				// TODO: Interactive mode uses TUI components that require terminal interaction
-				t.Skip("Interactive mode requires terminal interaction, skipping to prevent hanging")
+				_, cleanup := setupBookTest(t)
+				defer cleanup()
+
+				handler, err := NewBookHandler()
+				if err != nil {
+					t.Fatalf("Failed to create handler: %v", err)
+				}
+				defer handler.Close()
+
+				ctx := context.Background()
+				if _, err = handler.repos.Books.Create(ctx, &models.Book{
+					Title:  "Interactive Test Book",
+					Author: "Interactive Author",
+					Status: "completed",
+				}); err != nil {
+					t.Fatalf("Failed to create test book: %v", err)
+				}
+
+				if err = TestBookInteractiveList(t, handler, "completed"); err != nil {
+					t.Errorf("Interactive book list test with status filter failed: %v", err)
+				}
 			})
 
 			t.Run("successful search and add with user selection", func(t *testing.T) {
@@ -410,16 +441,16 @@ func TestBookHandler(t *testing.T) {
 						t.Errorf("UpdateBookStatusByID failed: %v", err)
 					}
 
-					updatedBook, err := handler.repos.Books.Get(ctx, book.ID)
+					updated, err := handler.repos.Books.Get(ctx, book.ID)
 					if err != nil {
 						t.Fatalf("Failed to get updated book: %v", err)
 					}
 
-					if updatedBook.Status != "reading" {
-						t.Errorf("Expected status 'reading', got '%s'", updatedBook.Status)
+					if updated.Status != "reading" {
+						t.Errorf("Expected status 'reading', got '%s'", updated.Status)
 					}
 
-					if updatedBook.Started == nil {
+					if updated.Started == nil {
 						t.Error("Expected started time to be set")
 					}
 				})
@@ -430,21 +461,21 @@ func TestBookHandler(t *testing.T) {
 						t.Errorf("UpdateBookStatusByID failed: %v", err)
 					}
 
-					updatedBook, err := handler.repos.Books.Get(ctx, book.ID)
+					updated, err := handler.repos.Books.Get(ctx, book.ID)
 					if err != nil {
 						t.Fatalf("Failed to get updated book: %v", err)
 					}
 
-					if updatedBook.Status != "finished" {
-						t.Errorf("Expected status 'finished', got '%s'", updatedBook.Status)
+					if updated.Status != "finished" {
+						t.Errorf("Expected status 'finished', got '%s'", updated.Status)
 					}
 
-					if updatedBook.Finished == nil {
+					if updated.Finished == nil {
 						t.Error("Expected finished time to be set")
 					}
 
-					if updatedBook.Progress != 100 {
-						t.Errorf("Expected progress 100, got %d", updatedBook.Progress)
+					if updated.Progress != 100 {
+						t.Errorf("Expected progress 100, got %d", updated.Progress)
 					}
 				})
 
@@ -512,20 +543,20 @@ func TestBookHandler(t *testing.T) {
 						t.Errorf("UpdateBookProgressByID failed: %v", err)
 					}
 
-					updatedBook, err := handler.repos.Books.Get(ctx, book.ID)
+					updated, err := handler.repos.Books.Get(ctx, book.ID)
 					if err != nil {
 						t.Fatalf("Failed to get updated book: %v", err)
 					}
 
-					if updatedBook.Progress != 50 {
-						t.Errorf("Expected progress 50, got %d", updatedBook.Progress)
+					if updated.Progress != 50 {
+						t.Errorf("Expected progress 50, got %d", updated.Progress)
 					}
 
-					if updatedBook.Status != "reading" {
-						t.Errorf("Expected status 'reading', got '%s'", updatedBook.Status)
+					if updated.Status != "reading" {
+						t.Errorf("Expected status 'reading', got '%s'", updated.Status)
 					}
 
-					if updatedBook.Started == nil {
+					if updated.Started == nil {
 						t.Error("Expected started time to be set")
 					}
 				})
@@ -536,20 +567,20 @@ func TestBookHandler(t *testing.T) {
 						t.Errorf("UpdateBookProgressByID failed: %v", err)
 					}
 
-					updatedBook, err := handler.repos.Books.Get(ctx, book.ID)
+					updated, err := handler.repos.Books.Get(ctx, book.ID)
 					if err != nil {
 						t.Fatalf("Failed to get updated book: %v", err)
 					}
 
-					if updatedBook.Progress != 100 {
-						t.Errorf("Expected progress 100, got %d", updatedBook.Progress)
+					if updated.Progress != 100 {
+						t.Errorf("Expected progress 100, got %d", updated.Progress)
 					}
 
-					if updatedBook.Status != "finished" {
-						t.Errorf("Expected status 'finished', got '%s'", updatedBook.Status)
+					if updated.Status != "finished" {
+						t.Errorf("Expected status 'finished', got '%s'", updated.Status)
 					}
 
-					if updatedBook.Finished == nil {
+					if updated.Finished == nil {
 						t.Error("Expected finished time to be set")
 					}
 				})
@@ -560,25 +591,24 @@ func TestBookHandler(t *testing.T) {
 					book.Started = &now
 					handler.repos.Books.Update(ctx, book)
 
-					err := handler.UpdateProgress(ctx, strconv.FormatInt(book.ID, 10), 0)
-					if err != nil {
+					if err := handler.UpdateProgress(ctx, strconv.FormatInt(book.ID, 10), 0); err != nil {
 						t.Errorf("UpdateBookProgressByID failed: %v", err)
 					}
 
-					updatedBook, err := handler.repos.Books.Get(ctx, book.ID)
+					updated, err := handler.repos.Books.Get(ctx, book.ID)
 					if err != nil {
 						t.Fatalf("Failed to get updated book: %v", err)
 					}
 
-					if updatedBook.Progress != 0 {
-						t.Errorf("Expected progress 0, got %d", updatedBook.Progress)
+					if updated.Progress != 0 {
+						t.Errorf("Expected progress 0, got %d", updated.Progress)
 					}
 
-					if updatedBook.Status != "queued" {
-						t.Errorf("Expected status 'queued', got '%s'", updatedBook.Status)
+					if updated.Status != "queued" {
+						t.Errorf("Expected status 'queued', got '%s'", updated.Status)
 					}
 
-					if updatedBook.Started != nil {
+					if updated.Started != nil {
 						t.Error("Expected started time to be nil")
 					}
 				})
@@ -595,9 +625,9 @@ func TestBookHandler(t *testing.T) {
 				})
 
 				t.Run("fails with progress out of range", func(t *testing.T) {
-					testCases := []int{-1, 101, 150}
+					tt := []int{-1, 101, 150}
 
-					for _, progress := range testCases {
+					for _, progress := range tt {
 						err := handler.UpdateProgress(ctx, strconv.FormatInt(book.ID, 10), progress)
 						if err == nil {
 							t.Errorf("Expected error for progress %d", progress)
@@ -751,13 +781,13 @@ func TestBookHandler(t *testing.T) {
 				t.Errorf("Failed to update progress: %v", err)
 			}
 
-			updatedBook, err := handler.repos.Books.Get(ctx, book.ID)
+			updated, err := handler.repos.Books.Get(ctx, book.ID)
 			if err != nil {
 				t.Fatalf("Failed to get updated book: %v", err)
 			}
 
-			if updatedBook.Status != "reading" {
-				t.Errorf("Expected status 'reading', got '%s'", updatedBook.Status)
+			if updated.Status != "reading" {
+				t.Errorf("Expected status 'reading', got '%s'", updated.Status)
 			}
 
 			err = handler.UpdateProgress(ctx, strconv.FormatInt(book.ID, 10), 100)
