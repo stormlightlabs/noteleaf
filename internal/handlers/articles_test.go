@@ -329,25 +329,70 @@ func TestArticleHandler(t *testing.T) {
 		})
 	})
 
+	t.Run("Read", func(t *testing.T) {
+		t.Run("read renders article successfully", func(t *testing.T) {
+			helper := NewArticleTestHelper(t)
+			ctx := context.Background()
+			id := helper.CreateTestArticle(t, "https://example.com/read", "Read Test Article", "Test Author", "2024-01-01")
+			err := helper.Read(ctx, id)
+			Expect.AssertNoError(t, err, "Read should succeed with valid article ID")
+		})
+
+		t.Run("handles non-existent article", func(t *testing.T) {
+			helper := NewArticleTestHelper(t)
+			ctx := context.Background()
+			err := helper.Read(ctx, 99999)
+			Expect.AssertError(t, err, "failed to get article", "Read should fail with non-existent article ID")
+		})
+
+		t.Run("handles missing markdown file", func(t *testing.T) {
+			helper := NewArticleTestHelper(t)
+			ctx := context.Background()
+
+			article := &models.Article{
+				URL:          "https://example.com/missing-md",
+				Title:        "Missing Markdown Article",
+				Author:       "Test Author",
+				Date:         "2024-01-01",
+				MarkdownPath: "/non/existent/path.md",
+				HTMLPath:     "/some/existent/path.html",
+				Created:      time.Now(),
+				Modified:     time.Now(),
+			}
+
+			id, err := helper.repos.Articles.Create(ctx, article)
+			if err != nil {
+				t.Fatalf("Failed to create article with missing markdown file: %v", err)
+			}
+
+			err = helper.Read(ctx, id)
+			Expect.AssertError(t, err, "markdown file not found", "Read should fail when markdown file is missing")
+		})
+
+		t.Run("handles database error", func(t *testing.T) {
+			helper := NewArticleTestHelper(t)
+			ctx := context.Background()
+			helper.db.Exec("DROP TABLE articles")
+			err := helper.Read(ctx, 1)
+			Expect.AssertError(t, err, "failed to get article", "Read should fail when database is corrupted")
+		})
+	})
+
 	t.Run("Remove", func(t *testing.T) {
 		t.Run("removes article successfully", func(t *testing.T) {
 			helper := NewArticleTestHelper(t)
 			ctx := context.Background()
-
 			id := helper.CreateTestArticle(t, "https://example.com/remove", "Remove Test", "Author", "2024-01-01")
-
 			Expect.AssertArticleExists(t, helper, id)
 
 			err := helper.Remove(ctx, id)
 			Expect.AssertNoError(t, err, "Remove should succeed")
-
 			Expect.AssertArticleNotExists(t, helper, id)
 		})
 
 		t.Run("handles non-existent article", func(t *testing.T) {
 			helper := NewArticleTestHelper(t)
 			ctx := context.Background()
-
 			err := helper.Remove(ctx, 99999)
 			Expect.AssertError(t, err, "failed to get article", "Remove should fail with non-existent article ID")
 		})
@@ -379,7 +424,6 @@ func TestArticleHandler(t *testing.T) {
 		t.Run("handles database error", func(t *testing.T) {
 			helper := NewArticleTestHelper(t)
 			ctx := context.Background()
-
 			id := helper.CreateTestArticle(t, "https://example.com/db-error", "DB Error Test", "Author", "2024-01-01")
 
 			helper.db.Exec("DROP TABLE articles")
@@ -392,7 +436,6 @@ func TestArticleHandler(t *testing.T) {
 	t.Run("Help", func(t *testing.T) {
 		t.Run("shows supported domains", func(t *testing.T) {
 			helper := NewArticleTestHelper(t)
-
 			err := helper.Help()
 			Expect.AssertNoError(t, err, "Help should succeed")
 		})
@@ -419,7 +462,6 @@ func TestArticleHandler(t *testing.T) {
 	t.Run("Close", func(t *testing.T) {
 		t.Run("closes successfully", func(t *testing.T) {
 			helper := NewArticleTestHelper(t)
-
 			err := helper.Close()
 			Expect.AssertNoError(t, err, "Close should succeed")
 		})
@@ -427,7 +469,6 @@ func TestArticleHandler(t *testing.T) {
 		t.Run("handles nil database gracefully", func(t *testing.T) {
 			helper := NewArticleTestHelper(t)
 			helper.db = nil
-
 			err := helper.Close()
 			Expect.AssertNoError(t, err, "Close should succeed with nil database")
 		})
@@ -436,7 +477,6 @@ func TestArticleHandler(t *testing.T) {
 	t.Run("getStorageDirectory", func(t *testing.T) {
 		t.Run("returns storage directory successfully", func(t *testing.T) {
 			helper := NewArticleTestHelper(t)
-
 			dir, err := helper.getStorageDirectory()
 			Expect.AssertNoError(t, err, "getStorageDirectory should succeed")
 

@@ -734,6 +734,24 @@ func TestCommandExecution(t *testing.T) {
 			}
 		})
 
+		t.Run("read command with non-existent article ID", func(t *testing.T) {
+			cmd := NewArticleCommand(handler).Create()
+			cmd.SetArgs([]string{"read", "999"})
+			err := cmd.Execute()
+			if err == nil {
+				t.Error("expected article read command to fail with non-existent ID")
+			}
+		})
+
+		t.Run("read command with non-numeric ID", func(t *testing.T) {
+			cmd := NewArticleCommand(handler).Create()
+			cmd.SetArgs([]string{"read", "invalid"})
+			err := cmd.Execute()
+			if err == nil {
+				t.Error("expected article read command to fail with non-numeric ID")
+			}
+		})
+
 		t.Run("remove command with non-existent article ID", func(t *testing.T) {
 			cmd := NewArticleCommand(handler).Create()
 			cmd.SetArgs([]string{"remove", "999"})

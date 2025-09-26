@@ -479,6 +479,24 @@ Use query to filter by title, or use flags for more specific filtering.`,
 	}
 	root.AddCommand(viewCmd)
 
+	readCmd := &cobra.Command{
+		Use:   "read <id>",
+		Short: "Read article content with formatted markdown",
+		Long: `Read the full markdown content of an article with beautiful formatting.
+
+This displays the complete article content using syntax highlighting and proper formatting.`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if articleID, err := parseID("article", args); err != nil {
+				return err
+			} else {
+				defer c.handler.Close()
+				return c.handler.Read(cmd.Context(), articleID)
+			}
+		},
+	}
+	root.AddCommand(readCmd)
+
 	removeCmd := &cobra.Command{
 		Use:     "remove <id>",
 		Short:   "Remove article and associated files",

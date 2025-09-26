@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/charmbracelet/glamour"
 	"github.com/stormlightlabs/noteleaf/internal/models"
 	"github.com/stormlightlabs/noteleaf/internal/repo"
 	"github.com/stormlightlabs/noteleaf/internal/store"
@@ -275,19 +274,11 @@ func (h *NoteHandler) getEditor() string {
 	return ""
 }
 
-func defaultOpenInEditor(editor, filePath string) error {
-	cmd := exec.Command(editor, filePath)
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
-}
-
 func (h *NoteHandler) openInEditor(editor, filePath string) error {
 	if h.openInEditorFunc != nil {
 		return h.openInEditorFunc(editor, filePath)
 	}
-	return defaultOpenInEditor(editor, filePath)
+	return openInDefaultEditor(editor, filePath)
 }
 
 func (h *NoteHandler) parseNoteContent(content string) (title, noteContent string, tags []string) {
@@ -324,25 +315,6 @@ func (h *NoteHandler) parseNoteContent(content string) (title, noteContent strin
 	return title, noteContent, tags
 }
 
-func (h *NoteHandler) formatNoteForEdit(note *models.Note) string {
-	var content strings.Builder
-
-	if !strings.Contains(note.Content, "# "+note.Title) {
-		content.WriteString("# " + note.Title + "\n\n")
-	}
-
-	content.WriteString(note.Content)
-
-	if len(note.Tags) > 0 {
-		if !strings.HasSuffix(note.Content, "\n") {
-			content.WriteString("\n")
-		}
-		content.WriteString("\n<!-- Tags: " + strings.Join(note.Tags, ", ") + " -->\n")
-	}
-
-	return content.String()
-}
-
 // View displays a note with formatted markdown content
 func (h *NoteHandler) View(ctx context.Context, id int64) error {
 	note, err := h.repos.Notes.Get(ctx, id)
@@ -350,22 +322,13 @@ func (h *NoteHandler) View(ctx context.Context, id int64) error {
 		return fmt.Errorf("failed to get note: %w", err)
 	}
 
-	renderer, err := glamour.NewTermRenderer(
-		glamour.WithAutoStyle(),
-		glamour.WithWordWrap(80),
-	)
-	if err != nil {
-		return fmt.Errorf("failed to create markdown renderer: %w", err)
-	}
-
 	content := h.formatNoteForView(note)
-	rendered, err := renderer.Render(content)
-	if err != nil {
-		return fmt.Errorf("failed to render markdown: %w", err)
+	if rendered, err := renderMarkdown(content); err != nil {
+		return err
+	} else {
+		fmt.Print(rendered)
+		return nil
 	}
-
-	fmt.Print(rendered)
-	return nil
 }
 
 // List opens either an interactive TUI browser for navigating and viewing notes or a static list
@@ -429,4 +392,31 @@ func (h *NoteHandler) formatNoteForView(note *models.Note) string {
 	}
 
 	return content.String()
+}
+
+func (h *NoteHandler) formatNoteForEdit(note *models.Note) string {
+	var content strings.Builder
+
+	if !strings.Contains(note.Content, "# "+note.Title) {
+		content.WriteString("# " + note.Title + "\n\n")
+	}
+
+	content.WriteString(note.Content)
+
+	if len(note.Tags) > 0 {
+		if !strings.HasSuffix(note.Content, "\n") {
+			content.WriteString("\n")
+		}
+		content.WriteString("\n<!-- Tags: " + strings.Join(note.Tags, ", ") + " -->\n")
+	}
+
+	return content.String()
+}
+
+func openInDefaultEditor(editor, filePath string) error {
+	cmd := exec.Command(editor, filePath)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }

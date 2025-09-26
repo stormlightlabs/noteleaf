@@ -485,6 +485,20 @@ func TestBookHandler(t *testing.T) {
 				t.Errorf("Close failed: %v", err)
 			}
 		})
+
+		t.Run("handles service close gracefully", func(t *testing.T) {
+			_, cleanup := setupBookTest(t)
+			defer cleanup()
+
+			handler, err := NewBookHandler()
+			if err != nil {
+				t.Fatalf("NewBookHandler failed: %v", err)
+			}
+
+			if err = handler.Close(); err != nil {
+				t.Errorf("Close should succeed: %v", err)
+			}
+		})
 	})
 
 	t.Run("Print", func(t *testing.T) {

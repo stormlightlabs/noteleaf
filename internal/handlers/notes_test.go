@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stormlightlabs/noteleaf/internal/models"
 	"github.com/stormlightlabs/noteleaf/internal/store"
@@ -717,15 +718,28 @@ This is the modified content.
 	})
 
 	t.Run("Close", func(t *testing.T) {
-		testHandler, err := NewNoteHandler()
-		if err != nil {
-			t.Fatalf("Failed to create test handler: %v", err)
-		}
+		t.Run("closes handler resources successfully", func(t *testing.T) {
+			testHandler, err := NewNoteHandler()
+			if err != nil {
+				t.Fatalf("Failed to create test handler: %v", err)
+			}
 
-		err = testHandler.Close()
-		if err != nil {
-			t.Errorf("Close should succeed: %v", err)
-		}
+			if err = testHandler.Close(); err != nil {
+				t.Errorf("Close should succeed: %v", err)
+			}
+		})
+
+		t.Run("handles nil database", func(t *testing.T) {
+			testHandler, err := NewNoteHandler()
+			if err != nil {
+				t.Fatalf("Failed to create test handler: %v", err)
+			}
+			testHandler.db = nil
+
+			if err = testHandler.Close(); err != nil {
+				t.Errorf("Close should succeed with nil database: %v", err)
+			}
+		})
 	})
 
 	t.Run("Helper Methods", func(t *testing.T) {
@@ -868,6 +882,184 @@ This is content from the interactive editor.
 
 			err := handler.createInteractive(ctx)
 			Expect.AssertError(t, err, "failed to read edited content", "createInteractive should fail when temp file is deleted")
+		})
+	})
+
+	t.Run("CreateWithOptions", func(t *testing.T) {
+		ctx := context.Background()
+
+		t.Run("creates note successfully without editor prompt", func(t *testing.T) {
+			handler := NewHandlerTestHelper(t)
+			err := handler.CreateWithOptions(ctx, "Test Note", "Test content", "", false, false)
+			Expect.AssertNoError(t, err, "CreateWithOptions should succeed")
+		})
+
+		t.Run("creates note successfully with editor prompt disabled", func(t *testing.T) {
+			handler := NewHandlerTestHelper(t)
+			err := handler.CreateWithOptions(ctx, "Another Test Note", "More content", "", false, false)
+			Expect.AssertNoError(t, err, "CreateWithOptions should succeed")
+		})
+
+		t.Run("handles database error during creation", func(t *testing.T) {
+			handler := NewHandlerTestHelper(t)
+			cancelCtx, cancel := context.WithCancel(ctx)
+			cancel()
+
+			err := handler.CreateWithOptions(cancelCtx, "Test Note", "Test content", "", false, false)
+			Expect.AssertError(t, err, "failed to create note", "CreateWithOptions should fail with cancelled context")
+		})
+
+		t.Run("creates note with empty content", func(t *testing.T) {
+			handler := NewHandlerTestHelper(t)
+			err := handler.CreateWithOptions(ctx, "Empty Content Note", "", "", false, false)
+			Expect.AssertNoError(t, err, "CreateWithOptions should succeed with empty content")
+		})
+
+		t.Run("creates note with empty title", func(t *testing.T) {
+			handler := NewHandlerTestHelper(t)
+			err := handler.CreateWithOptions(ctx, "", "Content without title", "", false, false)
+			Expect.AssertNoError(t, err, "CreateWithOptions should succeed with empty title")
+		})
+
+		t.Run("handles editor prompt with no editor available", func(t *testing.T) {
+			handler := NewHandlerTestHelper(t)
+			envHelper := NewEnvironmentTestHelper()
+			defer envHelper.RestoreEnv()
+
+			envHelper.UnsetEnv("EDITOR")
+			envHelper.SetEnv("PATH", "")
+
+			err := handler.CreateWithOptions(ctx, "Test Note", "Test content", "", false, true)
+			Expect.AssertNoError(t, err, "CreateWithOptions should succeed even when no editor is available")
+		})
+	})
+
+	t.Run("formatNoteForView", func(t *testing.T) {
+		t.Run("formats note with title and content", func(t *testing.T) {
+			note := &models.Note{
+				Title:    "Test Note",
+				Content:  "This is test content",
+				Tags:     []string{},
+				Created:  time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC),
+				Modified: time.Date(2023, 1, 2, 11, 0, 0, 0, time.UTC),
+			}
+
+			result := handler.formatNoteForView(note)
+
+			if !strings.Contains(result, "# Test Note") {
+				t.Error("Formatted note should contain title")
+			}
+			if !strings.Contains(result, "This is test content") {
+				t.Error("Formatted note should contain content")
+			}
+			if !strings.Contains(result, "**Created:**") {
+				t.Error("Formatted note should contain created timestamp")
+			}
+			if !strings.Contains(result, "**Modified:**") {
+				t.Error("Formatted note should contain modified timestamp")
+			}
+		})
+
+		t.Run("formats note with tags", func(t *testing.T) {
+			note := &models.Note{
+				Title:    "Tagged Note",
+				Content:  "Content with tags",
+				Tags:     []string{"work", "important", "personal"},
+				Created:  time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC),
+				Modified: time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC),
+			}
+
+			result := handler.formatNoteForView(note)
+
+			if !strings.Contains(result, "**Tags:**") {
+				t.Error("Formatted note should contain tags section")
+			}
+			if !strings.Contains(result, "`work`") {
+				t.Error("Formatted note should contain work tag")
+			}
+			if !strings.Contains(result, "`important`") {
+				t.Error("Formatted note should contain important tag")
+			}
+			if !strings.Contains(result, "`personal`") {
+				t.Error("Formatted note should contain personal tag")
+			}
+		})
+
+		t.Run("formats note with no tags", func(t *testing.T) {
+			note := &models.Note{
+				Title:    "Untagged Note",
+				Content:  "Content without tags",
+				Tags:     []string{},
+				Created:  time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC),
+				Modified: time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC),
+			}
+
+			result := handler.formatNoteForView(note)
+
+			if strings.Contains(result, "**Tags:**") {
+				t.Error("Formatted note should not contain tags section when no tags exist")
+			}
+		})
+
+		t.Run("handles content with existing title", func(t *testing.T) {
+			note := &models.Note{
+				Title:    "Note Title",
+				Content:  "# Duplicate Title\nContent after title",
+				Tags:     []string{},
+				Created:  time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC),
+				Modified: time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC),
+			}
+
+			result := handler.formatNoteForView(note)
+
+			if !strings.Contains(result, "Content after title") {
+				t.Error("Formatted note should contain content after duplicate title removal")
+			}
+			contentLines := strings.Split(result, "\n")
+			duplicateTitleCount := 0
+			for _, line := range contentLines {
+				if strings.Contains(line, "# Duplicate Title") {
+					duplicateTitleCount++
+				}
+			}
+			if duplicateTitleCount > 0 {
+				t.Error("Formatted note should not contain duplicate title from content")
+			}
+		})
+
+		t.Run("handles empty content", func(t *testing.T) {
+			note := &models.Note{
+				Title:    "Empty Content Note",
+				Content:  "",
+				Tags:     []string{},
+				Created:  time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC),
+				Modified: time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC),
+			}
+
+			result := handler.formatNoteForView(note)
+
+			if !strings.Contains(result, "# Empty Content Note") {
+				t.Error("Formatted note should contain title even with empty content")
+			}
+			if !strings.Contains(result, "---") {
+				t.Error("Formatted note should contain separator")
+			}
+		})
+
+		t.Run("handles content with only title line", func(t *testing.T) {
+			note := &models.Note{
+				Title:    "Single Line",
+				Content:  "# Single Line",
+				Tags:     []string{},
+				Created:  time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC),
+				Modified: time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC),
+			}
+
+			result := handler.formatNoteForView(note)
+
+			if !strings.Contains(result, "# Single Line") {
+				t.Error("Formatted note should contain title")
+			}
 		})
 	})
 }

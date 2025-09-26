@@ -1,16 +1,16 @@
 # Testing Documentation
 
-This document outlines the testing patterns and practices used in the noteleaf application.
+This document outlines the testing patterns and practices used in the `noteleaf` application.
 
-## Testing Principles
+## Overview
 
-The codebase follows Go's standard testing practices without external libraries. Tests use only the standard library `testing` package and avoid mock frameworks or assertion libraries. This keeps dependencies minimal and tests readable using standard Go patterns.
+The codebase follows Go's standard testing practices without external libraries. Tests use only the standard library package and avoid mock frameworks or assertion libraries. This is to keep dependencies minimal and tests readable using standard Go patterns.
 
-## Test File Organization
+### Organization
 
-Test files follow the standard Go convention of `*_test.go` naming. Each package contains its own test files alongside the source code. Test files are organized by functionality and mirror the structure of the source code they test.
+Each package contains its own test files alongside the source code. Test files are organized by functionality and mirror the structure of the source code they test.
 
-## Testing Patterns
+## Patterns
 
 ### Handler Creation Pattern
 
@@ -30,6 +30,10 @@ Tests properly manage resources using cleanup functions returned by factory meth
 
 Tests use `t.Fatal` for setup errors that prevent test execution and `t.Error` for test assertion failures. Fatal errors stop test execution while errors allow tests to continue checking other conditions.
 
+### Context Cancellation Testing Pattern
+
+Error case testing frequently uses context cancellation to simulate database and network failures. The pattern creates a context, immediately cancels it, then calls the function under test to verify error handling. This provides a reliable way to test error paths without requiring complex mock setups or external failure injection.
+
 ### Command Structure Testing
 
 Command group tests verify cobra command structure including use strings, aliases, short descriptions, and subcommand presence. Tests check that commands are properly configured without executing their logic.
@@ -38,52 +42,33 @@ Command group tests verify cobra command structure including use strings, aliase
 
 Tests verify interface compliance using compile-time checks with blank identifier assignments. This ensures structs implement expected interfaces without runtime overhead.
 
-```go
-var _ CommandGroup = NewTaskCommands(handler)
-```
-
 ## Test Organization Patterns
 
-### Single Root Test Pattern
+### Single Root Test
 
-The preferred test organization pattern uses a single root test function with nested subtests using `t.Run`. This provides clear hierarchical organization and allows running specific test sections while maintaining shared setup and context.
-
-```go
-func TestCommandGroup(t *testing.T) {
-    t.Run("Interface Implementations", func(t *testing.T) {
-        // Test interface compliance
-    })
-
-    t.Run("Create", func(t *testing.T) {
-        t.Run("TaskCommand", func(t *testing.T) {
-            // Test task command creation
-        })
-        t.Run("MovieCommand", func(t *testing.T) {
-            // Test movie command creation
-        })
-    })
-}
-```
-
-This pattern offers several advantages: clear test hierarchy with logical grouping, ability to run specific test sections with `go test -run TestCommandGroup/Create/TaskCommand`, consistent test structure across the codebase, and shared setup that can be inherited by subtests.
+The preferred test organization pattern uses a single root test function with nested subtests using `t.Run`. This provides clear hierarchical organization and allows running specific test sections while maintaining shared setup and context. This pattern offers several advantages: clear test hierarchy with logical grouping, ability to run specific test sections, consistent test structure across the codebase, and shared setup that can be inherited by subtests.
 
 ### Integration vs Unit Testing
 
-The codebase emphasizes integration testing over heavy mocking. Tests use real handlers and services to verify actual behavior rather than mocked interactions. This approach catches integration issues while maintaining test reliability.
+The codebase emphasizes integration testing over heavy mocking by using real handlers and services to verify actual behavior rather than mocked interactions. The goal is to catch integration issues while maintaining test reliability.
 
-### Static Output Testing
+### Static Output
 
 UI components support static output modes for testing. Tests capture output using bytes.Buffer and verify content using string contains checks rather than exact string matching for better test maintainability.
 
-## Test Utilities
+### Standard Output Redirection
 
-### Helper Functions
+For testing functions that write to stdout, tests use a pipe redirection pattern with goroutines to capture output. The pattern saves the original stdout, redirects to a pipe, captures output in a separate goroutine, and restores stdout after the test. This ensures clean output capture without interfering with the testing framework.
+
+## Utilities
+
+### Helpers
 
 Test files include helper functions for creating test data and finding elements in collections. These utilities reduce code duplication and improve test readability.
 
-### Mock Data Creation
+### Mock Data
 
-Tests create realistic mock data using factory functions that return properly initialized structs with sensible defaults. This approach provides consistent test data across different test cases.
+Tests create realistic mock data using factory functions (powered by faker) that return properly initialized structs with sensible defaults.
 
 ## Testing CLI Commands
 
@@ -101,6 +86,12 @@ Tests avoid expensive operations in setup functions. Handler creation uses real 
 
 The single root test pattern allows for efficient resource management where setup costs can be amortized across multiple related test cases.
 
-## Best Practices Summary
+## Errors
 
-Use factory functions for test handler creation with proper cleanup patterns. Organize tests using single root test functions with nested subtests for clear hierarchy. Manage resources with cleanup functions returned by factory methods. Prefer integration testing over mocking for real-world behavior validation. Verify interface compliance at compile time within dedicated subtests. Focus command tests on structure verification rather than execution testing. Leverage the single root test pattern for logical grouping and selective test execution. Use realistic test data with factory functions for consistent test scenarios.
+Error coverage follows a systematic approach to identify and test failure scenarios:
+
+1. **Context Cancellation** - Primary method for testing database and network timeout scenarios
+2. **Invalid Input** - Malformed data, empty inputs, boundary conditions
+3. **Resource Exhaustion** - Database connection failures, memory limits
+4. **Constraint Violations** - Duplicate keys, foreign key failures
+5. **State Validation** - Testing functions with invalid system states

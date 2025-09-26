@@ -1141,4 +1141,114 @@ func TestTaskHandler(t *testing.T) {
 			})
 		})
 	})
+
+	t.Run("ListContexts", func(t *testing.T) {
+		_, cleanup := setupTaskTest(t)
+		defer cleanup()
+
+		ctx := context.Background()
+
+		handler, err := NewTaskHandler()
+		if err != nil {
+			t.Fatalf("Failed to create handler: %v", err)
+		}
+		defer handler.Close()
+
+		tasks := []*models.Task{
+			{
+				UUID:        uuid.New().String(),
+				Description: "Task with context 1",
+				Status:      "pending",
+				Context:     "test-context",
+			},
+			{
+				UUID:        uuid.New().String(),
+				Description: "Task with context 2",
+				Status:      "pending",
+				Context:     "work-context",
+			},
+			{
+				UUID:        uuid.New().String(),
+				Description: "Task without context",
+				Status:      "pending",
+			},
+		}
+
+		for _, task := range tasks {
+			_, err := handler.repos.Tasks.Create(ctx, task)
+			if err != nil {
+				t.Fatalf("Failed to create task: %v", err)
+			}
+		}
+
+		t.Run("lists contexts in static mode", func(t *testing.T) {
+			err := handler.ListContexts(ctx, true)
+			if err != nil {
+				t.Errorf("ListContexts static mode failed: %v", err)
+			}
+		})
+
+		t.Run("lists contexts in interactive mode (falls back to static)", func(t *testing.T) {
+			err := handler.ListContexts(ctx, false)
+			if err != nil {
+				t.Errorf("ListContexts interactive mode failed: %v", err)
+			}
+		})
+
+		t.Run("lists contexts with todoTxt flag true", func(t *testing.T) {
+			err := handler.ListContexts(ctx, true, true)
+			if err != nil {
+				t.Errorf("ListContexts with todoTxt=true failed: %v", err)
+			}
+		})
+
+		t.Run("lists contexts with todoTxt flag false", func(t *testing.T) {
+			err := handler.ListContexts(ctx, true, false)
+			if err != nil {
+				t.Errorf("ListContexts with todoTxt=false failed: %v", err)
+			}
+		})
+
+		t.Run("handles database error in static mode", func(t *testing.T) {
+			cancelCtx, cancel := context.WithCancel(ctx)
+			cancel()
+
+			err := handler.ListContexts(cancelCtx, true)
+			if err == nil {
+				t.Error("Expected error with cancelled context in static mode")
+			}
+			if !strings.Contains(err.Error(), "failed to list tasks for contexts") {
+				t.Errorf("Expected specific error message, got: %v", err)
+			}
+		})
+
+		t.Run("handles database error in interactive mode", func(t *testing.T) {
+			cancelCtx, cancel := context.WithCancel(ctx)
+			cancel()
+
+			err := handler.ListContexts(cancelCtx, false)
+			if err == nil {
+				t.Error("Expected error with cancelled context in interactive mode")
+			}
+			if !strings.Contains(err.Error(), "failed to list tasks for contexts") {
+				t.Errorf("Expected specific error message, got: %v", err)
+			}
+		})
+
+		t.Run("returns no contexts when none exist", func(t *testing.T) {
+			_, cleanup_ := setupTaskTest(t)
+			defer cleanup_()
+
+			handler_, err := NewTaskHandler()
+			if err != nil {
+				t.Fatalf("Failed to create handler: %v", err)
+			}
+			defer handler_.Close()
+
+			err = handler_.ListContexts(ctx, true)
+			if err != nil {
+				t.Errorf("ListContexts with no contexts failed: %v", err)
+			}
+		})
+	})
 }

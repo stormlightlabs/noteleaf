@@ -267,6 +267,31 @@ func (h *ArticleHandler) Help() error {
 	return nil
 }
 
+// Read displays an article's content with formatted markdown rendering
+func (h *ArticleHandler) Read(ctx context.Context, id int64) error {
+	article, err := h.repos.Articles.Get(ctx, id)
+	if err != nil {
+		return fmt.Errorf("failed to get article: %w", err)
+	}
+
+	if _, err := os.Stat(article.MarkdownPath); os.IsNotExist(err) {
+		return fmt.Errorf("markdown file not found: %s", article.MarkdownPath)
+	}
+
+	content, err := os.ReadFile(article.MarkdownPath)
+	if err != nil {
+		return fmt.Errorf("failed to read markdown file: %w", err)
+	}
+
+	if rendered, err := renderMarkdown(string(content)); err != nil {
+		return err
+	} else {
+		fmt.Print(rendered)
+		return nil
+	}
+
+}
+
 // TODO: Try to get from config first (could be added later)
 // For now, use default ~/Documents/Leaf/
 func (h *ArticleHandler) getStorageDirectory() (string, error) {
