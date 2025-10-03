@@ -103,9 +103,8 @@ func TestTaskHandler(t *testing.T) {
 
 		t.Run("creates task successfully", func(t *testing.T) {
 			ctx := context.Background()
-			args := []string{"Buy groceries", "and", "cook dinner"}
-
-			err := handler.Create(ctx, args, "", "", "", "", []string{})
+			desc := "Buy groceries and cook dinner"
+			err := handler.Create(ctx, desc, "", "", "", "", "", "", "", "", []string{})
 			if err != nil {
 				t.Errorf("CreateTask failed: %v", err)
 			}
@@ -136,9 +135,8 @@ func TestTaskHandler(t *testing.T) {
 
 		t.Run("fails with empty description", func(t *testing.T) {
 			ctx := context.Background()
-			args := []string{}
-
-			err := handler.Create(ctx, args, "", "", "", "", []string{})
+			desc := ""
+			err := handler.Create(ctx, desc, "", "", "", "", "", "", "", "", []string{})
 			if err == nil {
 				t.Error("Expected error for empty description")
 			}
@@ -150,13 +148,13 @@ func TestTaskHandler(t *testing.T) {
 
 		t.Run("creates task with flags", func(t *testing.T) {
 			ctx := context.Background()
-			args := []string{"Task", "with", "flags"}
+			description := "Task with flags"
 			priority := "A"
 			project := "test-project"
 			due := "2024-12-31"
 			tags := []string{"urgent", "work"}
 
-			err := handler.Create(ctx, args, priority, project, "test-context", due, tags)
+			err := handler.Create(ctx, description, priority, project, "test-context", due, "", "", "", "", tags)
 			if err != nil {
 				t.Errorf("CreateTask with flags failed: %v", err)
 			}
@@ -209,10 +207,10 @@ func TestTaskHandler(t *testing.T) {
 
 		t.Run("fails with invalid due date format", func(t *testing.T) {
 			ctx := context.Background()
-			args := []string{"Task", "with", "invalid", "date"}
+			desc := "Task with invalid date"
 			invalidDue := "invalid-date"
 
-			err := handler.Create(ctx, args, "", "", "", invalidDue, []string{})
+			err := handler.Create(ctx, desc, "", "", "", invalidDue, "", "", "", "", []string{})
 			if err == nil {
 				t.Error("Expected error for invalid due date format")
 			}
@@ -228,7 +226,6 @@ func TestTaskHandler(t *testing.T) {
 		defer cleanup()
 
 		ctx := context.Background()
-
 		handler, err := NewTaskHandler()
 		if err != nil {
 			t.Fatalf("Failed to create handler: %v", err)
@@ -336,7 +333,7 @@ func TestTaskHandler(t *testing.T) {
 		t.Run("updates task by ID", func(t *testing.T) {
 			taskID := strconv.FormatInt(id, 10)
 
-			err := handler.Update(ctx, taskID, "Updated description", "", "", "", "", "", []string{}, []string{})
+			err := handler.Update(ctx, taskID, "Updated description", "", "", "", "", "", "", "", "", []string{}, []string{}, "", "")
 			if err != nil {
 				t.Errorf("UpdateTask failed: %v", err)
 			}
@@ -353,8 +350,7 @@ func TestTaskHandler(t *testing.T) {
 
 		t.Run("updates task by UUID", func(t *testing.T) {
 			taskID := task.UUID
-
-			err := handler.Update(ctx, taskID, "", "completed", "", "", "", "", []string{}, []string{})
+			err := handler.Update(ctx, taskID, "", "completed", "", "", "", "", "", "", "", []string{}, []string{}, "", "")
 			if err != nil {
 				t.Errorf("UpdateTask by UUID failed: %v", err)
 			}
@@ -371,8 +367,7 @@ func TestTaskHandler(t *testing.T) {
 
 		t.Run("updates multiple fields", func(t *testing.T) {
 			taskID := strconv.FormatInt(id, 10)
-
-			err := handler.Update(ctx, taskID, "Multiple updates", "", "B", "test", "office", "2024-12-31", []string{}, []string{})
+			err := handler.Update(ctx, taskID, "Multiple updates", "", "B", "test", "office", "2024-12-31", "", "", "", []string{}, []string{}, "", "")
 			if err != nil {
 				t.Errorf("UpdateTask with multiple fields failed: %v", err)
 			}
@@ -398,8 +393,7 @@ func TestTaskHandler(t *testing.T) {
 
 		t.Run("adds and removes tags", func(t *testing.T) {
 			taskID := strconv.FormatInt(id, 10)
-
-			err := handler.Update(ctx, taskID, "", "", "", "", "", "", []string{"work", "urgent"}, []string{})
+			err := handler.Update(ctx, taskID, "", "", "", "", "", "", "", "", "", []string{"work", "urgent"}, []string{}, "", "")
 			if err != nil {
 				t.Errorf("UpdateTask with add tags failed: %v", err)
 			}
@@ -415,7 +409,7 @@ func TestTaskHandler(t *testing.T) {
 
 			taskID = strconv.FormatInt(id, 10)
 
-			err = handler.Update(ctx, taskID, "", "", "", "", "", "", []string{}, []string{"urgent"})
+			err = handler.Update(ctx, taskID, "", "", "", "", "", "", "", "", "", []string{}, []string{"urgent"}, "", "")
 			if err != nil {
 				t.Errorf("UpdateTask with remove tag failed: %v", err)
 			}
@@ -435,7 +429,7 @@ func TestTaskHandler(t *testing.T) {
 		})
 
 		t.Run("fails with missing task ID", func(t *testing.T) {
-			err := handler.Update(ctx, "", "", "", "", "", "", "", []string{}, []string{})
+			err := handler.Update(ctx, "", "", "", "", "", "", "", "", "", "", []string{}, []string{}, "", "")
 			if err == nil {
 				t.Error("Expected error for missing task ID")
 			}
@@ -448,7 +442,7 @@ func TestTaskHandler(t *testing.T) {
 		t.Run("fails with invalid task ID", func(t *testing.T) {
 			taskID := "99999"
 
-			err := handler.Update(ctx, taskID, "test", "", "", "", "", "", []string{}, []string{})
+			err := handler.Update(ctx, taskID, "test", "", "", "", "", "", "", "", "", []string{}, []string{}, "", "")
 			if err == nil {
 				t.Error("Expected error for invalid task ID")
 			}
@@ -957,12 +951,12 @@ func TestTaskHandler(t *testing.T) {
 
 		ctx := context.Background()
 
-		err = handler.Create(ctx, []string{"Test", "Task", "1"}, "high", "test-project", "test-context", "", []string{"tag1"})
+		err = handler.Create(ctx, "Test Task 1", "high", "test-project", "test-context", "", "", "", "", "", []string{"tag1"})
 		if err != nil {
 			t.Fatalf("Failed to create test task: %v", err)
 		}
 
-		err = handler.Create(ctx, []string{"Test", "Task", "2"}, "medium", "test-project", "test-context", "", []string{"tag2"})
+		err = handler.Create(ctx, "Test Task 2", "medium", "test-project", "test-context", "", "", "", "", "", []string{"tag2"})
 		if err != nil {
 			t.Fatalf("Failed to create test task: %v", err)
 		}

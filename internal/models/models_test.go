@@ -374,6 +374,109 @@ func TestModels(t *testing.T) {
 			}
 		})
 
+		t.Run("IsStarted", func(t *testing.T) {
+			now := time.Now()
+			task := Task{UUID: "123", Description: "demo", Entry: now, Modified: now}
+
+			if task.IsStarted() {
+				t.Errorf("expected IsStarted to be false, got true")
+			}
+			task.Start = &now
+			if !task.IsStarted() {
+				t.Errorf("expected IsStarted to be true, got false")
+			}
+		})
+
+		t.Run("HasDueDate and IsOverdue", func(t *testing.T) {
+			now := time.Now()
+			past := now.Add(-24 * time.Hour)
+			future := now.Add(24 * time.Hour)
+			task := Task{UUID: "123", Description: "demo", Entry: now, Modified: now}
+
+			if task.HasDueDate() {
+				t.Errorf("expected HasDueDate to be false, got true")
+			}
+			task.Due = &future
+			if !task.HasDueDate() {
+				t.Errorf("expected HasDueDate to be true, got false")
+			}
+			task.Due = &past
+			task.Status = string(StatusPending)
+			if !task.IsOverdue(now) {
+				t.Errorf("expected overdue task, got false")
+			}
+			task.Status = string(StatusCompleted)
+			if task.IsOverdue(now) {
+				t.Errorf("expected completed task not to be overdue, got true")
+			}
+		})
+
+		t.Run("IsRecurring and IsRecurExpired", func(t *testing.T) {
+			now := time.Now()
+			past := now.Add(-24 * time.Hour)
+			future := now.Add(24 * time.Hour)
+
+			task := Task{UUID: "123", Description: "demo", Entry: now, Modified: now}
+			if task.IsRecurring() {
+				t.Errorf("expected IsRecurring to be false, got true")
+			}
+			task.Recur = "FREQ=DAILY"
+			if !task.IsRecurring() {
+				t.Errorf("expected IsRecurring to be true, got false")
+			}
+			if task.IsRecurExpired(now) {
+				t.Errorf("expected IsRecurExpired to be false without Until, got true")
+			}
+			task.Until = &past
+			if !task.IsRecurExpired(now) {
+				t.Errorf("expected IsRecurExpired to be true, got false")
+			}
+			task.Until = &future
+			if task.IsRecurExpired(now) {
+				t.Errorf("expected IsRecurExpired to be false, got true")
+			}
+		})
+
+		t.Run("HasDependencies and Blocks", func(t *testing.T) {
+			now := time.Now()
+			task := Task{UUID: "123", Description: "demo", Entry: now, Modified: now}
+			if task.HasDependencies() {
+				t.Errorf("expected HasDependencies to be false, got true")
+			}
+			task.DependsOn = []string{"abc"}
+			if !task.HasDependencies() {
+				t.Errorf("expected HasDependencies to be true, got false")
+			}
+			other := Task{UUID: "abc", DependsOn: []string{"123"}}
+			if !task.Blocks(&other) {
+				t.Errorf("expected task to block other, got false")
+			}
+			other.DependsOn = []string{}
+			if task.Blocks(&other) {
+				t.Errorf("expected task not to block other, got true")
+			}
+		})
+
+		t.Run("Urgency", func(t *testing.T) {
+			now := time.Now()
+			past := now.Add(-24 * time.Hour)
+
+			task := Task{
+				UUID:        "u1",
+				Description: "urgency test",
+				Priority:    "H",
+				Tags:        []string{"t1"},
+				Due:         &past,
+				Status:      string(StatusPending),
+				Entry:       now,
+				Modified:    now,
+			}
+			score := task.Urgency(now)
+			if score <= 0 {
+				t.Errorf("expected positive urgency score, got %f", score)
+			}
+		})
+
 	})
 
 	t.Run("Movie Model", func(t *testing.T) {

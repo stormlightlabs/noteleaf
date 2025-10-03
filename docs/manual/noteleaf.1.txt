@@ -1,0 +1,268 @@
+NOTELEAF(1)                     User Commands                        NOTELEAF(1)
+
+NAME
+    noteleaf - manage tasks, notes, books, movies, TV shows, and saved
+    articles from the command line
+
+SYNOPSIS
+    noteleaf [--help] [--version] <command> [<args>]
+
+DESCRIPTION
+    noteleaf is a terminal-first productivity tool written in Go. It combines
+    task management (with time tracking), note-taking, and media queues
+    (books, movies, TV shows, and saved articles) into a single command-line interface.
+
+    The design borrows from Taskwarrior and todo.txt but extends them with
+    features such as:
+        - Interactive TUIs for browsing notes and tasks
+        - Article parsing and storage
+        - Unified commands across different domains
+        - Time tracking with start/stop and timesheet summaries
+
+    Subcommands are grouped by domain: task, note, book, movie, tv, and article.
+    Each group has its own subcommands and options.
+
+OPTIONS
+    --help, -h
+        Show help for noteleaf or any subcommand.
+
+    --version, -v
+        Print the current version and exit.
+
+COMMANDS
+    General
+        help [command]
+            Show help for a command or subcommand.
+
+    version
+        Print the program version.
+
+    TASK COMMANDS
+        noteleaf task add [description]
+            Add a new task.
+            Flags:
+                -p, --priority <value>     Set task priority
+                --project <name>           Set project
+                -c, --context <name>       Set context
+                -d, --due YYYY-MM-DD       Set due date
+                -t, --tags tag1,tag2       Add tags
+
+        noteleaf task list
+            List tasks.
+            Flags:
+                -i, --interactive          Force interactive mode
+                --static                   Print static list
+                -a, --all                  Show all tasks
+                --status <status>          Filter by status
+                --priority <value>         Filter by priority
+                --project <name>           Filter by project
+                --context <name>           Filter by context
+
+        noteleaf task view <id>
+            View task details.
+            Flags:
+                --format detailed|brief    Output format
+                --json                     Print JSON
+                --no-metadata              Hide metadata
+
+        noteleaf task update <id>
+            Update task fields.
+            Flags:
+                --description <text>
+                --status <status>
+                -p, --priority <value>
+                --project <name>
+                -c, --context <name>
+                -d, --due YYYY-MM-DD
+                --add-tag tag
+                --remove-tag tag
+
+        noteleaf task edit <id>
+            Interactive edit with status/priority toggles.
+            Alias: e
+
+        noteleaf task delete <id>
+            Delete task permanently.
+
+        noteleaf task projects
+            List projects.
+            Flags: --static, --todo-txt
+
+        noteleaf task tags
+            List tags.
+            Flags: --static
+
+        noteleaf task contexts
+            List contexts.
+            Flags: --static, --todo-txt
+
+        noteleaf task done <id>
+            Mark task as completed.
+            Alias: complete
+
+        noteleaf task start <id>
+            Start time tracking for a task.
+            Flags: -n, --note <text>       Add note to entry
+
+        noteleaf task stop <id>
+            Stop time tracking for a task.
+
+        noteleaf task timesheet
+            Show time tracking summary.
+            Flags:
+                -d, --days <n>             Number of days (default 7)
+                -t, --task <id>            Timesheet for specific task
+
+    MOVIE COMMANDS
+        noteleaf movie add [query...]
+            Search and add a movie to the watch queue.
+            Flags: -i, --interactive
+
+        noteleaf movie list [--all|--watched|--queued]
+            List movies by status.
+
+        noteleaf movie watched <id>
+            Mark movie as watched.
+            Alias: seen
+
+        noteleaf movie remove <id>
+            Remove from queue.
+            Alias: rm
+
+    TV COMMANDS
+        noteleaf tv add [query...]
+            Search and add a TV show to the watch queue.
+            Flags: -i, --interactive
+
+        noteleaf tv list [--all|--queued|--watching|--watched]
+            List TV shows by status.
+
+        noteleaf tv watching <id>
+            Mark as currently watching.
+
+        noteleaf tv watched <id>
+            Mark as watched.
+            Alias: seen
+
+        noteleaf tv remove <id>
+            Remove show from queue.
+            Alias: rm
+
+    BOOK COMMANDS
+        noteleaf book add [query...]
+            Search and add a book to the reading list.
+            Flags: -i, --interactive
+
+        noteleaf book list [--all|--reading|--finished|--queued]
+            Show reading list.
+
+        noteleaf book reading <id>
+            Mark book as currently reading.
+
+        noteleaf book finished <id>
+            Mark book as finished.
+            Alias: read
+
+        noteleaf book remove <id>
+            Remove from reading list.
+            Alias: rm
+
+        noteleaf book progress <id> <percent>
+            Update reading progress percentage (0-100).
+
+        noteleaf book update <id> <status>
+            Update status (queued|reading|finished|removed).
+
+    NOTE COMMANDS
+        noteleaf note create [title] [content...]
+            Create a note.
+            Aliases: new
+            Flags:
+                -i, --interactive          Open interactive editor
+                -e, --editor               Open note in editor
+                -f, --file <path>          Create from markdown file
+
+        noteleaf note list
+            List notes (interactive TUI or static).
+            Aliases: ls
+            Flags:
+                -a, --archived             Include archived
+                -s, --static               Static list
+                --tags tag1,tag2           Filter by tags
+
+        noteleaf note read <id>
+            Display note content.
+            Alias: view
+
+        noteleaf note edit <id>
+            Edit note in editor.
+
+        noteleaf note remove <id>
+            Remove note permanently.
+            Aliases: rm, delete, del
+
+    ARTICLE COMMANDS
+        noteleaf article add <url>
+            Parse and save article from URL.
+
+        noteleaf article list [query]
+            List saved articles.
+            Aliases: ls
+            Flags:
+                --author <name>
+                -l, --limit <n>
+
+        noteleaf article view <id>
+            Show article metadata and preview.
+            Alias: show
+
+        noteleaf article read <id>
+            Display full content as Markdown.
+
+        noteleaf article remove <id>
+            Remove article and associated files.
+            Aliases: rm, delete
+
+EXIT STATUS
+    noteleaf returns 0 on success.
+    Non-zero exit status indicates an error.
+
+EXAMPLES
+    Add and list tasks:
+        noteleaf task add "Write blog post" -p H --project blog --due 2025-10-15
+        noteleaf task list --project blog
+
+    Mark complete:
+        noteleaf task done 42
+
+    Track media:
+        noteleaf book add "The Name of the Wind"
+        noteleaf movie add "Blade Runner" -i
+        noteleaf tv list --watching
+
+    Work with notes:
+        noteleaf note create "Ideas" "sketch out product roadmap"
+        noteleaf note list --tags=work
+
+    Save an article:
+        noteleaf article add https://example.com/post
+        noteleaf article list --author "Ada Lovelace"
+
+FILES
+    (TODO: configuration and data file paths once implemented)
+
+SEE ALSO
+    Taskwarrior(1), todo.txt(5), git(1), neovim(1), rsync(1)
+
+AUTHOR
+    Owais @ Stormlight Labs <https://github.com/stormlightlabs/noteleaf>
+
+BUGS
+    Please report issues at: https://github.com/stormlightlabs/noteleaf/issues
+
+COPYRIGHT
+    Copyright (c) 2025 Stormlight Labs, LLC.
+    Licensed under the MIT License.
+
+NOTELEAF(1)                     User Commands                        NOTELEAF(1)
+

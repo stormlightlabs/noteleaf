@@ -727,7 +727,6 @@ func TestTaskRepository(t *testing.T) {
 				}
 			}
 
-			// Test legacy priority
 			results, err = repo.GetByPriority(ctx, "A")
 			if err != nil {
 				t.Errorf("Failed to get tasks by priority A: %v", err)
@@ -798,7 +797,6 @@ func TestTaskRepository(t *testing.T) {
 				t.Error("Expected non-empty status summary")
 			}
 
-			// Check that we have expected statuses with counts
 			expectedStatuses := []string{
 				models.StatusTodo, models.StatusInProgress, models.StatusDone,
 				models.StatusBlocked, models.StatusAbandoned,
@@ -854,6 +852,88 @@ func TestTaskRepository(t *testing.T) {
 			}
 		})
 	})
+
+	t.Run("Recurrence Fields", func(t *testing.T) {
+		task := CreateSampleTask()
+		task.Recur = "FREQ=DAILY"
+		until := time.Now().Add(7 * 24 * time.Hour)
+		task.Until = &until
+		parent := newUUID()
+		task.ParentUUID = &parent
+
+		id, err := repo.Create(ctx, task)
+		if err != nil {
+			t.Fatalf("failed to create task with recurrence: %v", err)
+		}
+
+		retrieved, err := repo.Get(ctx, id)
+		if err != nil {
+			t.Fatalf("failed to get task with recurrence: %v", err)
+		}
+
+		if retrieved.Recur != "FREQ=DAILY" {
+			t.Errorf("expected Recur=FREQ=DAILY, got %s", retrieved.Recur)
+		}
+		if retrieved.Until == nil || !retrieved.Until.Equal(until) {
+			t.Errorf("expected Until=%v, got %v", until, retrieved.Until)
+		}
+		if retrieved.ParentUUID == nil || *retrieved.ParentUUID != parent {
+			t.Errorf("expected ParentUUID=%s, got %v", parent, retrieved.ParentUUID)
+		}
+	})
+
+	t.Run("Dependencies", func(t *testing.T) {
+		parent := CreateSampleTask()
+		child := CreateSampleTask()
+
+		_, err := repo.Create(ctx, parent)
+		if err != nil {
+			t.Fatalf("failed to create parent: %v", err)
+		}
+		_, err = repo.Create(ctx, child)
+		if err != nil {
+			t.Fatalf("failed to create child: %v", err)
+		}
+
+		if err := repo.AddDependency(ctx, child.UUID, parent.UUID); err != nil {
+			t.Fatalf("failed to add dependency: %v", err)
+		}
+
+		deps, err := repo.GetDependencies(ctx, child.UUID)
+		if err != nil {
+			t.Fatalf("failed to get dependencies: %v", err)
+		}
+		if len(deps) != 1 || deps[0] != parent.UUID {
+			t.Errorf("expected child to depend on parent=%s, got %v", parent.UUID, deps)
+		}
+
+		dependents, err := repo.GetDependents(ctx, parent.UUID)
+		if err != nil {
+			t.Fatalf("failed to get dependents: %v", err)
+		}
+		if len(dependents) != 1 || dependents[0].UUID != child.UUID {
+			t.Errorf("expected dependent to be child=%s, got %v", child.UUID, dependents)
+		}
+
+		if err := repo.RemoveDependency(ctx, child.UUID, parent.UUID); err != nil {
+			t.Fatalf("failed to remove dependency: %v", err)
+		}
+		deps, _ = repo.GetDependencies(ctx, child.UUID)
+		if len(deps) != 0 {
+			t.Errorf("expected dependencies to be cleared, got %v", deps)
+		}
+
+		if err := repo.AddDependency(ctx, child.UUID, parent.UUID); err != nil {
+			t.Fatalf("failed to re-add dependency: %v", err)
+		}
+		if err := repo.ClearDependencies(ctx, child.UUID); err != nil {
+			t.Fatalf("failed to clear dependencies: %v", err)
+		}
+		deps, _ = repo.GetDependencies(ctx, child.UUID)
+		if len(deps) != 0 {
+			t.Errorf("expected no dependencies after clear, got %v", deps)
+		}
+	})
 }
 
 func TestTaskRepository_GetContexts(t *testing.T) {
@@ -882,7 +962,6 @@ func TestTaskRepository_GetContexts(t *testing.T) {
 		t.Fatalf("Failed to create task3: %v", err)
 	}
 
-	// Task with empty context should not be included
 	task4 := CreateSampleTask()
 	task4.Context = ""
 	_, err = repo.Create(ctx, task4)
@@ -920,7 +999,6 @@ func TestTaskRepository_GetByContext(t *testing.T) {
 	repo := NewTaskRepository(db)
 	ctx := context.Background()
 
-	// Create tasks with different contexts
 	task1 := CreateSampleTask()
 	task1.Context = "work"
 	task1.Description = "Work task 1"
@@ -945,7 +1023,6 @@ func TestTaskRepository_GetByContext(t *testing.T) {
 		t.Fatalf("Failed to create task3: %v", err)
 	}
 
-	// Get tasks by work context
 	workTasks, err := repo.GetByContext(ctx, "work")
 	if err != nil {
 		t.Fatalf("Failed to get tasks by context: %v", err)
@@ -961,7 +1038,6 @@ func TestTaskRepository_GetByContext(t *testing.T) {
 		}
 	}
 
-	// Get tasks by home context
 	homeTasks, err := repo.GetByContext(ctx, "home")
 	if err != nil {
 		t.Fatalf("Failed to get tasks by context: %v", err)

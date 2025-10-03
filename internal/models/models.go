@@ -36,6 +36,10 @@ const (
 	PriorityNumericMax = 5
 )
 
+// RRule represents a recurrence rule (RFC 5545).
+// Example: "FREQ=DAILY;INTERVAL=1" or "FREQ=WEEKLY;BYDAY=MO,WE,FR".
+type RRule string
+
 // Model defines the common interface that all domain models must implement
 type Model interface {
 	// GetID returns the primary key identifier
@@ -56,33 +60,32 @@ type Model interface {
 
 // Task represents a task item with TaskWarrior-inspired fields
 type Task struct {
-	ID          int64  `json:"id"`
-	UUID        string `json:"uuid"`
-	Description string `json:"description"`
-	// pending, completed, deleted
-	Status string `json:"status"`
-	// A-Z or empty
-	Priority string     `json:"priority,omitempty"`
-	Project  string     `json:"project,omitempty"`
-	Context  string     `json:"context,omitempty"`
-	Tags     []string   `json:"tags,omitempty"`
-	Due      *time.Time `json:"due,omitempty"`
-	Entry    time.Time  `json:"entry"`
-	Modified time.Time  `json:"modified"`
-	// completion time
-	End *time.Time `json:"end,omitempty"`
-	// when task was started
-	Start       *time.Time `json:"start,omitempty"`
+	ID          int64      `json:"id"`
+	UUID        string     `json:"uuid"`
+	Description string     `json:"description"`
+	Status      string     `json:"status"`             // pending, completed, deleted
+	Priority    string     `json:"priority,omitempty"` // A-Z or empty
+	Project     string     `json:"project,omitempty"`
+	Context     string     `json:"context,omitempty"`
+	Tags        []string   `json:"tags,omitempty"`
+	Due         *time.Time `json:"due,omitempty"`
+	Entry       time.Time  `json:"entry"`
+	Modified    time.Time  `json:"modified"`
+	End         *time.Time `json:"end,omitempty"`   // Completion time
+	Start       *time.Time `json:"start,omitempty"` // When the task was started
 	Annotations []string   `json:"annotations,omitempty"`
+	Recur       RRule      `json:"recur,omitempty"`
+	Until       *time.Time `json:"until,omitempty"`       // End date for recurrence
+	ParentUUID  *string    `json:"parent_uuid,omitempty"` // ID of parent/template task
+	DependsOn   []string   `json:"depends_on,omitempty"`  // IDs of tasks this task depends on
 }
 
 // Movie represents a movie in the watch queue
 type Movie struct {
-	ID    int64  `json:"id"`
-	Title string `json:"title"`
-	Year  int    `json:"year,omitempty"`
-	// queued, watched, removed
-	Status  string     `json:"status"`
+	ID      int64      `json:"id"`
+	Title   string     `json:"title"`
+	Year    int        `json:"year,omitempty"`
+	Status  string     `json:"status"` // queued, watched, removed
 	Rating  float64    `json:"rating,omitempty"`
 	Notes   string     `json:"notes,omitempty"`
 	Added   time.Time  `json:"added"`
@@ -91,12 +94,11 @@ type Movie struct {
 
 // TVShow represents a TV show in the watch queue
 type TVShow struct {
-	ID      int64  `json:"id"`
-	Title   string `json:"title"`
-	Season  int    `json:"season,omitempty"`
-	Episode int    `json:"episode,omitempty"`
-	// queued, watching, watched, removed
-	Status      string     `json:"status"`
+	ID          int64      `json:"id"`
+	Title       string     `json:"title"`
+	Season      int        `json:"season,omitempty"`
+	Episode     int        `json:"episode,omitempty"`
+	Status      string     `json:"status"` // queued, watching, watched, removed
 	Rating      float64    `json:"rating,omitempty"`
 	Notes       string     `json:"notes,omitempty"`
 	Added       time.Time  `json:"added"`
@@ -105,13 +107,11 @@ type TVShow struct {
 
 // Book represents a book in the reading list
 type Book struct {
-	ID     int64  `json:"id"`
-	Title  string `json:"title"`
-	Author string `json:"author,omitempty"`
-	// queued, reading, finished, removed
-	Status string `json:"status"`
-	// percentage 0-100
-	Progress int        `json:"progress"`
+	ID       int64      `json:"id"`
+	Title    string     `json:"title"`
+	Author   string     `json:"author,omitempty"`
+	Status   string     `json:"status"`   // queued, reading, finished, removed
+	Progress int        `json:"progress"` // percentage 0-100
 	Pages    int        `json:"pages,omitempty"`
 	Rating   float64    `json:"rating,omitempty"`
 	Notes    string     `json:"notes,omitempty"`
@@ -308,6 +308,57 @@ func (t *Task) GetPriorityWeight() int {
 		}
 		return 0
 	}
+}
+
+// IsStarted returns true if the task has a start time set.
+func (t *Task) IsStarted() bool {
+	return t.Start != nil
+}
+
+// IsOverdue returns true if the task is overdue.
+func (t *Task) IsOverdue(now time.Time) bool {
+	return t.Due != nil && now.After(*t.Due) && !t.IsCompleted()
+}
+
+// HasDueDate returns true if the task has a due date set.
+func (t *Task) HasDueDate() bool {
+	return t.Due != nil
+}
+
+// IsRecurring returns true if the task has recurrence defined.
+func (t *Task) IsRecurring() bool {
+	return t.Recur != ""
+}
+
+// IsRecurExpired checks if the recurrence has an end (until) date and is past it.
+func (t *Task) IsRecurExpired(now time.Time) bool {
+	return t.Until != nil && now.After(*t.Until)
+}
+
+// HasDependencies returns true if the task depends on other tasks.
+func (t *Task) HasDependencies() bool {
+	return len(t.DependsOn) > 0
+}
+
+// Blocks checks if this task blocks another given task.
+func (t *Task) Blocks(other *Task) bool {
+	return slices.Contains(other.DependsOn, t.UUID)
+}
+
+// Urgency computes a score based on priority, due date, and tags.
+// This can be expanded later with weights.
+func (t *Task) Urgency(now time.Time) float64 {
+	score := 0.0
+	if t.Priority != "" {
+		score += 1.0
+	}
+	if t.IsOverdue(now) {
+		score += 2.0
+	}
+	if len(t.Tags) > 0 {
+		score += 0.5
+	}
+	return score
 }
 
 // IsWatched returns true if the movie has been watched

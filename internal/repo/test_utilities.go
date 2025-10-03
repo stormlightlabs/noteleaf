@@ -16,6 +16,110 @@ import (
 
 var fake = faker.New()
 
+const testSchema string = `
+	CREATE TABLE IF NOT EXISTS tasks (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		uuid TEXT UNIQUE NOT NULL,
+		description TEXT NOT NULL,
+		status TEXT DEFAULT 'pending',
+		priority TEXT,
+		project TEXT,
+		context TEXT,
+		tags TEXT,
+		due DATETIME,
+		entry DATETIME DEFAULT CURRENT_TIMESTAMP,
+		modified DATETIME DEFAULT CURRENT_TIMESTAMP,
+		end DATETIME,
+		start DATETIME,
+		annotations TEXT,
+		recur TEXT,
+		until DATETIME,
+		parent_uuid TEXT
+	);
+
+	CREATE TABLE IF NOT EXISTS task_dependencies (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		task_uuid TEXT NOT NULL,
+		depends_on_uuid TEXT NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+		FOREIGN KEY(task_uuid) REFERENCES tasks(uuid) ON DELETE CASCADE,
+		FOREIGN KEY(depends_on_uuid) REFERENCES tasks(uuid) ON DELETE CASCADE
+	);
+
+	CREATE TABLE IF NOT EXISTS books (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		title TEXT NOT NULL,
+		author TEXT,
+		status TEXT DEFAULT 'queued',
+		progress INTEGER DEFAULT 0,
+		pages INTEGER,
+		rating REAL,
+		notes TEXT,
+		added DATETIME DEFAULT CURRENT_TIMESTAMP,
+		started DATETIME,
+		finished DATETIME
+	);
+
+	CREATE TABLE IF NOT EXISTS movies (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		title TEXT NOT NULL,
+		year INTEGER,
+		status TEXT DEFAULT 'queued',
+		rating REAL,
+		notes TEXT,
+		added DATETIME DEFAULT CURRENT_TIMESTAMP,
+		watched DATETIME
+	);
+
+	CREATE TABLE IF NOT EXISTS tv_shows (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		title TEXT NOT NULL,
+		season INTEGER,
+		episode INTEGER,
+		status TEXT DEFAULT 'queued',
+		rating REAL,
+		notes TEXT,
+		added DATETIME DEFAULT CURRENT_TIMESTAMP,
+		last_watched DATETIME
+	);
+
+	CREATE TABLE IF NOT EXISTS notes (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		title TEXT NOT NULL,
+		content TEXT,
+		tags TEXT,
+		archived BOOLEAN DEFAULT FALSE,
+		created DATETIME DEFAULT CURRENT_TIMESTAMP,
+		modified DATETIME DEFAULT CURRENT_TIMESTAMP,
+		file_path TEXT
+	);
+
+	CREATE TABLE IF NOT EXISTS time_entries (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		task_id INTEGER NOT NULL,
+		start_time DATETIME NOT NULL,
+		end_time DATETIME,
+		duration_seconds INTEGER,
+		description TEXT,
+		created DATETIME DEFAULT CURRENT_TIMESTAMP,
+		modified DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+	);
+
+	CREATE TABLE IF NOT EXISTS articles (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		url TEXT UNIQUE NOT NULL,
+		title TEXT NOT NULL,
+		author TEXT,
+		date TEXT,
+		markdown_path TEXT NOT NULL,
+		html_path TEXT NOT NULL,
+		created DATETIME DEFAULT CURRENT_TIMESTAMP,
+		modified DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+`
+
 // CreateTestDB creates an in-memory SQLite database with the full schema for testing
 func CreateTestDB(t *testing.T) *sql.DB {
 	db, err := sql.Open("sqlite3", ":memory:")
@@ -27,98 +131,7 @@ func CreateTestDB(t *testing.T) *sql.DB {
 		t.Fatalf("Failed to enable foreign keys: %v", err)
 	}
 
-	// Full schema for all tables
-	schema := `
-		CREATE TABLE IF NOT EXISTS tasks (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			uuid TEXT UNIQUE NOT NULL,
-			description TEXT NOT NULL,
-			status TEXT DEFAULT 'pending',
-			priority TEXT,
-			project TEXT,
-			context TEXT,
-			tags TEXT,
-			due DATETIME,
-			entry DATETIME DEFAULT CURRENT_TIMESTAMP,
-			modified DATETIME DEFAULT CURRENT_TIMESTAMP,
-			end DATETIME,
-			start DATETIME,
-			annotations TEXT
-		);
-
-		CREATE TABLE IF NOT EXISTS books (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			title TEXT NOT NULL,
-			author TEXT,
-			status TEXT DEFAULT 'queued',
-			progress INTEGER DEFAULT 0,
-			pages INTEGER,
-			rating REAL,
-			notes TEXT,
-			added DATETIME DEFAULT CURRENT_TIMESTAMP,
-			started DATETIME,
-			finished DATETIME
-		);
-
-		CREATE TABLE IF NOT EXISTS movies (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			title TEXT NOT NULL,
-			year INTEGER,
-			status TEXT DEFAULT 'queued',
-			rating REAL,
-			notes TEXT,
-			added DATETIME DEFAULT CURRENT_TIMESTAMP,
-			watched DATETIME
-		);
-
-		CREATE TABLE IF NOT EXISTS tv_shows (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			title TEXT NOT NULL,
-			season INTEGER,
-			episode INTEGER,
-			status TEXT DEFAULT 'queued',
-			rating REAL,
-			notes TEXT,
-			added DATETIME DEFAULT CURRENT_TIMESTAMP,
-			last_watched DATETIME
-		);
-
-		CREATE TABLE IF NOT EXISTS notes (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			title TEXT NOT NULL,
-			content TEXT,
-			tags TEXT,
-			archived BOOLEAN DEFAULT FALSE,
-			created DATETIME DEFAULT CURRENT_TIMESTAMP,
-			modified DATETIME DEFAULT CURRENT_TIMESTAMP,
-			file_path TEXT
-		);
-
-		CREATE TABLE IF NOT EXISTS time_entries (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			task_id INTEGER NOT NULL,
-			start_time DATETIME NOT NULL,
-			end_time DATETIME,
-			duration_seconds INTEGER,
-			created DATETIME DEFAULT CURRENT_TIMESTAMP,
-			modified DATETIME DEFAULT CURRENT_TIMESTAMP,
-			FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
-		);
-
-		CREATE TABLE IF NOT EXISTS articles (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			url TEXT UNIQUE NOT NULL,
-			title TEXT NOT NULL,
-			author TEXT,
-			date TEXT,
-			markdown_path TEXT NOT NULL,
-			html_path TEXT NOT NULL,
-			created DATETIME DEFAULT CURRENT_TIMESTAMP,
-			modified DATETIME DEFAULT CURRENT_TIMESTAMP
-		);
-	`
-
-	if _, err := db.Exec(schema); err != nil {
+	if _, err := db.Exec(testSchema); err != nil {
 		t.Fatalf("Failed to create schema: %v", err)
 	}
 
@@ -129,7 +142,6 @@ func CreateTestDB(t *testing.T) *sql.DB {
 	return db
 }
 
-// Sample data creators
 func CreateSampleTask() *models.Task {
 	return &models.Task{
 		UUID:        uuid.New().String(),
@@ -258,7 +270,6 @@ func CreateFakeArticles(count int) []*models.Article {
 	return articles
 }
 
-// Test helpers for common operations
 func AssertNoError(t *testing.T, err error, msg string) {
 	t.Helper()
 	if err != nil {
@@ -332,7 +343,6 @@ func SetupTestData(t *testing.T, db *sql.DB) *Repositories {
 	AssertNoError(t, err, "Failed to create sample task 2")
 	task2.ID = id2
 
-	// Create sample books
 	book1 := CreateSampleBook()
 	book1.Title = "Sample Book 1"
 	book1.Status = "reading"
@@ -349,7 +359,6 @@ func SetupTestData(t *testing.T, db *sql.DB) *Repositories {
 	AssertNoError(t, err, "Failed to create sample book 2")
 	book2.ID = bookID2
 
-	// Create sample movies
 	movie1 := CreateSampleMovie()
 	movie1.Title = "Sample Movie 1"
 	movie1.Status = "queued"
@@ -366,7 +375,6 @@ func SetupTestData(t *testing.T, db *sql.DB) *Repositories {
 	AssertNoError(t, err, "Failed to create sample movie 2")
 	movie2.ID = movieID2
 
-	// Create sample TV shows
 	tv1 := CreateSampleTVShow()
 	tv1.Title = "Sample TV Show 1"
 	tv1.Status = "queued"
@@ -383,7 +391,6 @@ func SetupTestData(t *testing.T, db *sql.DB) *Repositories {
 	AssertNoError(t, err, "Failed to create sample TV show 2")
 	tv2.ID = tvID2
 
-	// Create sample notes
 	note1 := CreateSampleNote()
 	note1.Title = "Sample Note 1"
 	note1.Content = "Content for note 1"

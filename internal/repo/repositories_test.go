@@ -36,7 +36,20 @@ func createFullTestDB(t *testing.T) *sql.DB {
 			modified DATETIME DEFAULT CURRENT_TIMESTAMP,
 			end DATETIME,
 			start DATETIME,
-			annotations TEXT
+			annotations TEXT,
+			recur TEXT,
+			until DATETIME,
+			parent_uuid TEXT
+		);
+
+		-- Task dependencies table
+		CREATE TABLE IF NOT EXISTS task_dependencies (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			task_uuid TEXT NOT NULL,
+			depends_on_uuid TEXT NOT NULL,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY(task_uuid) REFERENCES tasks(uuid) ON DELETE CASCADE,
+			FOREIGN KEY(depends_on_uuid) REFERENCES tasks(uuid) ON DELETE CASCADE
 		);
 
 		-- Movies table
@@ -110,12 +123,7 @@ func TestRepositories(t *testing.T) {
 		ctx := context.Background()
 
 		t.Run("Create all resource types", func(t *testing.T) {
-			task := &models.Task{
-				UUID:        uuid.New().String(),
-				Description: "Integration test task",
-				Status:      "pending",
-				Project:     "integration",
-			}
+			task := &models.Task{UUID: uuid.New().String(), Description: "Integration test task", Status: "pending", Project: "integration"}
 			taskID, err := repos.Tasks.Create(ctx, task)
 			if err != nil {
 				t.Errorf("Failed to create task: %v", err)
@@ -138,13 +146,7 @@ func TestRepositories(t *testing.T) {
 				t.Error("Expected non-zero movie ID")
 			}
 
-			tvShow := &models.TVShow{
-				Title:   "Integration Series",
-				Season:  1,
-				Episode: 1,
-				Status:  "queued",
-				Rating:  9.0,
-			}
+			tvShow := &models.TVShow{Title: "Integration Series", Season: 1, Episode: 1, Status: "queued", Rating: 9.0}
 			tvID, err := repos.TV.Create(ctx, tvShow)
 			if err != nil {
 				t.Errorf("Failed to create TV show: %v", err)
@@ -168,11 +170,7 @@ func TestRepositories(t *testing.T) {
 				t.Error("Expected non-zero book ID")
 			}
 
-			note := &models.Note{
-				Title:   "Integration Note",
-				Content: "This is test content for integration",
-				Tags:    []string{"integration", "test"},
-			}
+			note := &models.Note{Title: "Integration Note", Content: "This is test content for integration", Tags: []string{"integration", "test"}}
 			noteID, err := repos.Notes.Create(ctx, note)
 			if err != nil {
 				t.Errorf("Failed to create note: %v", err)

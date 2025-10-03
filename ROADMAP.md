@@ -1,294 +1,266 @@
 # ROADMAP
 
-## Task Management Commands (TaskWarrior-inspired)
+Noteleaf is a command-line and TUI tool for managing tasks, notes, media, and articles. This roadmap outlines milestones: current capabilities, planned baseline features (v1), and future directions.
 
-### Implemented Commands
+## Core Usability
 
-- [x] `todo add [description]` - Create new task with metadata (priority, project, context, due, tags)
-- [x] `todo list` - Display tasks with filtering (status, priority, project, context) and interactive/static modes
-- [x] `todo view [task-id]` - View task details with format options (detailed, brief, json)
-- [x] `todo update [task-id]` - Edit task properties via flags
-- [x] `todo edit [task-id]` - Interactive task editor with status picker and priority toggle
-- [x] `todo done [task-id]` - Mark task as completed
-- [x] `todo delete [task-id]` - Remove task permanently
+The foundation across all domains is implemented. Tasks support CRUD operations, projects, tags, contexts, and time tracking. Notes have create, list, read, edit, and remove commands with interactive and static modes. Media queues exist for books, movies, and TV with progress and status management. SQLite persistence is in place with setup, seed, and reset commands. TUIs and colorized output are available.
+
+## RC
 
----
+### CORE
 
-- [x] `todo projects` - List all project names (interactive/static modes)
-- [x] `todo tags` - List all tag names (interactive/static modes)
-- [x] `todo contexts` - List all contexts/locations (interactive/static modes)
+- [ ] Ensure **all documented subcommands** exist and work:
+    - Tasks: add, list, view, update, edit, delete, projects, tags, contexts, done, start, stop, timesheet
+    - Notes: create, list, read, edit, remove
+    - Books: add, list, reading, finished, remove, progress, update
+    - Movies: add, list, watched, remove
+    - TV: add, list, watching, watched, remove
+    - Articles: add, list, view, read, remove
+- [ ] Confirm all **aliases** work (`todo`, `ls`, `rm`, etc.).
+- [ ] Verify **flags** and argument parsing match man page (priority, project, context, due, tags, etc.).
+- [ ] Implement or finish stubs (e.g. `config management` noted in code).
 
----
-
-- [x] `todo start [task-id]` - Start time tracking for a task
-- [x] `todo stop [task-id]` - Stop time tracking for a task
-- [x] `todo timesheet` - Show time tracking summaries (with date range and task filters)
-
-### Commands To Be Implemented
-
-- [ ] Due dates & scheduling - Including recurring tasks
-- [ ] Task dependencies - Task A blocks task B relationships
-- [ ] `annotate` - Add notes/comments to existing tasks
-- [ ] Recurring tasks
-- [ ] Smart due date suggestions
-- [ ] Completion notifications
-- [ ] `calendar` - Display tasks in calendar view
-
-## Media Queue Management Commands
-
-### Implemented Commands
-
-Book Management
-
-- [x] `media book add [search query...]` - Search and add book to reading list (with interactive mode)
-- [x] `media book list` - Show reading queue with progress and status filtering
-- [x] `media book reading <id>` - Mark book as currently reading
-- [x] `media book finished <id>` - Mark book as completed
-- [x] `media book remove <id>` - Remove from reading list
-- [x] `media book progress <id> <percentage>` - Update reading progress (0-100%)
-- [x] `media book update <id> <status>` - Update book status (queued|reading|finished|removed)
-
-Movie Management
-
-- [x] `media movie add [title]` - Add movie to watch queue (with interactive mode)
-- [x] `media movie list` - Show movie queue with status filtering
-- [x] `media movie watched <id>` - Mark movie as watched
-- [x] `media movie remove <id>` - Remove from queue
-
-TV Show Management
-
-- [x] `media tv add [title]` - Add TV show/season to queue (with interactive mode)
-- [x] `media tv list` - Show TV queue with status filtering
-- [x] `media tv watching <id>` - Mark TV show as currently watching
-- [x] `media tv watched <id>` - Mark episodes/seasons as watched
-- [x] `media tv remove <id>` - Remove from TV queue
-
-### Commands To Be Implemented
-
----
-
-- [ ] Articles, papers, blogs support (implement article parser)
-- [ ] Source tracking (recommendation sources)
-- [ ] Ratings and personal notes
-- [ ] Genre/topic tagging
-- [ ] Episode/season progress tracking for TV
-- [ ] Platform tracking (Netflix, Amazon, etc.)
-- [ ] Watch status: queued, watching, completed, dropped
-
-## Management Commands
-
-### Implemented Commands
-
-Application Management
-
-- [x] `status` - Show application status and configuration
-- [x] `setup` - Initialize and manage application setup
-- [x] `setup seed` - Populate database with test data (with --force flag)
-- [x] `reset` - Reset the application (removes all data)
-- [x] `config [key] [value]` - Manage configuration settings (stubbed)
-
-### Commands To Be Implemented
-
-Organization Features
-
-- [ ] Custom queries and saved searches
-- [ ] Context-aware suggestions
-- [ ] Overdue/urgent highlighting
-- [ ] Recently added/modified items
-- [ ] Seasonal/mood-based filtering
-- [ ] Full-text search across titles, notes, tags
-
-Analytics
-
-- [ ] Reading/watching velocity tracking
-- [ ] Completion rates by content type
-- [ ] Time investment analysis
-- [ ] Personal productivity metrics
-- [ ] Content source analysis
-
-Integrations
-
-- [ ] `import` - Import from various formats (CSV, JSON, todo.txt)
-- [ ] `export` - Export to various formats
-- [ ] Goodreads import for books
-- [ ] IMDB/Letterboxd import for movies
-- [ ] Todo.txt format compatibility
-- [ ] TaskWarrior import/export
-- [ ] URL parsing for automatic metadata
-
-`todo.txt` Compatibility
-
-- [ ] `archive` - Move completed tasks to done.txt
-- [ ] `[con]texts` - List all contexts (@context)
-- [ ] `[proj]ects` - List all projects (+project)
-- [ ] `[pri]ority` - Set task priority (A-Z)
-- [ ] `[depri]oritize` - Remove priority from task
-- [ ] `[re]place` - Replace task text entirely
-- [ ] `[pre]pend/[app]end` - Add text to beginning/end of task
-
-Automation
-
-- [ ] Auto-categorization of new items
-- [ ] Smart due date suggestions
-- [ ] Recurring content (weekly podcast check-ins)
-- [ ] Completion notifications
-
-Storage
-
-- [ ] `sync` - Synchronize with remote storage
-- [ ] `sync setup` - Setup remote storage
-- [ ] Local SQLite database with optional cloud sync
-- [ ] Multiple profile support
-- [ ] `backup` - Create local backup
-- [ ] Backup/restore functionality
-
-Configuration
-
-- [x] Enhanced `config` command implementation (basic stubbed version)
-- [ ] `undo` - Reverse last operation
-- [ ] Themes and personalization
-- [ ] Customizable output formats
-
-## Notes Management Commands
-
-### Implemented Commands
-
-Core Notes Operations
-
-- [x] `note create [title] [content...]` - Create new markdown note with optional interactive editor
-- [x] `note list` - Interactive TUI browser for navigating and viewing notes (with archive and tag filtering)
-- [x] `note read <note-id>` - Display formatted note content with syntax highlighting
-- [x] `note edit <note-id>` - Edit note in configured editor
-- [x] `note remove <note-id>` - Permanently remove note file and metadata
-
-Additional Options
-
-- [x] `--interactive|-i` flag for create command (opens editor)
-- [x] `--file|-f` flag for create command (create from markdown file)
-- [x] `--archived|-a` flag for list command
-- [x] `--tags` filtering for list command
-
-### Commands To Be Implemented
-
-- [ ] `note search [query]` - Search notes by content, title, or tags
-- [ ] `note tag <note-id> [tags...]` - Add/remove tags from notes
-- [ ] `note recent` - Show recently created/modified notes
-- [ ] `note templates` - Create notes from predefined templates
-- [ ] `note archive <note-id>` - Archive old notes
-- [ ] `note export` - Export notes to various formats
-- [ ] Full-text search integration
-- [ ] Linking between notes and tasks/content
-
-## User Experience
-
-- [x] Interactive TUI modes for task lists, projects, tags, contexts, and notes
-- [x] Static output modes as alternatives to interactive TUI
-- [x] Color-coded priority and status indicators
-- [x] Comprehensive help system via cobra CLI framework
-
----
-
-- [ ] Quick-add commands for rapid entry
-- [ ] Enhanced progress tracking UI
-- [ ] Calendar view for tasks
-
-### Technical Infrastructure
-
-- [ ] CI/CD pipeline -> pre-build binaries
-- [ ] Complete README/documentation
-- [ ] Installation instructions
-- [ ] Usage examples
-
-## Tech Debt
-
-### Signatures
-
-We've got inconsistent argument parsing and sanitization leading to calls to strconv.Atoi in tests & handler funcs.
-This is only done correctly in the note command -> handler sequence
-
-- [ ] TaskCommand
-- [ ] MovieCommand
-- [ ] TVCommand
-- [ ] BookCommand
-
-### Movie Commands - Missing Tests
-
-- [x] movie watched [id] - marks movie as watched
-
-### TV Commands - Missing Tests
-
-- [x] tv watching [id] - marks TV show as watching
-- [x] tv watched [id] - marks TV show as watched
-
-### Book Commands - Missing Tests
-
-- [x] book add [search query...] - search and add book
-- [x] book reading `<id>` - marks book as reading
-- [x] book finished `<id>` - marks book as finished
-- [x] book progress `<id>` `<percentage>` - updates reading progress
-
-## Ideas
-
-### Task Management Enhancements
-
-- Sub-tasks and hierarchical tasks - Break complex tasks into child tasks for better organization
-- Linking - Establish relationships between related tasks without strict dependencies
-- Batching - Group related tasks for bulk operations (completion, priority changes, etc.)
-- Retrospectives - Analysis of completed tasks to improve future estimates and planning
-- Automation rules - Create rules that automatically modify tasks based on conditions
-- Habit formation - Track recurring micro-tasks that build into larger goals
-- Context switching - Automatically adjust system settings, apps, or environment based on current task
-- Forecasting - Predict future tasks based on patterns, calendar events, or seasonal trends
-- "Energy" matching - Recommend tasks based on current energy levels or time of day
-- Priority rebalancing - Automatically suggest priority adjustments based on deadlines and importance
-- Dependency visualization: Visual flow charts showing how tasks connect and block each other
-
-### Media Management Enhancements
-
-- Podcast management: Add podcast tracking with episode progress and subscription management
-- YouTube/video content management: Track video content queues and viewing progress
-- Multi-format media support: Include audiobooks, comics, and other content formats
-- Media consumption goals: Set reading/watching goals (e.g., "2 books per month")
-- Media cross-referencing: Connect related content across different media types
-    - Series
-- Media note integration: Link notes to specific books, movies, or shows for reviews
-    - Review system - Write and store personal reviews of consumed content
-- Media budget tracking: Track spending on media content (subscriptions, purchases)
-- Media consumption patterns: Analyze personal consumption patterns and preferences over time
-- Media seasonal tracking: Track seasonal media preferences and suggest accordingly
-- Media completion streaks: Gamification elements for consistent media consumption
-- Media progress synchronization: Sync progress across different devices or platforms
-
-### Notes Management Enhancements
-
-- Linking and graph view: Create bidirectional links between related notes
-- Templates system: Predefined templates for different note types (meeting notes, book summaries)
-- Versioning and history: Track changes to notes over time with ability to revert
-- Export with formatting: Rich export options with preserved formatting and links
-- Import capabilities: Import notes from other systems (Notion, Evernote, etc.)
-- Content extraction: Extract key points or action items from longer notes
-- Encryption: End-to-end encryption for sensitive notes
-- Content validation: Check for broken links, missing references, or inconsistent information
-
-### System Integration & Automation
-
-- Calendar integration: Sync tasks with calendar systems (Google Calendar, Outlook)
-- Email integration: Create tasks or notes from emails automatically
-- Browser extension: Quick capture of web content as tasks or notes
-- IDE/plugin integration: Direct integration with code editors and development environments
-- File system integration: Monitor files for content that should become tasks or notes
-
-### Advanced UI/UX Features
-
-- Customizable themes: Multiple visual themes and color schemes
-- Terminal interface enhancements: Rich TUI with advanced navigation and visualization
-- Web-based interface: Alternative web UI for browser-based access
-- Advanced filtering and sorting: Complex query systems for data manipulation
-- Visual task mapping: Gantt charts, Kanban boards, and other visual representations
-- Quick entry mode: Rapid capture interface for minimal friction
-- Keyboard customization: Fully customizable keyboard shortcuts
-
-### Security and Privacy
-
-- End-to-end encryption: Full encryption of sensitive data
-- Local-first architecture: Guarantee that all data remains local
+### Task Management Domain
+
+- [ ] Verify tasks can be created with all attributes (priority, project, context, due date, tags).
+- [ ] Confirm task listing supports interactive and static modes.
+- [ ] Implement status filtering (`pending`, `completed`, etc.).
+- [ ] Validate time tracking (start/stop) writes entries and timesheet summarizes correctly.
+- [ ] Ensure update supports add/remove tags and all fields.
+- [ ] Test interactive editor (`task edit`).
+
+### Notes Domain
+
+- [ ] Implement note creation from:
+    - Inline text
+    - File (`--file`)
+    - Interactive input (`--interactive`)
+- [ ] Verify note list interactive TUI works, static list fallback works.
+- [ ] Confirm filtering by tags and `--archived`.
+- [ ] Ensure notes can be opened, edited in `$EDITOR`, and deleted.
+
+### Media Domains
+
+#### Books
+
+- [ ] Implement search + add (possibly external API).
+- [ ] Verify list supports statuses (`queued`, `reading`, `finished`).
+- [ ] Progress updates (`book progress`) work with percentages.
+- [ ] Status update (`book update`) accepts valid values.
+
+#### Movies
+
+- [ ] Implement search + add.
+- [ ] Verify `list` with status filtering (`all`, `queued`, `watched`).
+- [ ] Confirm `watched`/`remove` commands update correctly.
+
+#### TV
+
+- [ ] Implement search + add.
+- [ ] Verify `list` with multiple statuses (`queued`, `watching`, `watched`).
+- [ ] Ensure `watching`, `watched`, `remove` commands behave correctly.
+
+#### Articles
+
+- [ ] Implement article parser (XPath/domain-specific rules).
+- [ ] Save articles in Markdown + HTML.
+- [ ] Verify metadata is stored in DB.
+- [ ] Confirm list supports query, author filter, limit.
+- [ ] Test article view/read/remove.
+
+### Configuration & Data
+
+- [ ] Implement **config management** (flagged TODO in code).
+- [ ] Define config file format (TOML, YAML, JSON).
+- [ ] Set default config/data paths:
+    - Linux: `~/.config/noteleaf`, `~/.local/share/noteleaf`
+    - macOS: `~/Library/Application Support/noteleaf`
+    - Windows: `%APPDATA%\noteleaf`
+- [ ] Implement overrides with environment variables (`NOTELEAF_CONFIG`, `NOTELEAF_DATA_DIR`).
+- [ ] Ensure consistent DB schema migrations and versioning.
+
+### Documentation
+
+- [ ] Finalize **man page** (plaintext + roff).
+- [ ] Write quickstart guide in `README.md`.
+- [ ] Add examples for each command.
+- [ ] Document config file with defaults and examples.
+- [ ] Provide developer docs for contributing.
+
+### QA
+
+- [ ] Verify **unit tests** for all handlers (TaskHandler, NoteHandler, Media Handlers).
+- [ ] Write **integration tests** covering CLI flows.
+- [ ] Ensure error handling works for:
+    - Invalid IDs
+    - Invalid flags
+    - Schema corruption (already tested in repo)
+- [ ] Test cross-platform behavior (Linux/macOS/Windows).
+
+### Packaging
+
+- [ ] Provide prebuilt binaries (via GoReleaser).
+- [ ] Add installation instructions (Homebrew, AUR, Scoop, etc.).
+- [ ] Version bump to `v1.0.0-rc1`.
+- [ ] Publish man page with release.
+- [ ] Verify `noteleaf --version` returns correct string.
+
+## v1 Features
+
+Planned functionality for a complete baseline release.
+
+### Tasks
+
+- [ ] Model
+    - [ ] Dependencies
+    - [ ] Recurrence (`recur`, `until`, templates)
+    - [ ] Wait/scheduled dates
+    - [ ] Urgency scoring
+- [ ] Operations
+    - [ ] `annotate`
+    - [ ] Bulk edit and undo/history
+    - [ ] `$EDITOR` integration
+- [ ] Reports and Views
+    - [ ] Next actions
+    - [ ] Completed/waiting/blocked reports
+    - [ ] Calendar view
+    - [ ] Sorting and urgency-based views
+- [ ] Queries and Filters
+    - [ ] Rich query language
+    - [ ] Saved filters and aliases
+- [ ] Interoperability
+    - [ ] JSON import/export
+    - [ ] todo.txt compatibility
+
+### Notes
+
+- [ ] Commands
+    - [ ] `note search`
+    - [ ] `note tag`
+    - [ ] `note recent`
+    - [ ] `note templates`
+    - [ ] `note archive`
+    - [ ] `note export`
+- [ ] Features
+    - [ ] Full-text search
+    - [ ] Linking between notes, tasks, and media
+
+### Media
+
+- [ ] Articles/papers/blogs
+    - [ ] Parser with domain-specific rules
+    - [ ] Commands: `add`, `list`, `view`, `remove`
+    - [ ] Metadata validation and storage
+- [ ] Books
+    - [ ] Source tracking and ratings
+    - [ ] Genre/topic tagging
+- [ ] Movies/TV
+    - [ ] Ratings and notes
+    - [ ] Genre/topic tagging
+    - [ ] Episode/season progress for TV
+    - [ ] Platform/source tracking
+
+## Beyond v1
+
+Features that demonstrate Go proficiency and broaden Noteleaf’s scope.
+
+### Tasks
+
+- [ ] Parallel report generation and background services
+- [ ] Hook system for task lifecycle events
+- [ ] Plugin mechanism
+- [ ] Generics-based filter engine
+- [ ] Functional options for configuration
+- [ ] Error handling with wrapping and sentinel checks
+
+### Notes
+
+- [ ] Templates system for note types
+- [ ] Versioning and history
+- [ ] Export with formatting
+- [ ] Import from other systems
+
+### Media
+
+- [ ] External imports (Goodreads, IMDB, Letterboxd)
+- [ ] Cross-referencing across media types
+- [ ] Analytics: velocity, completion rates
+
+### Articles
+
+- [ ] Enhanced parsing coverage
+- [ ] Export to multiple formats
+- [ ] Linking with tasks and notes
+
+### User Experience
+
+- [ ] Shell completions
+- [ ] Manpages and docs generator
+- [ ] Theming and customizable output
+- [ ] Calendar integration
+
+### Tasks
+
+- [ ] Sub-tasks and hierarchical tasks
+- [ ] Visual dependency mapping
+- [ ] Forecasting and smart suggestions
+- [ ] Habit and streak tracking
+- [ ] Context-aware recommendations
+
+### Notes
+
+- [ ] Graph view of linked notes
+- [ ] Content extraction and summarization
+- [ ] Encryption and privacy controls
+
+### Media
+
+- [ ] Podcast and YouTube management
+- [ ] Multi-format (audiobooks, comics)
+- [ ] Media consumption goals and streaks
+- [ ] Media budget tracking
+- [ ] Seasonal and energy-based filtering
+
+### Articles
+
+- [ ] Content validation
+- [ ] Encryption support
+- [ ] Advanced classification
+
+## Technical Infrastructure
+
+### Completed
+
+SQLite persistence, CI with GitHub Actions and Codecov, TUIs with Charm stack, initial help system.
+
+### Planned
+
+- Prebuilt binaries for releases
+- Installation and usage documentation
+- Contribution guide and developer docs
+- Consistent argument parsing
+- Backup/restore
+- Multiple profiles
+- Optional synchronization
+
+## v1 Feature Matrix
+
+| Domain   | Feature               | Status    |
+|----------|-----------------------|-----------|
+| Tasks    | CRUD                  | Complete  |
+| Tasks    | Projects/tags         | Complete  |
+| Tasks    | Time tracking         | Complete  |
+| Tasks    | Dependencies          | Planned   |
+| Tasks    | Recurrence            | Planned   |
+| Tasks    | Wait/scheduled        | Planned   |
+| Tasks    | Urgency scoring       | Planned   |
+| Notes    | CRUD                  | Complete  |
+| Notes    | Search/tagging        | Planned   |
+| Media    | Books/movies/TV       | Complete  |
+| Media    | Articles              | Planned   |
+| Media    | Source/ratings        | Planned   |
+| Articles | Parser + storage      | Planned   |
+| System   | SQLite persistence    | Complete  |
+| System   | Synchronization       | Future    |
+| System   | Import/export formats | Future    |

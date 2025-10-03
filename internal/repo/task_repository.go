@@ -70,12 +70,18 @@ func (r *TaskRepository) Create(ctx context.Context, task *models.Task) (int64, 
 	}
 
 	query := `
-		INSERT INTO tasks (uuid, description, status, priority, project, context, tags, due, entry, modified, end, start, annotations)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		INSERT INTO tasks (
+			uuid, description, status, priority, project, context,
+			tags, due, entry, modified, end, start, annotations,
+			recur, until, parent_uuid
+		)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	result, err := r.db.ExecContext(ctx, query,
 		task.UUID, task.Description, task.Status, task.Priority, task.Project, task.Context,
-		tags, task.Due, task.Entry, task.Modified, task.End, task.Start, annotations)
+		tags, task.Due, task.Entry, task.Modified, task.End, task.Start, annotations,
+		task.Recur, task.Until, task.ParentUUID,
+	)
 	if err != nil {
 		return 0, fmt.Errorf("failed to insert task: %w", err)
 	}
@@ -86,22 +92,35 @@ func (r *TaskRepository) Create(ctx context.Context, task *models.Task) (int64, 
 	}
 
 	task.ID = id
+
+	// Sync dependencies to task_dependencies table
+	for _, depUUID := range task.DependsOn {
+		if err := r.AddDependency(ctx, task.UUID, depUUID); err != nil {
+			return 0, fmt.Errorf("failed to add dependency: %w", err)
+		}
+	}
+
 	return id, nil
 }
 
 // Get retrieves a task by ID
 func (r *TaskRepository) Get(ctx context.Context, id int64) (*models.Task, error) {
 	query := `
-		SELECT id, uuid, description, status, priority, project, context, tags, due, entry, modified, end, start, annotations
+		SELECT id, uuid, description, status, priority, project, context, tags,
+		       due, entry, modified, end, start, annotations,
+		       recur, until, parent_uuid
 		FROM tasks WHERE id = ?`
 
 	task := &models.Task{}
 	var tags, annotations sql.NullString
+	var parentUUID sql.NullString
 
-	err := r.db.QueryRowContext(ctx, query, id).Scan(
-		&task.ID, &task.UUID, &task.Description, &task.Status, &task.Priority, &task.Project, &task.Context,
-		&tags, &task.Due, &task.Entry, &task.Modified, &task.End, &task.Start, &annotations)
-	if err != nil {
+	if err := r.db.QueryRowContext(ctx, query, id).Scan(
+		&task.ID, &task.UUID, &task.Description, &task.Status, &task.Priority,
+		&task.Project, &task.Context, &tags,
+		&task.Due, &task.Entry, &task.Modified, &task.End, &task.Start, &annotations,
+		&task.Recur, &task.Until, &parentUUID,
+	); err != nil {
 		return nil, fmt.Errorf("failed to get task: %w", err)
 	}
 
@@ -115,6 +134,14 @@ func (r *TaskRepository) Get(ctx context.Context, id int64) (*models.Task, error
 		if err := task.UnmarshalAnnotations(annotations.String); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal annotations: %w", err)
 		}
+	}
+	if parentUUID.Valid {
+		task.ParentUUID = &parentUUID.String
+	}
+
+	// Populate dependencies from task_dependencies table
+	if err := r.PopulateDependencies(ctx, task); err != nil {
+		return nil, fmt.Errorf("failed to populate dependencies: %w", err)
 	}
 
 	return task, nil
@@ -135,15 +162,30 @@ func (r *TaskRepository) Update(ctx context.Context, task *models.Task) error {
 	}
 
 	query := `
-		UPDATE tasks SET uuid = ?, description = ?, status = ?, priority = ?, project = ?, context = ?,
-		tags = ?, due = ?, modified = ?, end = ?, start = ?, annotations = ?
+		UPDATE tasks SET
+			uuid = ?, description = ?, status = ?, priority = ?, project = ?, context = ?,
+			tags = ?, due = ?, modified = ?, end = ?, start = ?, annotations = ?,
+			recur = ?, until = ?, parent_uuid = ?
 		WHERE id = ?`
 
-	_, err = r.db.ExecContext(ctx, query,
+	if _, err = r.db.ExecContext(ctx, query,
 		task.UUID, task.Description, task.Status, task.Priority, task.Project, task.Context,
-		tags, task.Due, task.Modified, task.End, task.Start, annotations, task.ID)
-	if err != nil {
+		tags, task.Due, task.Modified, task.End, task.Start, annotations,
+		task.Recur, task.Until, task.ParentUUID,
+		task.ID,
+	); err != nil {
 		return fmt.Errorf("failed to update task: %w", err)
+	}
+
+	// Sync dependencies: clear existing and add new ones
+	if err := r.ClearDependencies(ctx, task.UUID); err != nil {
+		return fmt.Errorf("failed to clear dependencies: %w", err)
+	}
+
+	for _, depUUID := range task.DependsOn {
+		if err := r.AddDependency(ctx, task.UUID, depUUID); err != nil {
+			return fmt.Errorf("failed to add dependency: %w", err)
+		}
 	}
 
 	return nil
@@ -183,7 +225,11 @@ func (r *TaskRepository) List(ctx context.Context, opts TaskListOptions) ([]*mod
 }
 
 func (r *TaskRepository) buildListQuery(opts TaskListOptions) string {
-	query := "SELECT id, uuid, description, status, priority, project, context, tags, due, entry, modified, end, start, annotations FROM tasks"
+	query := `
+    SELECT id, uuid, description, status, priority, project, context, tags,
+           due, entry, modified, end, start, annotations,
+           recur, until, parent_uuid
+    FROM tasks`
 
 	var conditions []string
 
@@ -272,10 +318,19 @@ func (r *TaskRepository) buildListArgs(opts TaskListOptions) []any {
 
 func (r *TaskRepository) scanTaskRow(rows *sql.Rows, task *models.Task) error {
 	var tags, annotations sql.NullString
+	var parentUUID sql.NullString
 
-	if err := rows.Scan(&task.ID, &task.UUID, &task.Description, &task.Status, &task.Priority,
-		&task.Project, &task.Context, &tags, &task.Due, &task.Entry, &task.Modified, &task.End, &task.Start, &annotations); err != nil {
+	if err := rows.Scan(
+		&task.ID, &task.UUID, &task.Description, &task.Status, &task.Priority,
+		&task.Project, &task.Context, &tags,
+		&task.Due, &task.Entry, &task.Modified, &task.End, &task.Start, &annotations,
+		&task.Recur, &task.Until, &parentUUID,
+	); err != nil {
 		return fmt.Errorf("failed to scan task row: %w", err)
+	}
+
+	if parentUUID.Valid {
+		task.ParentUUID = &parentUUID.String
 	}
 
 	if tags.Valid {
@@ -317,6 +372,10 @@ func (r *TaskRepository) Count(ctx context.Context, opts TaskListOptions) (int64
 		conditions = append(conditions, "project = ?")
 		args = append(args, opts.Project)
 	}
+	if opts.Context != "" {
+		conditions = append(conditions, "context = ?")
+		args = append(args, opts.Context)
+	}
 	if !opts.DueAfter.IsZero() {
 		conditions = append(conditions, "due >= ?")
 		args = append(args, opts.DueAfter)
@@ -330,11 +389,12 @@ func (r *TaskRepository) Count(ctx context.Context, opts TaskListOptions) (int64
 		searchConditions := []string{
 			"description LIKE ?",
 			"project LIKE ?",
+			"context LIKE ?",
 			"tags LIKE ?",
 		}
 		conditions = append(conditions, fmt.Sprintf("(%s)", strings.Join(searchConditions, " OR ")))
 		searchPattern := "%" + opts.Search + "%"
-		args = append(args, searchPattern, searchPattern, searchPattern)
+		args = append(args, searchPattern, searchPattern, searchPattern, searchPattern)
 	}
 
 	if len(conditions) > 0 {
@@ -353,15 +413,21 @@ func (r *TaskRepository) Count(ctx context.Context, opts TaskListOptions) (int64
 // GetByUUID retrieves a task by UUID
 func (r *TaskRepository) GetByUUID(ctx context.Context, uuid string) (*models.Task, error) {
 	query := `
-		SELECT id, uuid, description, status, priority, project, tags, due, entry, modified, end, start, annotations
+		SELECT id, uuid, description, status, priority, project, context, tags,
+		       due, entry, modified, end, start, annotations,
+		       recur, until, parent_uuid
 		FROM tasks WHERE uuid = ?`
 
 	task := &models.Task{}
 	var tags, annotations sql.NullString
+	var parentUUID sql.NullString
 
 	if err := r.db.QueryRowContext(ctx, query, uuid).Scan(
-		&task.ID, &task.UUID, &task.Description, &task.Status, &task.Priority, &task.Project,
-		&tags, &task.Due, &task.Entry, &task.Modified, &task.End, &task.Start, &annotations); err != nil {
+		&task.ID, &task.UUID, &task.Description, &task.Status, &task.Priority,
+		&task.Project, &task.Context, &tags,
+		&task.Due, &task.Entry, &task.Modified, &task.End, &task.Start, &annotations,
+		&task.Recur, &task.Until, &parentUUID,
+	); err != nil {
 		return nil, fmt.Errorf("failed to get task by UUID: %w", err)
 	}
 
@@ -375,6 +441,15 @@ func (r *TaskRepository) GetByUUID(ctx context.Context, uuid string) (*models.Ta
 		if err := task.UnmarshalAnnotations(annotations.String); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal annotations: %w", err)
 		}
+	}
+
+	if parentUUID.Valid {
+		task.ParentUUID = &parentUUID.String
+	}
+
+	// Populate dependencies from task_dependencies table
+	if err := r.PopulateDependencies(ctx, task); err != nil {
+		return nil, fmt.Errorf("failed to populate dependencies: %w", err)
 	}
 
 	return task, nil
@@ -484,10 +559,12 @@ func (r *TaskRepository) GetContexts(ctx context.Context) ([]ContextSummary, err
 // GetTasksByTag retrieves all tasks with a specific tag
 func (r *TaskRepository) GetTasksByTag(ctx context.Context, tag string) ([]*models.Task, error) {
 	query := `
-		SELECT tasks.id, tasks.uuid, tasks.description, tasks.status, tasks.priority, tasks.project, tasks.context, tasks.tags, tasks.due, tasks.entry, tasks.modified, tasks.end, tasks.start, tasks.annotations
-		FROM tasks, json_each(tasks.tags)
-		WHERE tasks.tags != '' AND tasks.tags IS NOT NULL AND json_each.value = ?
-		ORDER BY tasks.modified DESC`
+		SELECT t.id, t.uuid, t.description, t.status, t.priority, t.project, t.context,
+		       t.tags, t.due, t.entry, t.modified, t.end, t.start, t.annotations,
+		       t.recur, t.until, t.parent_uuid
+		FROM tasks t, json_each(t.tags)
+		WHERE t.tags != '' AND t.tags IS NOT NULL AND json_each.value = ?
+		ORDER BY t.modified DESC`
 
 	rows, err := r.db.QueryContext(ctx, query, tag)
 	if err != nil {
@@ -532,13 +609,13 @@ func (r *TaskRepository) GetAbandoned(ctx context.Context) ([]*models.Task, erro
 	return r.List(ctx, TaskListOptions{Status: models.StatusAbandoned})
 }
 
-// GetByPriority retrieves all tasks with a specific priority
-//
-//	We need special handling for empty priority by using raw SQL
+// GetByPriority retrieves all tasks with a specific priority with special handling for empty priority by using raw SQL
 func (r *TaskRepository) GetByPriority(ctx context.Context, priority string) ([]*models.Task, error) {
 	if priority == "" {
 		query := `
-			SELECT id, uuid, description, status, priority, project, context, tags, due, entry, modified, end, start, annotations
+			SELECT id, uuid, description, status, priority, project, context,
+			       tags, due, entry, modified, end, start, annotations,
+			       recur, until, parent_uuid
 			FROM tasks
 			WHERE priority = '' OR priority IS NULL
 			ORDER BY modified DESC`
@@ -557,7 +634,6 @@ func (r *TaskRepository) GetByPriority(ctx context.Context, priority string) ([]
 			}
 			tasks = append(tasks, task)
 		}
-
 		return tasks, rows.Err()
 	}
 
@@ -636,4 +712,119 @@ func (r *TaskRepository) GetPrioritySummary(ctx context.Context) (map[string]int
 	}
 
 	return summary, rows.Err()
+}
+
+// AddDependency creates a dependency relationship where taskUUID depends on dependsOnUUID.
+func (r *TaskRepository) AddDependency(ctx context.Context, taskUUID, dependsOnUUID string) error {
+	_, err := r.db.ExecContext(ctx,
+		`INSERT INTO task_dependencies (task_uuid, depends_on_uuid) VALUES (?, ?)`,
+		taskUUID, dependsOnUUID)
+	if err != nil {
+		err = fmt.Errorf("failed to add dependency: %w", err)
+	}
+	return err
+}
+
+// RemoveDependency deletes a specific dependency relationship.
+func (r *TaskRepository) RemoveDependency(ctx context.Context, taskUUID, dependsOnUUID string) error {
+	_, err := r.db.ExecContext(ctx,
+		`DELETE FROM task_dependencies WHERE task_uuid = ? AND depends_on_uuid = ?`,
+		taskUUID, dependsOnUUID)
+	if err != nil {
+		err = fmt.Errorf("failed to remove dependency: %w", err)
+	}
+	return err
+}
+
+// ClearDependencies removes all dependencies for a given task.
+func (r *TaskRepository) ClearDependencies(ctx context.Context, taskUUID string) error {
+	_, err := r.db.ExecContext(ctx,
+		`DELETE FROM task_dependencies WHERE task_uuid = ?`,
+		taskUUID)
+	if err != nil {
+		err = fmt.Errorf("failed to clear dependencies: %w", err)
+	}
+	return err
+}
+
+// GetDependencies returns the UUIDs of tasks this task depends on.
+func (r *TaskRepository) GetDependencies(ctx context.Context, taskUUID string) ([]string, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT depends_on_uuid FROM task_dependencies WHERE task_uuid = ?`, taskUUID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get dependencies: %w", err)
+	}
+	defer rows.Close()
+
+	var deps []string
+	for rows.Next() {
+		var dep string
+		if err := rows.Scan(&dep); err != nil {
+			return nil, fmt.Errorf("failed to scan dependency: %w", err)
+		}
+		deps = append(deps, dep)
+	}
+	return deps, rows.Err()
+}
+
+// PopulateDependencies loads dependency UUIDs from task_dependencies table into task.DependsOn
+func (r *TaskRepository) PopulateDependencies(ctx context.Context, task *models.Task) error {
+	deps, err := r.GetDependencies(ctx, task.UUID)
+	if err != nil {
+		return err
+	}
+	task.DependsOn = deps
+	return nil
+}
+
+// GetDependents returns tasks that are blocked by a given UUID.
+func (r *TaskRepository) GetDependents(ctx context.Context, blockingUUID string) ([]*models.Task, error) {
+	query := `
+		SELECT t.id, t.uuid, t.description, t.status, t.priority, t.project, t.context,
+		       t.tags, t.due, t.entry, t.modified, t.end, t.start, t.annotations,
+		       t.recur, t.until, t.parent_uuid
+		FROM tasks t
+		JOIN task_dependencies d ON t.uuid = d.task_uuid
+		WHERE d.depends_on_uuid = ?`
+
+	rows, err := r.db.QueryContext(ctx, query, blockingUUID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get dependents: %w", err)
+	}
+	defer rows.Close()
+
+	var tasks []*models.Task
+	for rows.Next() {
+		task := &models.Task{}
+		if err := r.scanTaskRow(rows, task); err != nil {
+			return nil, err
+		}
+		tasks = append(tasks, task)
+	}
+	return tasks, rows.Err()
+}
+
+// GetBlockedTasks finds tasks that are blocked by a given UUID.
+func (r *TaskRepository) GetBlockedTasks(ctx context.Context, blockingUUID string) ([]*models.Task, error) {
+	query := `
+	SELECT t.id, t.uuid, t.description, t.status, t.priority, t.project, t.context,
+	       t.tags, t.due, t.entry, t.modified, t.end, t.start, t.annotations, t.recur, t.until, t.parent_uuid
+	FROM tasks t
+	JOIN task_dependencies d ON t.uuid = d.task_uuid
+	WHERE d.depends_on_uuid = ?`
+	rows, err := r.db.QueryContext(ctx, query, blockingUUID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tasks []*models.Task
+	for rows.Next() {
+		task := &models.Task{}
+		if err := r.scanTaskRow(rows, task); err != nil {
+			return nil, err
+		}
+		tasks = append(tasks, task)
+	}
+	return tasks, rows.Err()
 }

@@ -53,29 +53,68 @@ func (h *TaskHandler) Close() error {
 }
 
 // Create creates a new task
-func (h *TaskHandler) Create(ctx context.Context, desc []string, priority, project, context, due string, tags []string) error {
-	if len(desc) < 1 {
+func (h *TaskHandler) Create(ctx context.Context, description, priority, project, context, due, recur, until, parentUUID, dependsOn string, tags []string) error {
+	if description == "" {
 		return fmt.Errorf("task description required")
 	}
 
-	description := strings.Join(desc, " ")
+	parsed := parseDescription(description)
+
+	if project != "" {
+		parsed.Project = project
+	}
+	if context != "" {
+		parsed.Context = context
+	}
+	if due != "" {
+		parsed.Due = due
+	}
+	if recur != "" {
+		parsed.Recur = recur
+	}
+	if until != "" {
+		parsed.Until = until
+	}
+	if parentUUID != "" {
+		parsed.ParentUUID = parentUUID
+	}
+	if dependsOn != "" {
+		parsed.DependsOn = strings.Split(dependsOn, ",")
+	}
+	if len(tags) > 0 {
+		parsed.Tags = append(parsed.Tags, tags...)
+	}
 
 	task := &models.Task{
 		UUID:        uuid.New().String(),
-		Description: description,
+		Description: parsed.Description,
 		Status:      "pending",
 		Priority:    priority,
-		Project:     project,
-		Context:     context,
-		Tags:        tags,
+		Project:     parsed.Project,
+		Context:     parsed.Context,
+		Tags:        parsed.Tags,
+		Recur:       models.RRule(parsed.Recur),
+		DependsOn:   parsed.DependsOn,
 	}
 
-	if due != "" {
-		if dueTime, err := time.Parse("2006-01-02", due); err == nil {
+	if parsed.Due != "" {
+		if dueTime, err := time.Parse("2006-01-02", parsed.Due); err == nil {
 			task.Due = &dueTime
 		} else {
 			return fmt.Errorf("invalid due date format, use YYYY-MM-DD: %w", err)
 		}
+	}
+
+	if parsed.Until != "" {
+		if untilTime, err := time.Parse("2006-01-02", parsed.Until); err == nil {
+			task.Until = &untilTime
+		} else {
+			return fmt.Errorf("invalid until date format, use YYYY-MM-DD: %w", err)
+		}
+	}
+
+	if parsed.ParentUUID != "" {
+		task.ParentUUID = &parsed.ParentUUID
 	}
 
 	id, err := h.repos.Tasks.Create(ctx, task)
@@ -88,17 +127,29 @@ func (h *TaskHandler) Create(ctx context.Context, desc []string, priority, proje
 	if priority != "" {
 		fmt.Printf("Priority: %s\n", priority)
 	}
-	if project != "" {
-		fmt.Printf("Project: %s\n", project)
+	if task.Project != "" {
+		fmt.Printf("Project: %s\n", task.Project)
 	}
-	if context != "" {
-		fmt.Printf("Context: %s\n", context)
+	if task.Context != "" {
+		fmt.Printf("Context: %s\n", task.Context)
 	}
-	if len(tags) > 0 {
-		fmt.Printf("Tags: %s\n", strings.Join(tags, ", "))
+	if len(task.Tags) > 0 {
+		fmt.Printf("Tags: %s\n", strings.Join(task.Tags, ", "))
 	}
 	if task.Due != nil {
 		fmt.Printf("Due: %s\n", task.Due.Format("2006-01-02"))
+	}
+	if task.Recur != "" {
+		fmt.Printf("Recur: %s\n", task.Recur)
+	}
+	if task.Until != nil {
+		fmt.Printf("Until: %s\n", task.Until.Format("2006-01-02"))
+	}
+	if task.ParentUUID != nil {
+		fmt.Printf("Parent: %s\n", *task.ParentUUID)
+	}
+	if len(task.DependsOn) > 0 {
+		fmt.Printf("Depends on: %s\n", strings.Join(task.DependsOn, ", "))
 	}
 
 	return nil
@@ -150,7 +201,7 @@ func (h *TaskHandler) listTasksInteractive(ctx context.Context, showAll bool, st
 }
 
 // Update updates a task using parsed flag values
-func (h *TaskHandler) Update(ctx context.Context, taskID, description, status, priority, project, context, due string, addTags, removeTags []string) error {
+func (h *TaskHandler) Update(ctx context.Context, taskID, description, status, priority, project, context, due, recur, until, parentUUID string, addTags, removeTags []string, addDeps, removeDeps string) error {
 	var task *models.Task
 	var err error
 
@@ -186,6 +237,19 @@ func (h *TaskHandler) Update(ctx context.Context, taskID, description, status, p
 			return fmt.Errorf("invalid due date format, use YYYY-MM-DD: %w", err)
 		}
 	}
+	if recur != "" {
+		task.Recur = models.RRule(recur)
+	}
+	if until != "" {
+		if untilTime, err := time.Parse("2006-01-02", until); err == nil {
+			task.Until = &untilTime
+		} else {
+			return fmt.Errorf("invalid until date format, use YYYY-MM-DD: %w", err)
+		}
+	}
+	if parentUUID != "" {
+		task.ParentUUID = &parentUUID
+	}
 
 	for _, tag := range addTags {
 		if !slices.Contains(task.Tags, tag) {
@@ -195,6 +259,26 @@ func (h *TaskHandler) Update(ctx context.Context, taskID, description, status, p
 
 	for _, tag := range removeTags {
 		task.Tags = removeString(task.Tags, tag)
+	}
+
+	// Handle dependency additions
+	if addDeps != "" {
+		deps := strings.Split(addDeps, ",")
+		for _, dep := range deps {
+			dep = strings.TrimSpace(dep)
+			if dep != "" && !slices.Contains(task.DependsOn, dep) {
+				task.DependsOn = append(task.DependsOn, dep)
+			}
+		}
+	}
+
+	// Handle dependency removals
+	if removeDeps != "" {
+		deps := strings.Split(removeDeps, ",")
+		for _, dep := range deps {
+			dep = strings.TrimSpace(dep)
+			task.DependsOn = removeString(task.DependsOn, dep)
+		}
 	}
 
 	err = h.repos.Tasks.Update(ctx, task)
@@ -681,6 +765,14 @@ func (h *TaskHandler) printTask(task *models.Task) {
 		fmt.Printf(" (due: %s)", task.Due.Format("2006-01-02"))
 	}
 
+	if task.Recur != "" {
+		fmt.Printf(" \u21bb")
+	}
+
+	if len(task.DependsOn) > 0 {
+		fmt.Printf(" \u2937%d", len(task.DependsOn))
+	}
+
 	fmt.Println()
 }
 
@@ -708,6 +800,25 @@ func (h *TaskHandler) printTaskDetail(task *models.Task, noMetadata bool) {
 
 	if task.Due != nil {
 		fmt.Printf("Due: %s\n", task.Due.Format("2006-01-02 15:04"))
+	}
+
+	if task.Recur != "" {
+		fmt.Printf("Recurrence: %s\n", task.Recur)
+	}
+
+	if task.Until != nil {
+		fmt.Printf("Recur Until: %s\n", task.Until.Format("2006-01-02"))
+	}
+
+	if task.ParentUUID != nil {
+		fmt.Printf("Parent Task: %s\n", *task.ParentUUID)
+	}
+
+	if len(task.DependsOn) > 0 {
+		fmt.Printf("Depends On:\n")
+		for _, dep := range task.DependsOn {
+			fmt.Printf("  - %s\n", dep)
+		}
 	}
 
 	if !noMetadata {
@@ -738,6 +849,54 @@ func (h *TaskHandler) printTaskJSON(task *models.Task) error {
 	}
 	fmt.Println(string(jsonData))
 	return nil
+}
+
+// ParsedTaskData holds extracted metadata from a task description
+type ParsedTaskData struct {
+	Description string
+	Project     string
+	Context     string
+	Tags        []string
+	Due         string
+	Recur       string
+	Until       string
+	ParentUUID  string
+	DependsOn   []string
+}
+
+// parseDescription extracts inline metadata from description text
+// Supports: +project @context #tag due:YYYY-MM-DD recur:RULE until:DATE parent:UUID depends:UUID1,UUID2
+func parseDescription(text string) *ParsedTaskData {
+	parsed := &ParsedTaskData{Tags: []string{}, DependsOn: []string{}}
+	words := strings.Fields(text)
+
+	var descWords []string
+	for _, word := range words {
+		switch {
+		case strings.HasPrefix(word, "+"):
+			parsed.Project = strings.TrimPrefix(word, "+")
+		case strings.HasPrefix(word, "@"):
+			parsed.Context = strings.TrimPrefix(word, "@")
+		case strings.HasPrefix(word, "#"):
+			parsed.Tags = append(parsed.Tags, strings.TrimPrefix(word, "#"))
+		case strings.HasPrefix(word, "due:"):
+			parsed.Due = strings.TrimPrefix(word, "due:")
+		case strings.HasPrefix(word, "recur:"):
+			parsed.Recur = strings.TrimPrefix(word, "recur:")
+		case strings.HasPrefix(word, "until:"):
+			parsed.Until = strings.TrimPrefix(word, "until:")
+		case strings.HasPrefix(word, "parent:"):
+			parsed.ParentUUID = strings.TrimPrefix(word, "parent:")
+		case strings.HasPrefix(word, "depends:"):
+			deps := strings.TrimPrefix(word, "depends:")
+			parsed.DependsOn = strings.Split(deps, ",")
+		default:
+			descWords = append(descWords, word)
+		}
+	}
+
+	parsed.Description = strings.Join(descWords, " ")
+	return parsed
 }
 
 func removeString(slice []string, item string) []string {
@@ -772,9 +931,9 @@ func formatDuration(d time.Duration) string {
 		return fmt.Sprintf("%.1fh", hours)
 	}
 	days := int(hours / 24)
-	remainingHours := hours - float64(days*24)
-	if remainingHours == 0 {
+	if remainingHours := hours - float64(days*24); remainingHours == 0 {
 		return fmt.Sprintf("%dd", days)
+	} else {
+		return fmt.Sprintf("%dd %.1fh", days, remainingHours)
 	}
-	return fmt.Sprintf("%dd %.1fh", days, remainingHours)
 }

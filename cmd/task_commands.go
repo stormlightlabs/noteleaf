@@ -1,6 +1,8 @@
 package main
 
 import (
+	"strings"
+
 	"github.com/spf13/cobra"
 	"github.com/stormlightlabs/noteleaf/internal/handlers"
 )
@@ -37,20 +39,29 @@ func addTaskCmd(h *handlers.TaskHandler) *cobra.Command {
 		Aliases: []string{"create", "new"},
 		Args:    cobra.MinimumNArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
+			description := strings.Join(args, " ")
 			priority, _ := c.Flags().GetString("priority")
 			project, _ := c.Flags().GetString("project")
 			context, _ := c.Flags().GetString("context")
 			due, _ := c.Flags().GetString("due")
+			recur, _ := c.Flags().GetString("recur")
+			until, _ := c.Flags().GetString("until")
+			parent, _ := c.Flags().GetString("parent")
+			dependsOn, _ := c.Flags().GetString("depends-on")
 			tags, _ := c.Flags().GetStringSlice("tags")
 
 			defer h.Close()
-			return h.Create(c.Context(), args, priority, project, context, due, tags)
+			return h.Create(c.Context(), description, priority, project, context, due, recur, until, parent, dependsOn, tags)
 		},
 	}
 	cmd.Flags().StringP("priority", "p", "", "Set task priority")
 	cmd.Flags().String("project", "", "Set task project")
 	cmd.Flags().StringP("context", "c", "", "Set task context")
 	cmd.Flags().StringP("due", "d", "", "Set due date (YYYY-MM-DD)")
+	cmd.Flags().String("recur", "", "Set recurrence rule (e.g., FREQ=DAILY)")
+	cmd.Flags().String("until", "", "Set recurrence end date (YYYY-MM-DD)")
+	cmd.Flags().String("parent", "", "Set parent task UUID")
+	cmd.Flags().String("depends-on", "", "Set task dependencies (comma-separated UUIDs)")
 	cmd.Flags().StringSliceP("tags", "t", []string{}, "Add tags to task")
 
 	return cmd
@@ -123,11 +134,16 @@ func updateTaskCmd(handler *handlers.TaskHandler) *cobra.Command {
 			project, _ := cmd.Flags().GetString("project")
 			context, _ := cmd.Flags().GetString("context")
 			due, _ := cmd.Flags().GetString("due")
+			recur, _ := cmd.Flags().GetString("recur")
+			until, _ := cmd.Flags().GetString("until")
+			parent, _ := cmd.Flags().GetString("parent")
 			addTags, _ := cmd.Flags().GetStringSlice("add-tag")
 			removeTags, _ := cmd.Flags().GetStringSlice("remove-tag")
+			addDeps, _ := cmd.Flags().GetString("add-depends")
+			removeDeps, _ := cmd.Flags().GetString("remove-depends")
 
 			defer handler.Close()
-			return handler.Update(cmd.Context(), taskID, description, status, priority, project, context, due, addTags, removeTags)
+			return handler.Update(cmd.Context(), taskID, description, status, priority, project, context, due, recur, until, parent, addTags, removeTags, addDeps, removeDeps)
 		},
 	}
 	updateCmd.Flags().String("description", "", "Update task description")
@@ -136,8 +152,13 @@ func updateTaskCmd(handler *handlers.TaskHandler) *cobra.Command {
 	updateCmd.Flags().String("project", "", "Update task project")
 	updateCmd.Flags().StringP("context", "c", "", "Update task context")
 	updateCmd.Flags().StringP("due", "d", "", "Update due date (YYYY-MM-DD)")
+	updateCmd.Flags().String("recur", "", "Update recurrence rule")
+	updateCmd.Flags().String("until", "", "Update recurrence end date (YYYY-MM-DD)")
+	updateCmd.Flags().String("parent", "", "Update parent task UUID")
 	updateCmd.Flags().StringSlice("add-tag", []string{}, "Add tags to task")
 	updateCmd.Flags().StringSlice("remove-tag", []string{}, "Remove tags from task")
+	updateCmd.Flags().String("add-depends", "", "Add task dependencies (comma-separated UUIDs)")
+	updateCmd.Flags().String("remove-depends", "", "Remove task dependencies (comma-separated UUIDs)")
 
 	return updateCmd
 }
