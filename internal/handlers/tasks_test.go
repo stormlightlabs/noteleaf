@@ -811,7 +811,7 @@ func TestTaskHandler(t *testing.T) {
 				}
 			}()
 
-			handler.printTask(task)
+			printTask(task)
 		})
 
 		t.Run("printTaskDetail doesn't panic", func(t *testing.T) {
@@ -821,7 +821,7 @@ func TestTaskHandler(t *testing.T) {
 				}
 			}()
 
-			handler.printTaskDetail(task, false)
+			printTaskDetail(task, false)
 		})
 	})
 
