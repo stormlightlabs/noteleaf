@@ -24,6 +24,7 @@ func (c *TaskCommand) Create() *cobra.Command {
 		addTaskCmd, listTaskCmd, viewTaskCmd, updateTaskCmd, editTaskCmd,
 		deleteTaskCmd, taskProjectsCmd, taskTagsCmd, taskContextsCmd,
 		taskCompleteCmd, taskStartCmd, taskStopCmd, timesheetViewCmd,
+		taskRecurCmd, taskDependCmd,
 	} {
 		cmd := init(c.handler)
 		root.AddCommand(cmd)
@@ -54,15 +55,11 @@ func addTaskCmd(h *handlers.TaskHandler) *cobra.Command {
 			return h.Create(c.Context(), description, priority, project, context, due, recur, until, parent, dependsOn, tags)
 		},
 	}
-	cmd.Flags().StringP("priority", "p", "", "Set task priority")
-	cmd.Flags().String("project", "", "Set task project")
-	cmd.Flags().StringP("context", "c", "", "Set task context")
-	cmd.Flags().StringP("due", "d", "", "Set due date (YYYY-MM-DD)")
-	cmd.Flags().String("recur", "", "Set recurrence rule (e.g., FREQ=DAILY)")
-	cmd.Flags().String("until", "", "Set recurrence end date (YYYY-MM-DD)")
-	cmd.Flags().String("parent", "", "Set parent task UUID")
-	cmd.Flags().String("depends-on", "", "Set task dependencies (comma-separated UUIDs)")
-	cmd.Flags().StringSliceP("tags", "t", []string{}, "Add tags to task")
+	addCommonTaskFlags(cmd)
+	addDueDateFlag(cmd)
+	addRecurrenceFlags(cmd)
+	addParentFlag(cmd)
+	addDependencyFlags(cmd)
 
 	return cmd
 }
@@ -114,9 +111,7 @@ func viewTaskCmd(handler *handlers.TaskHandler) *cobra.Command {
 			return handler.View(cmd.Context(), args, format, jsonOutput, noMetadata)
 		},
 	}
-	viewCmd.Flags().String("format", "detailed", "Output format (detailed, brief)")
-	viewCmd.Flags().Bool("json", false, "Output as JSON")
-	viewCmd.Flags().Bool("no-metadata", false, "Hide creation/modification timestamps")
+	addOutputFlags(viewCmd)
 
 	return viewCmd
 }
@@ -148,13 +143,10 @@ func updateTaskCmd(handler *handlers.TaskHandler) *cobra.Command {
 	}
 	updateCmd.Flags().String("description", "", "Update task description")
 	updateCmd.Flags().String("status", "", "Update task status")
-	updateCmd.Flags().StringP("priority", "p", "", "Update task priority")
-	updateCmd.Flags().String("project", "", "Update task project")
-	updateCmd.Flags().StringP("context", "c", "", "Update task context")
-	updateCmd.Flags().StringP("due", "d", "", "Update due date (YYYY-MM-DD)")
-	updateCmd.Flags().String("recur", "", "Update recurrence rule")
-	updateCmd.Flags().String("until", "", "Update recurrence end date (YYYY-MM-DD)")
-	updateCmd.Flags().String("parent", "", "Update parent task UUID")
+	addCommonTaskFlags(updateCmd)
+	addDueDateFlag(updateCmd)
+	addRecurrenceFlags(updateCmd)
+	addParentFlag(updateCmd)
 	updateCmd.Flags().StringSlice("add-tag", []string{}, "Add tags to task")
 	updateCmd.Flags().StringSlice("remove-tag", []string{}, "Remove tags from task")
 	updateCmd.Flags().String("add-depends", "", "Add task dependencies (comma-separated UUIDs)")
@@ -304,4 +296,102 @@ func taskCompleteCmd(h *handlers.TaskHandler) *cobra.Command {
 			return h.Done(c.Context(), args)
 		},
 	}
+}
+
+func taskRecurCmd(h *handlers.TaskHandler) *cobra.Command {
+	root := &cobra.Command{
+		Use:     "recur",
+		Short:   "Manage task recurrence",
+		Aliases: []string{"repeat"},
+	}
+
+	setCmd := &cobra.Command{
+		Use:   "set [task-id]",
+		Short: "Set recurrence rule for a task",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			rule, _ := c.Flags().GetString("rule")
+			until, _ := c.Flags().GetString("until")
+			defer h.Close()
+			return h.SetRecur(c.Context(), args[0], rule, until)
+		},
+	}
+	setCmd.Flags().String("rule", "", "Recurrence rule (e.g., FREQ=DAILY)")
+	setCmd.Flags().String("until", "", "Recurrence end date (YYYY-MM-DD)")
+
+	clearCmd := &cobra.Command{
+		Use:   "clear [task-id]",
+		Short: "Clear recurrence rule from a task",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			defer h.Close()
+			return h.ClearRecur(c.Context(), args[0])
+		},
+	}
+
+	showCmd := &cobra.Command{
+		Use:   "show [task-id]",
+		Short: "Show recurrence details for a task",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			defer h.Close()
+			return h.ShowRecur(c.Context(), args[0])
+		},
+	}
+
+	root.AddCommand(setCmd, clearCmd, showCmd)
+	return root
+}
+
+func taskDependCmd(h *handlers.TaskHandler) *cobra.Command {
+	root := &cobra.Command{
+		Use:     "depend",
+		Short:   "Manage task dependencies",
+		Aliases: []string{"dep", "deps"},
+	}
+
+	addCmd := &cobra.Command{
+		Use:   "add [task-id] [depends-on-uuid]",
+		Short: "Add a dependency to a task",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(c *cobra.Command, args []string) error {
+			defer h.Close()
+			return h.AddDep(c.Context(), args[0], args[1])
+		},
+	}
+
+	removeCmd := &cobra.Command{
+		Use:     "remove [task-id] [depends-on-uuid]",
+		Short:   "Remove a dependency from a task",
+		Aliases: []string{"rm"},
+		Args:    cobra.ExactArgs(2),
+		RunE: func(c *cobra.Command, args []string) error {
+			defer h.Close()
+			return h.RemoveDep(c.Context(), args[0], args[1])
+		},
+	}
+
+	listCmd := &cobra.Command{
+		Use:     "list [task-id]",
+		Short:   "List dependencies for a task",
+		Aliases: []string{"ls"},
+		Args:    cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			defer h.Close()
+			return h.ListDeps(c.Context(), args[0])
+		},
+	}
+
+	blockedByCmd := &cobra.Command{
+		Use:   "blocked-by [task-id]",
+		Short: "Show tasks blocked by this task",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			defer h.Close()
+			return h.BlockedByDep(c.Context(), args[0])
+		},
+	}
+
+	root.AddCommand(addCmd, removeCmd, listCmd, blockedByCmd)
+	return root
 }

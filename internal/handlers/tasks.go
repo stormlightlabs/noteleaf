@@ -261,10 +261,9 @@ func (h *TaskHandler) Update(ctx context.Context, taskID, description, status, p
 		task.Tags = removeString(task.Tags, tag)
 	}
 
-	// Handle dependency additions
 	if addDeps != "" {
-		deps := strings.Split(addDeps, ",")
-		for _, dep := range deps {
+		deps := strings.SplitSeq(addDeps, ",")
+		for dep := range deps {
 			dep = strings.TrimSpace(dep)
 			if dep != "" && !slices.Contains(task.DependsOn, dep) {
 				task.DependsOn = append(task.DependsOn, dep)
@@ -272,10 +271,9 @@ func (h *TaskHandler) Update(ctx context.Context, taskID, description, status, p
 		}
 	}
 
-	// Handle dependency removals
 	if removeDeps != "" {
-		deps := strings.Split(removeDeps, ",")
-		for _, dep := range deps {
+		deps := strings.SplitSeq(removeDeps, ",")
+		for dep := range deps {
 			dep = strings.TrimSpace(dep)
 			task.DependsOn = removeString(task.DependsOn, dep)
 		}
@@ -848,6 +846,232 @@ func (h *TaskHandler) printTaskJSON(task *models.Task) error {
 		return fmt.Errorf("failed to marshal task to JSON: %w", err)
 	}
 	fmt.Println(string(jsonData))
+	return nil
+}
+
+// SetRecur sets the recurrence rule for a task
+func (h *TaskHandler) SetRecur(ctx context.Context, taskID, rule, until string) error {
+	var task *models.Task
+	var err error
+
+	if id, err_ := strconv.ParseInt(taskID, 10, 64); err_ == nil {
+		task, err = h.repos.Tasks.Get(ctx, id)
+	} else {
+		task, err = h.repos.Tasks.GetByUUID(ctx, taskID)
+	}
+
+	if err != nil {
+		return fmt.Errorf("failed to find task: %w", err)
+	}
+
+	if rule != "" {
+		task.Recur = models.RRule(rule)
+	}
+
+	if until != "" {
+		if untilTime, err := time.Parse("2006-01-02", until); err == nil {
+			task.Until = &untilTime
+		} else {
+			return fmt.Errorf("invalid until date format, use YYYY-MM-DD: %w", err)
+		}
+	}
+
+	err = h.repos.Tasks.Update(ctx, task)
+	if err != nil {
+		return fmt.Errorf("failed to update task recurrence: %w", err)
+	}
+
+	fmt.Printf("Recurrence set for task (ID: %d): %s\n", task.ID, task.Description)
+	if task.Recur != "" {
+		fmt.Printf("Rule: %s\n", task.Recur)
+	}
+	if task.Until != nil {
+		fmt.Printf("Until: %s\n", task.Until.Format("2006-01-02"))
+	}
+
+	return nil
+}
+
+// ClearRecur clears the recurrence rule from a task
+func (h *TaskHandler) ClearRecur(ctx context.Context, taskID string) error {
+	var task *models.Task
+	var err error
+
+	if id, err_ := strconv.ParseInt(taskID, 10, 64); err_ == nil {
+		task, err = h.repos.Tasks.Get(ctx, id)
+	} else {
+		task, err = h.repos.Tasks.GetByUUID(ctx, taskID)
+	}
+
+	if err != nil {
+		return fmt.Errorf("failed to find task: %w", err)
+	}
+
+	task.Recur = ""
+	task.Until = nil
+
+	err = h.repos.Tasks.Update(ctx, task)
+	if err != nil {
+		return fmt.Errorf("failed to clear task recurrence: %w", err)
+	}
+
+	fmt.Printf("Recurrence cleared for task (ID: %d): %s\n", task.ID, task.Description)
+	return nil
+}
+
+// ShowRecur displays the recurrence details for a task
+func (h *TaskHandler) ShowRecur(ctx context.Context, taskID string) error {
+	var task *models.Task
+	var err error
+
+	if id, err_ := strconv.ParseInt(taskID, 10, 64); err_ == nil {
+		task, err = h.repos.Tasks.Get(ctx, id)
+	} else {
+		task, err = h.repos.Tasks.GetByUUID(ctx, taskID)
+	}
+
+	if err != nil {
+		return fmt.Errorf("failed to find task: %w", err)
+	}
+
+	fmt.Printf("Task (ID: %d): %s\n", task.ID, task.Description)
+	if task.Recur != "" {
+		fmt.Printf("Recurrence rule: %s\n", task.Recur)
+		if task.Until != nil {
+			fmt.Printf("Recurrence until: %s\n", task.Until.Format("2006-01-02"))
+		} else {
+			fmt.Printf("Recurrence until: (no end date)\n")
+		}
+	} else {
+		fmt.Printf("No recurrence set\n")
+	}
+
+	return nil
+}
+
+// AddDep adds a dependency to a task
+func (h *TaskHandler) AddDep(ctx context.Context, taskID, dependsOnUUID string) error {
+	var task *models.Task
+	var err error
+
+	if id, err_ := strconv.ParseInt(taskID, 10, 64); err_ == nil {
+		task, err = h.repos.Tasks.Get(ctx, id)
+	} else {
+		task, err = h.repos.Tasks.GetByUUID(ctx, taskID)
+	}
+
+	if err != nil {
+		return fmt.Errorf("failed to find task: %w", err)
+	}
+
+	if _, err := h.repos.Tasks.GetByUUID(ctx, dependsOnUUID); err != nil {
+		return fmt.Errorf("dependency task not found: %w", err)
+	}
+
+	err = h.repos.Tasks.AddDependency(ctx, task.UUID, dependsOnUUID)
+	if err != nil {
+		return fmt.Errorf("failed to add dependency: %w", err)
+	}
+
+	fmt.Printf("Dependency added to task (ID: %d): %s\n", task.ID, task.Description)
+	fmt.Printf("Now depends on: %s\n", dependsOnUUID)
+
+	return nil
+}
+
+// RemoveDep removes a dependency from a task
+func (h *TaskHandler) RemoveDep(ctx context.Context, taskID, dependsOnUUID string) error {
+	var task *models.Task
+	var err error
+
+	if id, err_ := strconv.ParseInt(taskID, 10, 64); err_ == nil {
+		task, err = h.repos.Tasks.Get(ctx, id)
+	} else {
+		task, err = h.repos.Tasks.GetByUUID(ctx, taskID)
+	}
+
+	if err != nil {
+		return fmt.Errorf("failed to find task: %w", err)
+	}
+
+	err = h.repos.Tasks.RemoveDependency(ctx, task.UUID, dependsOnUUID)
+	if err != nil {
+		return fmt.Errorf("failed to remove dependency: %w", err)
+	}
+
+	fmt.Printf("Dependency removed from task (ID: %d): %s\n", task.ID, task.Description)
+	fmt.Printf("No longer depends on: %s\n", dependsOnUUID)
+
+	return nil
+}
+
+// ListDeps lists all dependencies for a task
+func (h *TaskHandler) ListDeps(ctx context.Context, taskID string) error {
+	var task *models.Task
+	var err error
+
+	if id, err_ := strconv.ParseInt(taskID, 10, 64); err_ == nil {
+		task, err = h.repos.Tasks.Get(ctx, id)
+	} else {
+		task, err = h.repos.Tasks.GetByUUID(ctx, taskID)
+	}
+
+	if err != nil {
+		return fmt.Errorf("failed to find task: %w", err)
+	}
+
+	fmt.Printf("Task (ID: %d): %s\n", task.ID, task.Description)
+
+	if len(task.DependsOn) == 0 {
+		fmt.Printf("No dependencies\n")
+		return nil
+	}
+
+	fmt.Printf("Depends on %d task(s):\n", len(task.DependsOn))
+	for _, depUUID := range task.DependsOn {
+		depTask, err := h.repos.Tasks.GetByUUID(ctx, depUUID)
+		if err != nil {
+			fmt.Printf("  - %s (not found)\n", depUUID)
+			continue
+		}
+		fmt.Printf("  - [%d] %s (UUID: %s)\n", depTask.ID, depTask.Description, depTask.UUID)
+	}
+
+	return nil
+}
+
+// BlockedByDep shows tasks that are blocked by the given task
+func (h *TaskHandler) BlockedByDep(ctx context.Context, taskID string) error {
+	var task *models.Task
+	var err error
+
+	if id, err_ := strconv.ParseInt(taskID, 10, 64); err_ == nil {
+		task, err = h.repos.Tasks.Get(ctx, id)
+	} else {
+		task, err = h.repos.Tasks.GetByUUID(ctx, taskID)
+	}
+
+	if err != nil {
+		return fmt.Errorf("failed to find task: %w", err)
+	}
+
+	fmt.Printf("Task (ID: %d): %s\n", task.ID, task.Description)
+
+	dependents, err := h.repos.Tasks.GetDependents(ctx, task.UUID)
+	if err != nil {
+		return fmt.Errorf("failed to get dependent tasks: %w", err)
+	}
+
+	if len(dependents) == 0 {
+		fmt.Printf("No tasks are blocked by this task\n")
+		return nil
+	}
+
+	fmt.Printf("Blocks %d task(s):\n", len(dependents))
+	for _, dep := range dependents {
+		fmt.Printf("  - [%d] %s\n", dep.ID, dep.Description)
+	}
+
 	return nil
 }
 

@@ -113,6 +113,32 @@ COMMANDS
                 -d, --days <n>             Number of days (default 7)
                 -t, --task <id>            Timesheet for specific task
 
+        noteleaf task recur set <id>
+            Set recurrence rule for a task.
+            Flags:
+                --rule <value>             Recurrence rule (e.g., FREQ=DAILY)
+                --until YYYY-MM-DD         Recurrence end date
+
+        noteleaf task recur clear <id>
+            Clear recurrence rule from a task.
+
+        noteleaf task recur show <id>
+            Show recurrence details for a task.
+
+        noteleaf task depend add <id> <depends-on-uuid>
+            Add a dependency to a task.
+
+        noteleaf task depend remove <id> <depends-on-uuid>
+            Remove a dependency from a task.
+            Alias: rm
+
+        noteleaf task depend list <id>
+            List dependencies for a task.
+            Alias: ls
+
+        noteleaf task depend blocked-by <id>
+            Show tasks blocked by this task.
+
     MOVIE COMMANDS
         noteleaf movie add [query...]
             Search and add a movie to the watch queue.
@@ -247,6 +273,17 @@ EXAMPLES
     Save an article:
         noteleaf article add https://example.com/post
         noteleaf article list --author "Ada Lovelace"
+
+    Manage task recurrence:
+        noteleaf task recur set 42 --rule FREQ=DAILY --until 2025-12-31
+        noteleaf task recur show 42
+        noteleaf task recur clear 42
+
+    Manage task dependencies:
+        noteleaf task depend add 42 abc123-uuid
+        noteleaf task depend list 42
+        noteleaf task depend blocked-by abc123-uuid
+        noteleaf task depend remove 42 abc123-uuid
 
 FILES
     (TODO: configuration and data file paths once implemented)

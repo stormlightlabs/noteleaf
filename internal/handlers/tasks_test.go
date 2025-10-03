@@ -1167,23 +1167,9 @@ func TestTaskHandler(t *testing.T) {
 		defer handler.Close()
 
 		tasks := []*models.Task{
-			{
-				UUID:        uuid.New().String(),
-				Description: "Task with context 1",
-				Status:      "pending",
-				Context:     "test-context",
-			},
-			{
-				UUID:        uuid.New().String(),
-				Description: "Task with context 2",
-				Status:      "pending",
-				Context:     "work-context",
-			},
-			{
-				UUID:        uuid.New().String(),
-				Description: "Task without context",
-				Status:      "pending",
-			},
+			{UUID: uuid.New().String(), Description: "Task with context 1", Status: "pending", Context: "test-context"},
+			{UUID: uuid.New().String(), Description: "Task with context 2", Status: "pending", Context: "work-context"},
+			{UUID: uuid.New().String(), Description: "Task without context", Status: "pending"},
 		}
 
 		for _, task := range tasks {
@@ -1262,5 +1248,296 @@ func TestTaskHandler(t *testing.T) {
 				t.Errorf("ListContexts with no contexts failed: %v", err)
 			}
 		})
+	})
+
+	t.Run("RecurSet", func(t *testing.T) {
+		_, cleanup := setupTaskTest(t)
+		defer cleanup()
+
+		ctx := context.Background()
+
+		handler, err := NewTaskHandler()
+		if err != nil {
+			t.Fatalf("Failed to create handler: %v", err)
+		}
+		defer handler.Close()
+
+		id, err := handler.repos.Tasks.Create(ctx, &models.Task{
+			UUID: uuid.New().String(), Description: "Test task", Status: "pending",
+		})
+		if err != nil {
+			t.Fatalf("Failed to create task: %v", err)
+		}
+
+		t.Run("sets recurrence rule", func(t *testing.T) {
+			err := handler.SetRecur(ctx, strconv.FormatInt(id, 10), "FREQ=DAILY", "2025-12-31")
+			if err != nil {
+				t.Errorf("RecurSet failed: %v", err)
+			}
+
+			task, err := handler.repos.Tasks.Get(ctx, id)
+			if err != nil {
+				t.Fatalf("Failed to get task: %v", err)
+			}
+
+			if task.Recur != "FREQ=DAILY" {
+				t.Errorf("Expected recur to be 'FREQ=DAILY', got '%s'", task.Recur)
+			}
+
+			if task.Until == nil {
+				t.Error("Expected until to be set")
+			}
+		})
+
+		t.Run("handles invalid until date", func(t *testing.T) {
+			err := handler.SetRecur(ctx, strconv.FormatInt(id, 10), "FREQ=WEEKLY", "invalid-date")
+			if err == nil {
+				t.Error("Expected error for invalid until date")
+			}
+		})
+	})
+
+	t.Run("RecurClear", func(t *testing.T) {
+		_, cleanup := setupTaskTest(t)
+		defer cleanup()
+
+		ctx := context.Background()
+
+		handler, err := NewTaskHandler()
+		if err != nil {
+			t.Fatalf("Failed to create handler: %v", err)
+		}
+		defer handler.Close()
+
+		until := time.Now()
+		id, err := handler.repos.Tasks.Create(ctx, &models.Task{
+			UUID:        uuid.New().String(),
+			Description: "Test task",
+			Status:      "pending",
+			Recur:       "FREQ=DAILY",
+			Until:       &until,
+		})
+		if err != nil {
+			t.Fatalf("Failed to create task: %v", err)
+		}
+
+		err = handler.ClearRecur(ctx, strconv.FormatInt(id, 10))
+		if err != nil {
+			t.Errorf("RecurClear failed: %v", err)
+		}
+
+		task, err := handler.repos.Tasks.Get(ctx, id)
+		if err != nil {
+			t.Fatalf("Failed to get task: %v", err)
+		}
+
+		if task.Recur != "" {
+			t.Errorf("Expected recur to be cleared, got '%s'", task.Recur)
+		}
+
+		if task.Until != nil {
+			t.Error("Expected until to be cleared")
+		}
+	})
+
+	t.Run("RecurShow", func(t *testing.T) {
+		_, cleanup := setupTaskTest(t)
+		defer cleanup()
+
+		ctx := context.Background()
+
+		handler, err := NewTaskHandler()
+		if err != nil {
+			t.Fatalf("Failed to create handler: %v", err)
+		}
+		defer handler.Close()
+
+		until := time.Now()
+		id, err := handler.repos.Tasks.Create(ctx, &models.Task{
+			UUID:        uuid.New().String(),
+			Description: "Test task",
+			Status:      "pending",
+			Recur:       "FREQ=DAILY",
+			Until:       &until,
+		})
+		if err != nil {
+			t.Fatalf("Failed to create task: %v", err)
+		}
+
+		err = handler.ShowRecur(ctx, strconv.FormatInt(id, 10))
+		if err != nil {
+			t.Errorf("RecurShow failed: %v", err)
+		}
+	})
+
+	t.Run("DependAdd", func(t *testing.T) {
+		_, cleanup := setupTaskTest(t)
+		defer cleanup()
+
+		ctx := context.Background()
+
+		handler, err := NewTaskHandler()
+		if err != nil {
+			t.Fatalf("Failed to create handler: %v", err)
+		}
+		defer handler.Close()
+
+		task1UUID := uuid.New().String()
+		task2UUID := uuid.New().String()
+
+		id1, err := handler.repos.Tasks.Create(ctx, &models.Task{
+			UUID: task1UUID, Description: "Task 1", Status: "pending",
+		})
+		if err != nil {
+			t.Fatalf("Failed to create task 1: %v", err)
+		}
+
+		_, err = handler.repos.Tasks.Create(ctx, &models.Task{
+			UUID: task2UUID, Description: "Task 2", Status: "pending",
+		})
+		if err != nil {
+			t.Fatalf("Failed to create task 2: %v", err)
+		}
+
+		err = handler.AddDep(ctx, strconv.FormatInt(id1, 10), task2UUID)
+		if err != nil {
+			t.Errorf("DependAdd failed: %v", err)
+		}
+
+		task, err := handler.repos.Tasks.Get(ctx, id1)
+		if err != nil {
+			t.Fatalf("Failed to get task: %v", err)
+		}
+
+		if len(task.DependsOn) != 1 {
+			t.Errorf("Expected 1 dependency, got %d", len(task.DependsOn))
+		}
+
+		if task.DependsOn[0] != task2UUID {
+			t.Errorf("Expected dependency to be '%s', got '%s'", task2UUID, task.DependsOn[0])
+		}
+	})
+
+	t.Run("DependRemove", func(t *testing.T) {
+		_, cleanup := setupTaskTest(t)
+		defer cleanup()
+
+		ctx := context.Background()
+
+		handler, err := NewTaskHandler()
+		if err != nil {
+			t.Fatalf("Failed to create handler: %v", err)
+		}
+		defer handler.Close()
+
+		task1UUID := uuid.New().String()
+		task2UUID := uuid.New().String()
+
+		_, err = handler.repos.Tasks.Create(ctx, &models.Task{
+			UUID: task2UUID, Description: "Task 2", Status: "pending",
+		})
+		if err != nil {
+			t.Fatalf("Failed to create task 2: %v", err)
+		}
+
+		id1, err := handler.repos.Tasks.Create(ctx, &models.Task{
+			UUID:        task1UUID,
+			Description: "Task 1",
+			Status:      "pending",
+			DependsOn:   []string{task2UUID},
+		})
+		if err != nil {
+			t.Fatalf("Failed to create task 1: %v", err)
+		}
+
+		err = handler.RemoveDep(ctx, strconv.FormatInt(id1, 10), task2UUID)
+		if err != nil {
+			t.Errorf("DependRemove failed: %v", err)
+		}
+
+		task, err := handler.repos.Tasks.Get(ctx, id1)
+		if err != nil {
+			t.Fatalf("Failed to get task: %v", err)
+		}
+
+		if len(task.DependsOn) != 0 {
+			t.Errorf("Expected 0 dependencies, got %d", len(task.DependsOn))
+		}
+	})
+
+	t.Run("DependList", func(t *testing.T) {
+		_, cleanup := setupTaskTest(t)
+		defer cleanup()
+
+		ctx := context.Background()
+
+		handler, err := NewTaskHandler()
+		if err != nil {
+			t.Fatalf("Failed to create handler: %v", err)
+		}
+		defer handler.Close()
+
+		task1UUID := uuid.New().String()
+		task2UUID := uuid.New().String()
+
+		_, err = handler.repos.Tasks.Create(ctx, &models.Task{
+			UUID: task2UUID, Description: "Task 2", Status: "pending",
+		})
+		if err != nil {
+			t.Fatalf("Failed to create task 2: %v", err)
+		}
+
+		id1, err := handler.repos.Tasks.Create(ctx, &models.Task{
+			UUID:        task1UUID,
+			Description: "Task 1",
+			Status:      "pending",
+			DependsOn:   []string{task2UUID},
+		})
+		if err != nil {
+			t.Fatalf("Failed to create task 1: %v", err)
+		}
+
+		err = handler.ListDeps(ctx, strconv.FormatInt(id1, 10))
+		if err != nil {
+			t.Errorf("DependList failed: %v", err)
+		}
+	})
+
+	t.Run("DependBlockedBy", func(t *testing.T) {
+		_, cleanup := setupTaskTest(t)
+		defer cleanup()
+
+		ctx := context.Background()
+
+		handler, err := NewTaskHandler()
+		if err != nil {
+			t.Fatalf("Failed to create handler: %v", err)
+		}
+		defer handler.Close()
+
+		task1UUID := uuid.New().String()
+		task2UUID := uuid.New().String()
+
+		id2, err := handler.repos.Tasks.Create(ctx, &models.Task{
+			UUID: task2UUID, Description: "Task 2", Status: "pending",
+		})
+		if err != nil {
+			t.Fatalf("Failed to create task 2: %v", err)
+		}
+
+		_, err = handler.repos.Tasks.Create(ctx, &models.Task{
+			UUID:        task1UUID,
+			Description: "Task 1",
+			Status:      "pending",
+			DependsOn:   []string{task2UUID},
+		})
+		if err != nil {
+			t.Fatalf("Failed to create task 1: %v", err)
+		}
+
+		err = handler.BlockedByDep(ctx, strconv.FormatInt(id2, 10))
+		if err != nil {
+			t.Errorf("DependBlockedBy failed: %v", err)
+		}
 	})
 }
