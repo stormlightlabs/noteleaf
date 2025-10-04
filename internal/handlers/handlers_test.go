@@ -637,8 +637,8 @@ func TestIntegration(t *testing.T) {
 			t.Errorf("Setup failed: %v", err)
 		}
 
-		buf.Reset()
-		err = Status(ctx, []string{}, &buf)
+		var buf2 bytes.Buffer
+		err = Status(ctx, []string{}, &buf2)
 		if err != nil {
 			t.Errorf("Status after setup failed: %v", err)
 		}
@@ -667,8 +667,8 @@ func TestIntegration(t *testing.T) {
 			t.Error("Database should not exist after reset")
 		}
 
-		buf.Reset()
-		err = Status(ctx, []string{}, &buf)
+		var buf3 bytes.Buffer
+		err = Status(ctx, []string{}, &buf3)
 		if err != nil {
 			t.Errorf("Status after reset failed: %v", err)
 		}
@@ -686,9 +686,9 @@ func TestIntegration(t *testing.T) {
 
 		done := make(chan error, 3)
 
-		var buf bytes.Buffer
 		for range 3 {
 			go func() {
+				var buf bytes.Buffer
 				time.Sleep(time.Millisecond * 10)
 				done <- Status(ctx, []string{}, &buf)
 			}()
