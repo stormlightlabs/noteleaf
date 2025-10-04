@@ -31,8 +31,8 @@ type MigrationRunner struct {
 	runFn          func() error // inject for testing
 }
 
-// NewMigrationRunner creates a new migration runner
-func NewMigrationRunner(db *sql.DB, files FileSystem) *MigrationRunner {
+// CreateMigrationRunner creates a new migration runner
+func CreateMigrationRunner(db *sql.DB, files FileSystem) *MigrationRunner {
 	mr := &MigrationRunner{
 		db:             db,
 		migrationFiles: files,

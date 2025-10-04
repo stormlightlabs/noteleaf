@@ -105,7 +105,7 @@ func TestSetup(t *testing.T) {
 		}
 		defer db.Close()
 
-		runner := db.NewMigrationRunner()
+		runner := store.NewMigrationRunner(db)
 		migrations, err := runner.GetAppliedMigrations()
 		if err != nil {
 			t.Fatalf("Failed to get migrations: %v", err)

@@ -12,12 +12,12 @@ import (
 )
 
 var (
-	sqlOpen            = sql.Open
-	pragmaExec         = func(db *sql.DB, stmt string) (sql.Result, error) { return db.Exec(stmt) }
-	newMigrationRunner = NewMigrationRunner
-	getRuntime         = func() string { return runtime.GOOS }
-	getHomeDir         = os.UserHomeDir
-	mkdirAll           = os.MkdirAll
+	sqlOpen               = sql.Open
+	pragmaExec            = func(db *sql.DB, stmt string) (sql.Result, error) { return db.Exec(stmt) }
+	createMigrationRunner = CreateMigrationRunner
+	getRuntime            = func() string { return runtime.GOOS }
+	getHomeDir            = os.UserHomeDir
+	mkdirAll              = os.MkdirAll
 )
 
 //go:embed sql/migrations
@@ -113,7 +113,7 @@ var NewDatabase = func() (*Database, error) {
 	return NewDatabaseWithConfig(nil)
 }
 
-// NewDatabaseWithConfig creates and initializes a new database connection using the provided config
+// NewDatabaseWithConfig creates and initializes a new [Database] connection using the provided [Config]
 func NewDatabaseWithConfig(config *Config) (*Database, error) {
 	if config == nil {
 		var err error
@@ -156,7 +156,7 @@ func NewDatabaseWithConfig(config *Config) (*Database, error) {
 	}
 
 	database := &Database{DB: db, path: dbPath}
-	runner := newMigrationRunner(db, migrationFiles)
+	runner := createMigrationRunner(db, migrationFiles)
 	if err := runner.RunMigrations(); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("failed to run migrations: %w", err)
@@ -165,9 +165,9 @@ func NewDatabaseWithConfig(config *Config) (*Database, error) {
 	return database, nil
 }
 
-// NewMigrationRunnerFromDB creates a new migration runner from a Database instance
-func (db *Database) NewMigrationRunner() *MigrationRunner {
-	return newMigrationRunner(db.DB, migrationFiles)
+// NewMigrationRunner creates a new migration runner from a Database instance
+func NewMigrationRunner(db *Database) *MigrationRunner {
+	return createMigrationRunner(db.DB, migrationFiles)
 }
 
 // GetPath returns the database file path

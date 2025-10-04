@@ -2,7 +2,6 @@ package repo
 
 import (
 	"context"
-	"database/sql"
 	"testing"
 
 	"github.com/google/uuid"
@@ -10,115 +9,9 @@ import (
 	"github.com/stormlightlabs/noteleaf/internal/models"
 )
 
-func createFullTestDB(t *testing.T) *sql.DB {
-	db, err := sql.Open("sqlite3", ":memory:")
-	if err != nil {
-		t.Fatalf("Failed to create in-memory database: %v", err)
-	}
-
-	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
-		t.Fatalf("Failed to enable foreign keys: %v", err)
-	}
-
-	schema := `
-		-- Tasks table
-		CREATE TABLE IF NOT EXISTS tasks (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			uuid TEXT UNIQUE NOT NULL,
-			description TEXT NOT NULL,
-			status TEXT DEFAULT 'pending',
-			priority TEXT,
-			project TEXT,
-			context TEXT,
-			tags TEXT,
-			due DATETIME,
-			entry DATETIME DEFAULT CURRENT_TIMESTAMP,
-			modified DATETIME DEFAULT CURRENT_TIMESTAMP,
-			end DATETIME,
-			start DATETIME,
-			annotations TEXT,
-			recur TEXT,
-			until DATETIME,
-			parent_uuid TEXT
-		);
-
-		-- Task dependencies table
-		CREATE TABLE IF NOT EXISTS task_dependencies (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			task_uuid TEXT NOT NULL,
-			depends_on_uuid TEXT NOT NULL,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			FOREIGN KEY(task_uuid) REFERENCES tasks(uuid) ON DELETE CASCADE,
-			FOREIGN KEY(depends_on_uuid) REFERENCES tasks(uuid) ON DELETE CASCADE
-		);
-
-		-- Movies table
-		CREATE TABLE IF NOT EXISTS movies (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			title TEXT NOT NULL,
-			year INTEGER,
-			status TEXT DEFAULT 'queued',
-			rating REAL,
-			notes TEXT,
-			added DATETIME DEFAULT CURRENT_TIMESTAMP,
-			watched DATETIME
-		);
-
-		-- TV Shows table
-		CREATE TABLE IF NOT EXISTS tv_shows (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			title TEXT NOT NULL,
-			season INTEGER,
-			episode INTEGER,
-			status TEXT DEFAULT 'queued',
-			rating REAL,
-			notes TEXT,
-			added DATETIME DEFAULT CURRENT_TIMESTAMP,
-			last_watched DATETIME
-		);
-
-		-- Books table
-		CREATE TABLE IF NOT EXISTS books (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			title TEXT NOT NULL,
-			author TEXT,
-			status TEXT DEFAULT 'queued',
-			progress INTEGER DEFAULT 0,
-			pages INTEGER,
-			rating REAL,
-			notes TEXT,
-			added DATETIME DEFAULT CURRENT_TIMESTAMP,
-			started DATETIME,
-			finished DATETIME
-		);
-
-		-- Notes table
-		CREATE TABLE IF NOT EXISTS notes (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			title TEXT NOT NULL,
-			content TEXT NOT NULL,
-			tags TEXT,
-			archived BOOLEAN DEFAULT FALSE,
-			created DATETIME DEFAULT CURRENT_TIMESTAMP,
-			modified DATETIME DEFAULT CURRENT_TIMESTAMP,
-			file_path TEXT
-		);
-	`
-
-	if _, err := db.Exec(schema); err != nil {
-		t.Fatalf("Failed to create schema: %v", err)
-	}
-
-	t.Cleanup(func() {
-		db.Close()
-	})
-
-	return db
-}
-
 func TestRepositories(t *testing.T) {
 	t.Run("Integration", func(t *testing.T) {
-		db := createFullTestDB(t)
+		db := CreateTestDB(t)
 		repos := NewRepositories(db)
 		ctx := context.Background()
 
@@ -300,7 +193,7 @@ func TestRepositories(t *testing.T) {
 	})
 
 	t.Run("New", func(t *testing.T) {
-		db := createFullTestDB(t)
+		db := CreateTestDB(t)
 		repos := NewRepositories(db)
 
 		t.Run("All repositories are initialized", func(t *testing.T) {

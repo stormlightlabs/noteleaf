@@ -118,11 +118,11 @@ func TestNewDatabase_ErrorPaths(t *testing.T) {
 	})
 
 	t.Run("migration runner fails", func(t *testing.T) {
-		orig := newMigrationRunner
-		newMigrationRunner = func(db *sql.DB, fs FileSystem) *MigrationRunner {
+		orig := createMigrationRunner
+		createMigrationRunner = func(db *sql.DB, fs FileSystem) *MigrationRunner {
 			return &MigrationRunner{runFn: func() error { return fmt.Errorf("migration fail") }}
 		}
-		t.Cleanup(func() { newMigrationRunner = orig })
+		t.Cleanup(func() { createMigrationRunner = orig })
 
 		_, err := NewDatabase()
 		if err == nil || !strings.Contains(err.Error(), "failed to run migrations") {

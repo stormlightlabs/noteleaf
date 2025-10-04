@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"os"
-	"path/filepath"
 	"runtime"
 	"slices"
 	"strconv"
@@ -14,40 +13,15 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stormlightlabs/noteleaf/internal/models"
+	"github.com/stormlightlabs/noteleaf/internal/repo"
 	"github.com/stormlightlabs/noteleaf/internal/ui"
 )
 
-func setupTaskTest(t *testing.T) (string, func()) {
-	tempDir, err := os.MkdirTemp("", "noteleaf-task-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-
-	oldNoteleafConfig := os.Getenv("NOTELEAF_CONFIG")
-	oldNoteleafDataDir := os.Getenv("NOTELEAF_DATA_DIR")
-	os.Setenv("NOTELEAF_CONFIG", filepath.Join(tempDir, ".noteleaf.conf.toml"))
-	os.Setenv("NOTELEAF_DATA_DIR", tempDir)
-
-	cleanup := func() {
-		os.Setenv("NOTELEAF_CONFIG", oldNoteleafConfig)
-		os.Setenv("NOTELEAF_DATA_DIR", oldNoteleafDataDir)
-		os.RemoveAll(tempDir)
-	}
-
-	ctx := context.Background()
-	err = Setup(ctx, []string{})
-	if err != nil {
-		cleanup()
-		t.Fatalf("Failed to setup database: %v", err)
-	}
-
-	return tempDir, cleanup
-}
-
 func TestTaskHandler(t *testing.T) {
+	ctx := context.Background()
 	t.Run("New", func(t *testing.T) {
 		t.Run("creates handler successfully", func(t *testing.T) {
-			_, cleanup := setupTaskTest(t)
+			_, cleanup := SetupHandlerTest(t)
 			defer cleanup()
 
 			handler, err := NewTaskHandler()
@@ -96,27 +70,18 @@ func TestTaskHandler(t *testing.T) {
 	})
 
 	t.Run("Create", func(t *testing.T) {
-		_, cleanup := setupTaskTest(t)
+		_, cleanup := SetupHandlerTest(t)
 		defer cleanup()
 
-		handler, err := NewTaskHandler()
-		if err != nil {
-			t.Fatalf("Failed to create handler: %v", err)
-		}
-		defer handler.Close()
+		handler := CreateTaskHandler(t)
 
 		t.Run("creates task successfully", func(t *testing.T) {
-			ctx := context.Background()
 			desc := "Buy groceries and cook dinner"
 			err := handler.Create(ctx, desc, "", "", "", "", "", "", "", "", []string{})
-			if err != nil {
-				t.Errorf("CreateTask failed: %v", err)
-			}
+			repo.AssertNoError(t, err, "CreateTask should succeed")
 
 			tasks, err := handler.repos.Tasks.GetPending(ctx)
-			if err != nil {
-				t.Fatalf("Failed to get pending tasks: %v", err)
-			}
+			repo.AssertNoError(t, err, "Failed to get pending tasks")
 
 			if len(tasks) != 1 {
 				t.Errorf("Expected 1 task, got %d", len(tasks))
@@ -138,20 +103,13 @@ func TestTaskHandler(t *testing.T) {
 		})
 
 		t.Run("fails with empty description", func(t *testing.T) {
-			ctx := context.Background()
 			desc := ""
 			err := handler.Create(ctx, desc, "", "", "", "", "", "", "", "", []string{})
-			if err == nil {
-				t.Error("Expected error for empty description")
-			}
-
-			if !strings.Contains(err.Error(), "task description required") {
-				t.Errorf("Expected error about required description, got: %v", err)
-			}
+			repo.AssertError(t, err, "Expected error for empty description")
+			repo.AssertContains(t, err.Error(), "task description required", "Error message should mention required description")
 		})
 
 		t.Run("creates task with flags", func(t *testing.T) {
-			ctx := context.Background()
 			description := "Task with flags"
 			priority := "A"
 			project := "test-project"
@@ -210,7 +168,6 @@ func TestTaskHandler(t *testing.T) {
 		})
 
 		t.Run("fails with invalid due date format", func(t *testing.T) {
-			ctx := context.Background()
 			desc := "Task with invalid date"
 			invalidDue := "invalid-date"
 
@@ -223,13 +180,26 @@ func TestTaskHandler(t *testing.T) {
 				t.Errorf("Expected error about invalid date format, got: %v", err)
 			}
 		})
+
+		t.Run("fails when repository Create returns error", func(t *testing.T) {
+			ctx, cancel := context.WithCancel(ctx)
+			cancel()
+
+			err := handler.Create(ctx, "Test task", "", "", "", "", "", "", "", "", []string{})
+			if err == nil {
+				t.Error("Expected error when repository Create fails")
+			}
+
+			if !strings.Contains(err.Error(), "failed to create task") {
+				t.Errorf("Expected 'failed to create task' error, got: %v", err)
+			}
+		})
 	})
 
 	t.Run("List", func(t *testing.T) {
-		_, cleanup := setupTaskTest(t)
+		_, cleanup := SetupHandlerTest(t)
 		defer cleanup()
 
-		ctx := context.Background()
 		handler, err := NewTaskHandler()
 		if err != nil {
 			t.Fatalf("Failed to create handler: %v", err)
@@ -313,10 +283,8 @@ func TestTaskHandler(t *testing.T) {
 	})
 
 	t.Run("Update", func(t *testing.T) {
-		_, cleanup := setupTaskTest(t)
+		_, cleanup := SetupHandlerTest(t)
 		defer cleanup()
-
-		ctx := context.Background()
 
 		handler, err := NewTaskHandler()
 		if err != nil {
@@ -455,19 +423,48 @@ func TestTaskHandler(t *testing.T) {
 				t.Errorf("Expected error about task not found, got: %v", err)
 			}
 		})
+
+		t.Run("fails when repository Get fails", func(t *testing.T) {
+			cancelCtx, cancel := context.WithCancel(context.Background())
+			cancel()
+
+			err := handler.Update(cancelCtx, "1", "test", "", "", "", "", "", "", "", "", []string{}, []string{}, "", "")
+			if err == nil {
+				t.Error("Expected error when repository Get fails")
+			}
+
+			if !strings.Contains(err.Error(), "failed to find task") {
+				t.Errorf("Expected 'failed to find task' error, got: %v", err)
+			}
+		})
+
+		t.Run("fails when repository operations fail with canceled context", func(t *testing.T) {
+			task := &models.Task{
+				UUID:        uuid.New().String(),
+				Description: "Test task",
+				Status:      "pending",
+			}
+			id, err := handler.repos.Tasks.Create(ctx, task)
+			if err != nil {
+				t.Fatalf("Failed to create task: %v", err)
+			}
+
+			cancelCtx, cancel := context.WithCancel(context.Background())
+			cancel()
+
+			taskID := strconv.FormatInt(id, 10)
+			err = handler.Update(cancelCtx, taskID, "Updated", "", "", "", "", "", "", "", "", []string{}, []string{}, "", "")
+			if err == nil {
+				t.Error("Expected error with canceled context")
+			}
+		})
 	})
 
 	t.Run("Delete", func(t *testing.T) {
-		_, cleanup := setupTaskTest(t)
+		_, cleanup := SetupHandlerTest(t)
 		defer cleanup()
 
-		ctx := context.Background()
-
-		handler, err := NewTaskHandler()
-		if err != nil {
-			t.Fatalf("Failed to create handler: %v", err)
-		}
-		defer handler.Close()
+		handler := CreateTaskHandler(t)
 
 		task := &models.Task{
 			UUID:        uuid.New().String(),
@@ -545,10 +542,8 @@ func TestTaskHandler(t *testing.T) {
 	})
 
 	t.Run("View", func(t *testing.T) {
-		_, cleanup := setupTaskTest(t)
+		_, cleanup := SetupHandlerTest(t)
 		defer cleanup()
-
-		ctx := context.Background()
 
 		handler, err := NewTaskHandler()
 		if err != nil {
@@ -642,10 +637,8 @@ func TestTaskHandler(t *testing.T) {
 	})
 
 	t.Run("Done", func(t *testing.T) {
-		_, cleanup := setupTaskTest(t)
+		_, cleanup := SetupHandlerTest(t)
 		defer cleanup()
-
-		ctx := context.Background()
 
 		handler, err := NewTaskHandler()
 		if err != nil {
@@ -783,7 +776,7 @@ func TestTaskHandler(t *testing.T) {
 	})
 
 	t.Run("Print", func(t *testing.T) {
-		_, cleanup := setupTaskTest(t)
+		_, cleanup := SetupHandlerTest(t)
 		defer cleanup()
 
 		handler, err := NewTaskHandler()
@@ -830,10 +823,8 @@ func TestTaskHandler(t *testing.T) {
 	})
 
 	t.Run("ListProjects", func(t *testing.T) {
-		_, cleanup := setupTaskTest(t)
+		_, cleanup := SetupHandlerTest(t)
 		defer cleanup()
-
-		ctx := context.Background()
 
 		handler, err := NewTaskHandler()
 		if err != nil {
@@ -863,7 +854,7 @@ func TestTaskHandler(t *testing.T) {
 		})
 
 		t.Run("returns no projects when none exist", func(t *testing.T) {
-			_, cleanup2 := setupTaskTest(t)
+			_, cleanup2 := SetupHandlerTest(t)
 			defer cleanup2()
 
 			err := handler.ListProjects(ctx, true)
@@ -871,13 +862,25 @@ func TestTaskHandler(t *testing.T) {
 				t.Errorf("ListProjects with no projects failed: %v", err)
 			}
 		})
+
+		t.Run("fails when repository List fails", func(t *testing.T) {
+			cancelCtx, cancel := context.WithCancel(context.Background())
+			cancel()
+
+			err := handler.ListProjects(cancelCtx, true)
+			if err == nil {
+				t.Error("Expected error when repository List fails")
+			}
+
+			if !strings.Contains(err.Error(), "failed to list tasks for projects") {
+				t.Errorf("Expected 'failed to list tasks for projects' error, got: %v", err)
+			}
+		})
 	})
 
 	t.Run("ListTags", func(t *testing.T) {
-		_, cleanup := setupTaskTest(t)
+		_, cleanup := SetupHandlerTest(t)
 		defer cleanup()
-
-		ctx := context.Background()
 
 		handler, err := NewTaskHandler()
 		if err != nil {
@@ -907,12 +910,26 @@ func TestTaskHandler(t *testing.T) {
 		})
 
 		t.Run("returns no tags when none exist", func(t *testing.T) {
-			_, cleanup2 := setupTaskTest(t)
+			_, cleanup2 := SetupHandlerTest(t)
 			defer cleanup2()
 
 			err := handler.ListTags(ctx, true)
 			if err != nil {
 				t.Errorf("ListTags with no tags failed: %v", err)
+			}
+		})
+
+		t.Run("fails when repository List fails", func(t *testing.T) {
+			cancelCtx, cancel := context.WithCancel(context.Background())
+			cancel()
+
+			err := handler.ListTags(cancelCtx, true)
+			if err == nil {
+				t.Error("Expected error when repository List fails")
+			}
+
+			if !strings.Contains(err.Error(), "failed to list tasks for tags") {
+				t.Errorf("Expected 'failed to list tasks for tags' error, got: %v", err)
 			}
 		})
 	})
@@ -944,7 +961,7 @@ func TestTaskHandler(t *testing.T) {
 	})
 
 	t.Run("InteractiveComponentsStatic", func(t *testing.T) {
-		_, cleanup := setupTaskTest(t)
+		_, cleanup := SetupHandlerTest(t)
 		defer cleanup()
 
 		handler, err := NewTaskHandler()
@@ -952,8 +969,6 @@ func TestTaskHandler(t *testing.T) {
 			t.Fatalf("Failed to create task handler: %v", err)
 		}
 		defer handler.Close()
-
-		ctx := context.Background()
 
 		err = handler.Create(ctx, "Test Task 1", "high", "test-project", "test-context", "", "", "", "", "", []string{"tag1"})
 		if err != nil {
@@ -1092,7 +1107,7 @@ func TestTaskHandler(t *testing.T) {
 			})
 
 			t.Run("handles no contexts", func(t *testing.T) {
-				_, cleanup2 := setupTaskTest(t)
+				_, cleanup2 := SetupHandlerTest(t)
 				defer cleanup2()
 
 				handler2, err := NewTaskHandler()
@@ -1159,10 +1174,8 @@ func TestTaskHandler(t *testing.T) {
 	})
 
 	t.Run("ListContexts", func(t *testing.T) {
-		_, cleanup := setupTaskTest(t)
+		_, cleanup := SetupHandlerTest(t)
 		defer cleanup()
-
-		ctx := context.Background()
 
 		handler, err := NewTaskHandler()
 		if err != nil {
@@ -1238,7 +1251,7 @@ func TestTaskHandler(t *testing.T) {
 		})
 
 		t.Run("returns no contexts when none exist", func(t *testing.T) {
-			_, cleanup_ := setupTaskTest(t)
+			_, cleanup_ := SetupHandlerTest(t)
 			defer cleanup_()
 
 			handler_, err := NewTaskHandler()
@@ -1254,11 +1267,9 @@ func TestTaskHandler(t *testing.T) {
 		})
 	})
 
-	t.Run("RecurSet", func(t *testing.T) {
-		_, cleanup := setupTaskTest(t)
+	t.Run("SetRecur", func(t *testing.T) {
+		_, cleanup := SetupHandlerTest(t)
 		defer cleanup()
-
-		ctx := context.Background()
 
 		handler, err := NewTaskHandler()
 		if err != nil {
@@ -1276,7 +1287,7 @@ func TestTaskHandler(t *testing.T) {
 		t.Run("sets recurrence rule", func(t *testing.T) {
 			err := handler.SetRecur(ctx, strconv.FormatInt(id, 10), "FREQ=DAILY", "2025-12-31")
 			if err != nil {
-				t.Errorf("RecurSet failed: %v", err)
+				t.Errorf("SetRecur failed: %v", err)
 			}
 
 			task, err := handler.repos.Tasks.Get(ctx, id)
@@ -1299,13 +1310,45 @@ func TestTaskHandler(t *testing.T) {
 				t.Error("Expected error for invalid until date")
 			}
 		})
+
+		t.Run("fails when repository Get fails", func(t *testing.T) {
+			cancelCtx, cancel := context.WithCancel(context.Background())
+			cancel()
+
+			err := handler.SetRecur(cancelCtx, "1", "FREQ=DAILY", "")
+			if err == nil {
+				t.Error("Expected error when repository Get fails")
+			}
+
+			if !strings.Contains(err.Error(), "failed to find task") {
+				t.Errorf("Expected 'failed to find task' error, got: %v", err)
+			}
+		})
+
+		t.Run("fails with canceled context", func(t *testing.T) {
+			task := &models.Task{
+				UUID:        uuid.New().String(),
+				Description: "Test task",
+				Status:      "pending",
+			}
+			id, err := handler.repos.Tasks.Create(ctx, task)
+			if err != nil {
+				t.Fatalf("Failed to create task: %v", err)
+			}
+
+			cancelCtx, cancel := context.WithCancel(context.Background())
+			cancel()
+
+			err = handler.SetRecur(cancelCtx, strconv.FormatInt(id, 10), "FREQ=DAILY", "")
+			if err == nil {
+				t.Error("Expected error with canceled context")
+			}
+		})
 	})
 
-	t.Run("RecurClear", func(t *testing.T) {
-		_, cleanup := setupTaskTest(t)
+	t.Run("ClearRecur", func(t *testing.T) {
+		_, cleanup := SetupHandlerTest(t)
 		defer cleanup()
-
-		ctx := context.Background()
 
 		handler, err := NewTaskHandler()
 		if err != nil {
@@ -1325,9 +1368,8 @@ func TestTaskHandler(t *testing.T) {
 			t.Fatalf("Failed to create task: %v", err)
 		}
 
-		err = handler.ClearRecur(ctx, strconv.FormatInt(id, 10))
-		if err != nil {
-			t.Errorf("RecurClear failed: %v", err)
+		if err = handler.ClearRecur(ctx, strconv.FormatInt(id, 10)); err != nil {
+			t.Errorf("ClearRecur failed: %v", err)
 		}
 
 		task, err := handler.repos.Tasks.Get(ctx, id)
@@ -1342,13 +1384,45 @@ func TestTaskHandler(t *testing.T) {
 		if task.Until != nil {
 			t.Error("Expected until to be cleared")
 		}
+
+		t.Run("fails when repository Get fails", func(t *testing.T) {
+			cancelCtx, cancel := context.WithCancel(context.Background())
+			cancel()
+
+			err := handler.ClearRecur(cancelCtx, "1")
+			if err == nil {
+				t.Error("Expected error when repository Get fails")
+			}
+
+			if !strings.Contains(err.Error(), "failed to find task") {
+				t.Errorf("Expected 'failed to find task' error, got: %v", err)
+			}
+		})
+
+		t.Run("fails with canceled context", func(t *testing.T) {
+			task := &models.Task{
+				UUID:        uuid.New().String(),
+				Description: "Test task",
+				Status:      "pending",
+				Recur:       "FREQ=DAILY",
+			}
+			id, err := handler.repos.Tasks.Create(ctx, task)
+			if err != nil {
+				t.Fatalf("Failed to create task: %v", err)
+			}
+
+			cancelCtx, cancel := context.WithCancel(context.Background())
+			cancel()
+
+			if err = handler.ClearRecur(cancelCtx, strconv.FormatInt(id, 10)); err == nil {
+				t.Error("Expected error with canceled context")
+			}
+		})
 	})
 
-	t.Run("RecurShow", func(t *testing.T) {
-		_, cleanup := setupTaskTest(t)
+	t.Run("ShowRecur", func(t *testing.T) {
+		_, cleanup := SetupHandlerTest(t)
 		defer cleanup()
-
-		ctx := context.Background()
 
 		handler, err := NewTaskHandler()
 		if err != nil {
@@ -1370,15 +1444,27 @@ func TestTaskHandler(t *testing.T) {
 
 		err = handler.ShowRecur(ctx, strconv.FormatInt(id, 10))
 		if err != nil {
-			t.Errorf("RecurShow failed: %v", err)
+			t.Errorf("ShowRecur failed: %v", err)
 		}
+
+		t.Run("fails when repository Get fails", func(t *testing.T) {
+			cancelCtx, cancel := context.WithCancel(context.Background())
+			cancel()
+
+			err := handler.ShowRecur(cancelCtx, "1")
+			if err == nil {
+				t.Error("Expected error when repository Get fails")
+			}
+
+			if !strings.Contains(err.Error(), "failed to find task") {
+				t.Errorf("Expected 'failed to find task' error, got: %v", err)
+			}
+		})
 	})
 
-	t.Run("DependAdd", func(t *testing.T) {
-		_, cleanup := setupTaskTest(t)
+	t.Run("AddDep", func(t *testing.T) {
+		_, cleanup := SetupHandlerTest(t)
 		defer cleanup()
-
-		ctx := context.Background()
 
 		handler, err := NewTaskHandler()
 		if err != nil {
@@ -1396,16 +1482,15 @@ func TestTaskHandler(t *testing.T) {
 			t.Fatalf("Failed to create task 1: %v", err)
 		}
 
-		_, err = handler.repos.Tasks.Create(ctx, &models.Task{
+		if _, err = handler.repos.Tasks.Create(ctx, &models.Task{
 			UUID: task2UUID, Description: "Task 2", Status: "pending",
-		})
-		if err != nil {
+		}); err != nil {
 			t.Fatalf("Failed to create task 2: %v", err)
 		}
 
 		err = handler.AddDep(ctx, strconv.FormatInt(id1, 10), task2UUID)
 		if err != nil {
-			t.Errorf("DependAdd failed: %v", err)
+			t.Errorf("AddDep failed: %v", err)
 		}
 
 		task, err := handler.repos.Tasks.Get(ctx, id1)
@@ -1422,11 +1507,9 @@ func TestTaskHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("DependRemove", func(t *testing.T) {
-		_, cleanup := setupTaskTest(t)
+	t.Run("RemoveDep", func(t *testing.T) {
+		_, cleanup := SetupHandlerTest(t)
 		defer cleanup()
-
-		ctx := context.Background()
 
 		handler, err := NewTaskHandler()
 		if err != nil {
@@ -1456,7 +1539,7 @@ func TestTaskHandler(t *testing.T) {
 
 		err = handler.RemoveDep(ctx, strconv.FormatInt(id1, 10), task2UUID)
 		if err != nil {
-			t.Errorf("DependRemove failed: %v", err)
+			t.Errorf("RemoveDep failed: %v", err)
 		}
 
 		task, err := handler.repos.Tasks.Get(ctx, id1)
@@ -1469,11 +1552,9 @@ func TestTaskHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("DependList", func(t *testing.T) {
-		_, cleanup := setupTaskTest(t)
+	t.Run("ListDeps", func(t *testing.T) {
+		_, cleanup := SetupHandlerTest(t)
 		defer cleanup()
-
-		ctx := context.Background()
 
 		handler, err := NewTaskHandler()
 		if err != nil {
@@ -1503,15 +1584,13 @@ func TestTaskHandler(t *testing.T) {
 
 		err = handler.ListDeps(ctx, strconv.FormatInt(id1, 10))
 		if err != nil {
-			t.Errorf("DependList failed: %v", err)
+			t.Errorf("ListDeps failed: %v", err)
 		}
 	})
 
-	t.Run("DependBlockedBy", func(t *testing.T) {
-		_, cleanup := setupTaskTest(t)
+	t.Run("BlockedByDep", func(t *testing.T) {
+		_, cleanup := SetupHandlerTest(t)
 		defer cleanup()
-
-		ctx := context.Background()
 
 		handler, err := NewTaskHandler()
 		if err != nil {
@@ -1522,26 +1601,17 @@ func TestTaskHandler(t *testing.T) {
 		task1UUID := uuid.New().String()
 		task2UUID := uuid.New().String()
 
-		id2, err := handler.repos.Tasks.Create(ctx, &models.Task{
-			UUID: task2UUID, Description: "Task 2", Status: "pending",
-		})
+		id2, err := handler.repos.Tasks.Create(ctx, &models.Task{UUID: task2UUID, Description: "Task 2", Status: "pending"})
 		if err != nil {
 			t.Fatalf("Failed to create task 2: %v", err)
 		}
 
-		_, err = handler.repos.Tasks.Create(ctx, &models.Task{
-			UUID:        task1UUID,
-			Description: "Task 1",
-			Status:      "pending",
-			DependsOn:   []string{task2UUID},
-		})
-		if err != nil {
+		if _, err = handler.repos.Tasks.Create(ctx, &models.Task{UUID: task1UUID, Description: "Task 1", Status: "pending", DependsOn: []string{task2UUID}}); err != nil {
 			t.Fatalf("Failed to create task 1: %v", err)
 		}
 
-		err = handler.BlockedByDep(ctx, strconv.FormatInt(id2, 10))
-		if err != nil {
-			t.Errorf("DependBlockedBy failed: %v", err)
+		if err = handler.BlockedByDep(ctx, strconv.FormatInt(id2, 10)); err != nil {
+			t.Errorf("BlockedByDep failed: %v", err)
 		}
 	})
 }

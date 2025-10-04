@@ -830,7 +830,7 @@ func (ith *InteractiveTestHelper) GetSimulator() *InputSimulator {
 
 // SetupHandlerWithInput creates a handler and sets up input simulation in one call
 func SetupBookHandlerWithInput(t *testing.T, inputs ...string) (*BookHandler, func()) {
-	_, cleanup := setupTest(t)
+	_, cleanup := SetupHandlerTest(t)
 
 	handler, err := NewBookHandler()
 	if err != nil {
@@ -852,7 +852,7 @@ func SetupBookHandlerWithInput(t *testing.T, inputs ...string) (*BookHandler, fu
 
 // SetupMovieHandlerWithInput creates a movie handler and sets up input simulation
 func SetupMovieHandlerWithInput(t *testing.T, inputs ...string) (*MovieHandler, func()) {
-	_, cleanup := setupTest(t)
+	_, cleanup := SetupHandlerTest(t)
 
 	handler, err := NewMovieHandler()
 	if err != nil {
@@ -874,7 +874,7 @@ func SetupMovieHandlerWithInput(t *testing.T, inputs ...string) (*MovieHandler, 
 
 // SetupTVHandlerWithInput creates a TV handler and sets up input simulation
 func SetupTVHandlerWithInput(t *testing.T, inputs ...string) (*TVHandler, func()) {
-	_, cleanup := setupTest(t)
+	_, cleanup := SetupHandlerTest(t)
 
 	handler, err := NewTVHandler()
 	if err != nil {
@@ -894,7 +894,7 @@ func SetupTVHandlerWithInput(t *testing.T, inputs ...string) (*TVHandler, func()
 	return handler, fullCleanup
 }
 
-func setupTest(t *testing.T) (string, func()) {
+func SetupHandlerTest(t *testing.T) (string, func()) {
 	tempDir, err := os.MkdirTemp("", "noteleaf-interactive-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
@@ -1189,5 +1189,40 @@ func CommonTUIScenarios() []TUITestScenario {
 			KeySequence: []tea.KeyType{tea.KeyCtrlC},
 			Timeout:     500 * time.Millisecond,
 		},
+	}
+}
+
+// CreateTaskHandler creates a TaskHandler for testing with automatic cleanup
+func CreateTaskHandler(t *testing.T) *TaskHandler {
+	t.Helper()
+
+	handler, err := NewTaskHandler()
+	if err != nil {
+		t.Fatalf("Failed to create task handler: %v", err)
+	}
+
+	t.Cleanup(func() {
+		handler.Close()
+	})
+
+	return handler
+}
+
+// AssertTaskHasUUID verifies that a task has a non-empty UUID
+func AssertTaskHasUUID(t *testing.T, task *models.Task) {
+	t.Helper()
+	if task.UUID == "" {
+		t.Fatal("Task should have a UUID")
+	}
+}
+
+// AssertTaskDatesSet verifies that Entry and Modified timestamps are set
+func AssertTaskDatesSet(t *testing.T, task *models.Task) {
+	t.Helper()
+	if task.Entry.IsZero() {
+		t.Error("Task Entry timestamp should be set")
+	}
+	if task.Modified.IsZero() {
+		t.Error("Task Modified timestamp should be set")
 	}
 }

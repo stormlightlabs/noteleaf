@@ -83,7 +83,7 @@ func createTestDB(t *testing.T) *sql.DB {
 func TestNewMigrationRunner(t *testing.T) {
 	db := createTestDB(t)
 
-	runner := NewMigrationRunner(db, testMigrationFiles)
+	runner := CreateMigrationRunner(db, testMigrationFiles)
 	if runner == nil {
 		t.Fatal("NewMigrationRunner should not return nil")
 	}
@@ -96,7 +96,7 @@ func TestNewMigrationRunner(t *testing.T) {
 func TestMigrationRunner_RunMigrations(t *testing.T) {
 	t.Run("runs migrations successfully", func(t *testing.T) {
 		db := createTestDB(t)
-		runner := NewMigrationRunner(db, testMigrationFiles)
+		runner := CreateMigrationRunner(db, testMigrationFiles)
 
 		err := runner.RunMigrations()
 		if err != nil {
@@ -128,7 +128,7 @@ func TestMigrationRunner_RunMigrations(t *testing.T) {
 		db := createTestDB(t)
 
 		emptyFS := embed.FS{}
-		runner := NewMigrationRunner(db, emptyFS)
+		runner := CreateMigrationRunner(db, emptyFS)
 
 		err := runner.RunMigrations()
 		if err == nil {
@@ -140,7 +140,7 @@ func TestMigrationRunner_RunMigrations(t *testing.T) {
 		db := createTestDB(t)
 		db.Close()
 
-		runner := NewMigrationRunner(db, testMigrationFiles)
+		runner := CreateMigrationRunner(db, testMigrationFiles)
 		err := runner.RunMigrations()
 		if err == nil {
 			t.Error("RunMigrations should fail when database connection is closed")
@@ -151,7 +151,7 @@ func TestMigrationRunner_RunMigrations(t *testing.T) {
 		db := createTestDB(t)
 
 		fakeFS := &fakeMigrationFS{shouldFailRead: true, hasNewMigrations: true}
-		runner := NewMigrationRunner(db, fakeFS)
+		runner := CreateMigrationRunner(db, fakeFS)
 
 		err := runner.RunMigrations()
 		if err == nil {
@@ -163,7 +163,7 @@ func TestMigrationRunner_RunMigrations(t *testing.T) {
 		db := createTestDB(t)
 
 		fakeFS := &fakeMigrationFS{invalidSQL: true, hasNewMigrations: true}
-		runner := NewMigrationRunner(db, fakeFS)
+		runner := CreateMigrationRunner(db, fakeFS)
 
 		err := runner.RunMigrations()
 		if err == nil {
@@ -173,7 +173,7 @@ func TestMigrationRunner_RunMigrations(t *testing.T) {
 
 	t.Run("handles migration record insertion failure", func(t *testing.T) {
 		db := createTestDB(t)
-		runner := NewMigrationRunner(db, testMigrationFiles)
+		runner := CreateMigrationRunner(db, testMigrationFiles)
 
 		err := runner.RunMigrations()
 		if err != nil {
@@ -198,7 +198,7 @@ func TestMigrationRunner_RunMigrations(t *testing.T) {
 
 	t.Run("skips already applied migrations", func(t *testing.T) {
 		db := createTestDB(t)
-		runner := NewMigrationRunner(db, testMigrationFiles)
+		runner := CreateMigrationRunner(db, testMigrationFiles)
 
 		err := runner.RunMigrations()
 		if err != nil {
@@ -229,7 +229,7 @@ func TestMigrationRunner_RunMigrations(t *testing.T) {
 
 	t.Run("creates expected tables", func(t *testing.T) {
 		db := createTestDB(t)
-		runner := NewMigrationRunner(db, testMigrationFiles)
+		runner := CreateMigrationRunner(db, testMigrationFiles)
 
 		err := runner.RunMigrations()
 		if err != nil {
@@ -255,7 +255,7 @@ func TestMigrationRunner_RunMigrations(t *testing.T) {
 func TestMigrationRunner_GetAppliedMigrations(t *testing.T) {
 	t.Run("returns empty list when no migrations table", func(t *testing.T) {
 		db := createTestDB(t)
-		runner := NewMigrationRunner(db, testMigrationFiles)
+		runner := CreateMigrationRunner(db, testMigrationFiles)
 
 		migrations, err := runner.GetAppliedMigrations()
 		if err != nil {
@@ -270,7 +270,7 @@ func TestMigrationRunner_GetAppliedMigrations(t *testing.T) {
 	t.Run("handles database connection failure", func(t *testing.T) {
 		db := createTestDB(t)
 		db.Close()
-		runner := NewMigrationRunner(db, testMigrationFiles)
+		runner := CreateMigrationRunner(db, testMigrationFiles)
 
 		_, err := runner.GetAppliedMigrations()
 		if err == nil {
@@ -280,7 +280,7 @@ func TestMigrationRunner_GetAppliedMigrations(t *testing.T) {
 
 	t.Run("handles query execution failure", func(t *testing.T) {
 		db := createTestDB(t)
-		runner := NewMigrationRunner(db, testMigrationFiles)
+		runner := CreateMigrationRunner(db, testMigrationFiles)
 
 		err := runner.RunMigrations()
 		if err != nil {
@@ -298,7 +298,7 @@ func TestMigrationRunner_GetAppliedMigrations(t *testing.T) {
 
 	t.Run("handles row scan failure", func(t *testing.T) {
 		db := createTestDB(t)
-		runner := NewMigrationRunner(db, testMigrationFiles)
+		runner := CreateMigrationRunner(db, testMigrationFiles)
 
 		err := runner.RunMigrations()
 		if err != nil {
@@ -319,7 +319,7 @@ func TestMigrationRunner_GetAppliedMigrations(t *testing.T) {
 
 	t.Run("returns applied migrations", func(t *testing.T) {
 		db := createTestDB(t)
-		runner := NewMigrationRunner(db, testMigrationFiles)
+		runner := CreateMigrationRunner(db, testMigrationFiles)
 
 		// Run migrations first
 		err := runner.RunMigrations()
@@ -359,7 +359,7 @@ func TestMigrationRunner_GetAppliedMigrations(t *testing.T) {
 func TestMigrationRunner_GetAvailableMigrations(t *testing.T) {
 	t.Run("returns available migrations from embedded files", func(t *testing.T) {
 		db := createTestDB(t)
-		runner := NewMigrationRunner(db, testMigrationFiles)
+		runner := CreateMigrationRunner(db, testMigrationFiles)
 
 		migrations, err := runner.GetAvailableMigrations()
 		if err != nil {
@@ -391,7 +391,7 @@ func TestMigrationRunner_GetAvailableMigrations(t *testing.T) {
 		db := createTestDB(t)
 
 		emptyFS := embed.FS{}
-		runner := NewMigrationRunner(db, emptyFS)
+		runner := CreateMigrationRunner(db, emptyFS)
 
 		_, err := runner.GetAvailableMigrations()
 		if err == nil {
@@ -403,7 +403,7 @@ func TestMigrationRunner_GetAvailableMigrations(t *testing.T) {
 		db := createTestDB(t)
 
 		fakeFS := &fakeMigrationFS{shouldFailRead: true}
-		runner := NewMigrationRunner(db, fakeFS)
+		runner := CreateMigrationRunner(db, fakeFS)
 
 		_, err := runner.GetAvailableMigrations()
 		if err == nil {
@@ -413,7 +413,7 @@ func TestMigrationRunner_GetAvailableMigrations(t *testing.T) {
 
 	t.Run("includes both up and down SQL when available", func(t *testing.T) {
 		db := createTestDB(t)
-		runner := NewMigrationRunner(db, testMigrationFiles)
+		runner := CreateMigrationRunner(db, testMigrationFiles)
 
 		migrations, err := runner.GetAvailableMigrations()
 		if err != nil {
@@ -437,7 +437,7 @@ func TestMigrationRunner_GetAvailableMigrations(t *testing.T) {
 func TestMigrationRunner_Rollback(t *testing.T) {
 	t.Run("fails when no migrations to rollback", func(t *testing.T) {
 		db := createTestDB(t)
-		runner := NewMigrationRunner(db, testMigrationFiles)
+		runner := CreateMigrationRunner(db, testMigrationFiles)
 
 		err := runner.Rollback()
 		if err == nil {
@@ -447,7 +447,7 @@ func TestMigrationRunner_Rollback(t *testing.T) {
 
 	t.Run("handles database connection failure", func(t *testing.T) {
 		db := createTestDB(t)
-		runner := NewMigrationRunner(db, testMigrationFiles)
+		runner := CreateMigrationRunner(db, testMigrationFiles)
 
 		err := runner.RunMigrations()
 		if err != nil {
@@ -464,7 +464,7 @@ func TestMigrationRunner_Rollback(t *testing.T) {
 
 	t.Run("handles migration directory read failure during rollback", func(t *testing.T) {
 		db := createTestDB(t)
-		runner := NewMigrationRunner(db, testMigrationFiles)
+		runner := CreateMigrationRunner(db, testMigrationFiles)
 
 		err := runner.RunMigrations()
 		if err != nil {
@@ -482,7 +482,7 @@ func TestMigrationRunner_Rollback(t *testing.T) {
 
 	t.Run("handles missing down migration file", func(t *testing.T) {
 		db := createTestDB(t)
-		runner := NewMigrationRunner(db, testMigrationFiles)
+		runner := CreateMigrationRunner(db, testMigrationFiles)
 
 		err := runner.RunMigrations()
 		if err != nil {
@@ -502,7 +502,7 @@ func TestMigrationRunner_Rollback(t *testing.T) {
 		db := createTestDB(t)
 
 		fakeFS := &fakeMigrationFS{}
-		runner := NewMigrationRunner(db, fakeFS)
+		runner := CreateMigrationRunner(db, fakeFS)
 
 		err := runner.RunMigrations()
 		if err != nil {
@@ -521,7 +521,7 @@ func TestMigrationRunner_Rollback(t *testing.T) {
 		db := createTestDB(t)
 
 		fakeFS := &fakeMigrationFS{}
-		runner := NewMigrationRunner(db, fakeFS)
+		runner := CreateMigrationRunner(db, fakeFS)
 
 		err := runner.RunMigrations()
 		if err != nil {
@@ -538,7 +538,7 @@ func TestMigrationRunner_Rollback(t *testing.T) {
 
 	t.Run("handles migration record deletion failure", func(t *testing.T) {
 		db := createTestDB(t)
-		runner := NewMigrationRunner(db, testMigrationFiles)
+		runner := CreateMigrationRunner(db, testMigrationFiles)
 
 		err := runner.RunMigrations()
 		if err != nil {
@@ -558,7 +558,7 @@ func TestMigrationRunner_Rollback(t *testing.T) {
 
 	t.Run("rolls back last migration", func(t *testing.T) {
 		db := createTestDB(t)
-		runner := NewMigrationRunner(db, testMigrationFiles)
+		runner := CreateMigrationRunner(db, testMigrationFiles)
 
 		err := runner.RunMigrations()
 		if err != nil {
@@ -638,7 +638,7 @@ func TestMigrationHelperFunctions(t *testing.T) {
 func TestMigrationIntegration(t *testing.T) {
 	t.Run("full migration lifecycle", func(t *testing.T) {
 		db := createTestDB(t)
-		runner := NewMigrationRunner(db, testMigrationFiles)
+		runner := CreateMigrationRunner(db, testMigrationFiles)
 
 		available, err := runner.GetAvailableMigrations()
 		if err != nil {
@@ -682,7 +682,7 @@ func TestMigrationIntegration(t *testing.T) {
 
 	t.Run("migration runner works with real database", func(t *testing.T) {
 		db := createTestDB(t)
-		runner := NewMigrationRunner(db, migrationFiles)
+		runner := CreateMigrationRunner(db, migrationFiles)
 
 		err := runner.RunMigrations()
 		if err != nil {

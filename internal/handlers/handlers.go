@@ -25,13 +25,11 @@ func Setup(ctx context.Context, args []string) error {
 	logger.Info("Using config directory", "path", configDir)
 	fmt.Printf("Config directory: %s\n", configDir)
 
-	// Load or create config to determine the actual database path
 	config, err := store.LoadConfig()
 	if err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 
-	// Determine database path using the same logic as NewDatabase
 	var dbPath string
 	if config.DatabasePath != "" {
 		dbPath = config.DatabasePath
@@ -68,7 +66,7 @@ func Setup(ctx context.Context, args []string) error {
 	fmt.Printf("Color scheme: %s\n", config.ColorScheme)
 	fmt.Printf("Default view: %s\n", config.DefaultView)
 
-	runner := db.NewMigrationRunner()
+	runner := store.NewMigrationRunner(db)
 	migrations, err := runner.GetAppliedMigrations()
 	if err != nil {
 		return fmt.Errorf("failed to get migration status: %w", err)
@@ -92,14 +90,11 @@ func Setup(ctx context.Context, args []string) error {
 func Reset(ctx context.Context, args []string) error {
 	fmt.Println("Resetting noteleaf...")
 
-	// Load config to determine the actual database path
 	config, err := store.LoadConfig()
 	if err != nil {
-		// If config doesn't exist, try to determine paths anyway
 		config = store.DefaultConfig()
 	}
 
-	// Determine database path using the same logic as NewDatabase
 	var dbPath string
 	if config.DatabasePath != "" {
 		dbPath = config.DatabasePath
@@ -182,7 +177,7 @@ func Status(ctx context.Context, args []string, w io.Writer) error {
 	}
 	defer db.Close()
 
-	runner := db.NewMigrationRunner()
+	runner := store.NewMigrationRunner(db)
 	applied, err := runner.GetAppliedMigrations()
 	if err != nil {
 		return fmt.Errorf("failed to get applied migrations: %w", err)

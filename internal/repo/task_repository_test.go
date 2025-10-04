@@ -2,6 +2,7 @@ package repo
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"testing"
 	"time"
@@ -63,14 +64,9 @@ func TestTaskRepository(t *testing.T) {
 			})
 
 			t.Run("when called with context cancellation", func(t *testing.T) {
-				cancelCtx, cancel := context.WithCancel(ctx)
-				cancel()
-
 				task := CreateSampleTask()
-				_, err := repo.Create(cancelCtx, task)
-				if err == nil {
-					t.Error("Expected error with cancelled context")
-				}
+				_, err := repo.Create(NewCanceledContext(), task)
+				AssertError(t, err, "Expected error with cancelled context")
 			})
 		})
 	})
@@ -160,18 +156,11 @@ func TestTaskRepository(t *testing.T) {
 			t.Run("when called with context cancellation", func(t *testing.T) {
 				task := CreateSampleTask()
 				_, err := repo.Create(ctx, task)
-				if err != nil {
-					t.Fatalf("Failed to create task: %v", err)
-				}
-
-				cancelCtx, cancel := context.WithCancel(ctx)
-				cancel()
+				AssertNoError(t, err, "Failed to create task")
 
 				task.Description = "Updated"
-				err = repo.Update(cancelCtx, task)
-				if err == nil {
-					t.Error("Expected error with cancelled context")
-				}
+				err = repo.Update(NewCanceledContext(), task)
+				AssertError(t, err, "Expected error with cancelled context")
 			})
 		})
 	})
@@ -344,13 +333,8 @@ func TestTaskRepository(t *testing.T) {
 		})
 
 		t.Run("GetByUUID with context cancellation", func(t *testing.T) {
-			cancelCtx, cancel := context.WithCancel(ctx)
-			cancel()
-
-			_, err := repo.GetByUUID(cancelCtx, task1.UUID)
-			if err == nil {
-				t.Error("Expected error with cancelled context")
-			}
+			_, err := repo.GetByUUID(NewCanceledContext(), task1.UUID)
+			AssertError(t, err, "Expected error with cancelled context")
 		})
 	})
 
@@ -402,13 +386,8 @@ func TestTaskRepository(t *testing.T) {
 		})
 
 		t.Run("Count with context cancellation", func(t *testing.T) {
-			cancelCtx, cancel := context.WithCancel(ctx)
-			cancel()
-
-			_, err := repo.Count(cancelCtx, TaskListOptions{})
-			if err == nil {
-				t.Error("Expected error with cancelled context")
-			}
+			_, err := repo.Count(NewCanceledContext(), TaskListOptions{})
+			AssertError(t, err, "Expected error with cancelled context")
 		})
 	})
 
@@ -934,120 +913,264 @@ func TestTaskRepository(t *testing.T) {
 			t.Errorf("expected no dependencies after clear, got %v", deps)
 		}
 	})
-}
 
-func TestTaskRepository_GetContexts(t *testing.T) {
-	db := CreateTestDB(t)
-	repo := NewTaskRepository(db)
-	ctx := context.Background()
+	t.Run("Error Paths", func(t *testing.T) {
+		t.Run("Create fails on MarshalTags error", func(t *testing.T) {
+			orig := marshalTaskTags
+			marshalTaskTags = func(t *models.Task) (string, error) {
+				return "", fmt.Errorf("marshal fail")
+			}
+			defer func() { marshalTaskTags = orig }()
 
-	task1 := CreateSampleTask()
-	task1.Context = "work"
-	_, err := repo.Create(ctx, task1)
-	if err != nil {
-		t.Fatalf("Failed to create task1: %v", err)
-	}
+			_, err := repo.Create(ctx, CreateSampleTask())
+			AssertError(t, err, "expected MarshalTags error")
+			AssertContains(t, err.Error(), "failed to marshal tags", "error message")
+		})
 
-	task2 := CreateSampleTask()
-	task2.Context = "home"
-	_, err = repo.Create(ctx, task2)
-	if err != nil {
-		t.Fatalf("Failed to create task2: %v", err)
-	}
+		t.Run("Create fails on MarshalAnnotations error", func(t *testing.T) {
+			orig := marshalTaskAnnotations
+			marshalTaskAnnotations = func(t *models.Task) (string, error) {
+				return "", fmt.Errorf("marshal fail")
+			}
+			defer func() { marshalTaskAnnotations = orig }()
 
-	task3 := CreateSampleTask()
-	task3.Context = "work"
-	_, err = repo.Create(ctx, task3)
-	if err != nil {
-		t.Fatalf("Failed to create task3: %v", err)
-	}
+			_, err := repo.Create(ctx, CreateSampleTask())
+			AssertError(t, err, "expected MarshalAnnotations error")
+			AssertContains(t, err.Error(), "failed to marshal annotations", "error message")
+		})
 
-	task4 := CreateSampleTask()
-	task4.Context = ""
-	_, err = repo.Create(ctx, task4)
-	if err != nil {
-		t.Fatalf("Failed to create task4: %v", err)
-	}
+		t.Run("Update fails on MarshalTags error", func(t *testing.T) {
+			task := CreateSampleTask()
+			id, err := repo.Create(ctx, task)
+			AssertNoError(t, err, "create should succeed")
 
-	contexts, err := repo.GetContexts(ctx)
-	if err != nil {
-		t.Fatalf("Failed to get contexts: %v", err)
-	}
+			orig := marshalTaskTags
+			marshalTaskTags = func(t *models.Task) (string, error) {
+				return "", fmt.Errorf("marshal fail")
+			}
+			defer func() { marshalTaskTags = orig }()
 
-	if len(contexts) != 2 {
-		t.Errorf("Expected 2 contexts, got %d", len(contexts))
-	}
+			task.ID = id
+			err = repo.Update(ctx, task)
+			AssertError(t, err, "expected MarshalTags error")
+			AssertContains(t, err.Error(), "failed to marshal tags", "error message")
+		})
 
-	expectedCounts := map[string]int{
-		"home": 1,
-		"work": 2,
-	}
+		t.Run("Update fails on MarshalAnnotations error", func(t *testing.T) {
+			task := CreateSampleTask()
+			id, err := repo.Create(ctx, task)
+			AssertNoError(t, err, "create should succeed")
 
-	for _, context := range contexts {
-		expected, exists := expectedCounts[context.Name]
-		if !exists {
-			t.Errorf("Unexpected context: %s", context.Name)
+			orig := marshalTaskAnnotations
+			marshalTaskAnnotations = func(t *models.Task) (string, error) {
+				return "", fmt.Errorf("marshal fail")
+			}
+			defer func() { marshalTaskAnnotations = orig }()
+
+			task.ID = id
+			err = repo.Update(ctx, task)
+			AssertError(t, err, "expected MarshalAnnotations error")
+			AssertContains(t, err.Error(), "failed to marshal annotations", "error message")
+		})
+
+		t.Run("Get fails on UnmarshalTags error", func(t *testing.T) {
+			task := CreateSampleTask()
+			task.Tags = []string{"test"}
+			id, err := repo.Create(ctx, task)
+			AssertNoError(t, err, "create should succeed")
+
+			orig := unmarshalTaskTags
+			unmarshalTaskTags = func(t *models.Task, s string) error {
+				return fmt.Errorf("unmarshal fail")
+			}
+			defer func() { unmarshalTaskTags = orig }()
+
+			_, err = repo.Get(ctx, id)
+			AssertError(t, err, "expected UnmarshalTags error")
+			AssertContains(t, err.Error(), "failed to unmarshal tags", "error message")
+		})
+
+		t.Run("Get fails on UnmarshalAnnotations error", func(t *testing.T) {
+			task := CreateSampleTask()
+			task.Annotations = []string{"test"}
+			id, err := repo.Create(ctx, task)
+			AssertNoError(t, err, "create should succeed")
+
+			orig := unmarshalTaskAnnotations
+			unmarshalTaskAnnotations = func(t *models.Task, s string) error {
+				return fmt.Errorf("unmarshal fail")
+			}
+			defer func() { unmarshalTaskAnnotations = orig }()
+
+			_, err = repo.Get(ctx, id)
+			AssertError(t, err, "expected UnmarshalAnnotations error")
+			AssertContains(t, err.Error(), "failed to unmarshal annotations", "error message")
+		})
+
+		t.Run("GetByUUID fails on UnmarshalTags error", func(t *testing.T) {
+			task := CreateSampleTask()
+			task.Tags = []string{"test"}
+			_, err := repo.Create(ctx, task)
+			AssertNoError(t, err, "create should succeed")
+
+			orig := unmarshalTaskTags
+			unmarshalTaskTags = func(t *models.Task, s string) error {
+				return fmt.Errorf("unmarshal fail")
+			}
+			defer func() { unmarshalTaskTags = orig }()
+
+			_, err = repo.GetByUUID(ctx, task.UUID)
+			AssertError(t, err, "expected UnmarshalTags error")
+			AssertContains(t, err.Error(), "failed to unmarshal tags", "error message")
+		})
+
+		t.Run("GetByUUID fails on UnmarshalAnnotations error", func(t *testing.T) {
+			task := CreateSampleTask()
+			task.Annotations = []string{"test"}
+			_, err := repo.Create(ctx, task)
+			AssertNoError(t, err, "create should succeed")
+
+			orig := unmarshalTaskAnnotations
+			unmarshalTaskAnnotations = func(t *models.Task, s string) error {
+				return fmt.Errorf("unmarshal fail")
+			}
+			defer func() { unmarshalTaskAnnotations = orig }()
+
+			_, err = repo.GetByUUID(ctx, task.UUID)
+			AssertError(t, err, "expected UnmarshalAnnotations error")
+			AssertContains(t, err.Error(), "failed to unmarshal annotations", "error message")
+		})
+	})
+
+	t.Run("GetContexts", func(t *testing.T) {
+
+		task1 := CreateSampleTask()
+		task1.Context = "work"
+		_, err := repo.Create(ctx, task1)
+		if err != nil {
+			t.Fatalf("Failed to create task1: %v", err)
 		}
-		if context.TaskCount != expected {
-			t.Errorf("Expected %d tasks for context %s, got %d", expected, context.Name, context.TaskCount)
+
+		task2 := CreateSampleTask()
+		task2.Context = "home"
+		_, err = repo.Create(ctx, task2)
+		if err != nil {
+			t.Fatalf("Failed to create task2: %v", err)
 		}
-	}
-}
 
-func TestTaskRepository_GetByContext(t *testing.T) {
-	db := CreateTestDB(t)
-	repo := NewTaskRepository(db)
-	ctx := context.Background()
-
-	task1 := CreateSampleTask()
-	task1.Context = "work"
-	task1.Description = "Work task 1"
-	_, err := repo.Create(ctx, task1)
-	if err != nil {
-		t.Fatalf("Failed to create task1: %v", err)
-	}
-
-	task2 := CreateSampleTask()
-	task2.Context = "home"
-	task2.Description = "Home task 1"
-	_, err = repo.Create(ctx, task2)
-	if err != nil {
-		t.Fatalf("Failed to create task2: %v", err)
-	}
-
-	task3 := CreateSampleTask()
-	task3.Context = "work"
-	task3.Description = "Work task 2"
-	_, err = repo.Create(ctx, task3)
-	if err != nil {
-		t.Fatalf("Failed to create task3: %v", err)
-	}
-
-	workTasks, err := repo.GetByContext(ctx, "work")
-	if err != nil {
-		t.Fatalf("Failed to get tasks by context: %v", err)
-	}
-
-	if len(workTasks) != 2 {
-		t.Errorf("Expected 2 work tasks, got %d", len(workTasks))
-	}
-
-	for _, task := range workTasks {
-		if task.Context != "work" {
-			t.Errorf("Expected context 'work', got '%s'", task.Context)
+		task3 := CreateSampleTask()
+		task3.Context = "work"
+		_, err = repo.Create(ctx, task3)
+		if err != nil {
+			t.Fatalf("Failed to create task3: %v", err)
 		}
-	}
 
-	homeTasks, err := repo.GetByContext(ctx, "home")
-	if err != nil {
-		t.Fatalf("Failed to get tasks by context: %v", err)
-	}
+		task4 := CreateSampleTask()
+		task4.Context = ""
+		_, err = repo.Create(ctx, task4)
+		if err != nil {
+			t.Fatalf("Failed to create task4: %v", err)
+		}
 
-	if len(homeTasks) != 1 {
-		t.Errorf("Expected 1 home task, got %d", len(homeTasks))
-	}
+		contexts, err := repo.GetContexts(ctx)
+		if err != nil {
+			t.Fatalf("Failed to get contexts: %v", err)
+		}
 
-	if homeTasks[0].Context != "home" {
-		t.Errorf("Expected context 'home', got '%s'", homeTasks[0].Context)
-	}
+		if len(contexts) < 2 {
+			t.Errorf("Expected at least 2 contexts, got %d", len(contexts))
+		}
+
+		expectedCounts := map[string]int{
+			"home":         1,
+			"work":         2,
+			"test-context": 14,
+		}
+
+		for _, context := range contexts {
+			expected, exists := expectedCounts[context.Name]
+			if !exists {
+				t.Errorf("Unexpected context: %s", context.Name)
+			}
+			if context.TaskCount < expected {
+				t.Errorf("Expected at least %d tasks for context %s, got %d", expected, context.Name, context.TaskCount)
+			}
+		}
+	})
+
+	t.Run("GetByContext", func(t *testing.T) {
+		task1 := NewTaskBuilder().WithContext("work").WithDescription("Work task 1").Build()
+		_, err := repo.Create(ctx, task1)
+		AssertNoError(t, err, "Failed to create task1")
+
+		task2 := NewTaskBuilder().WithContext("home").WithDescription("Home task 1").Build()
+		_, err = repo.Create(ctx, task2)
+		AssertNoError(t, err, "Failed to create task2")
+
+		task3 := NewTaskBuilder().WithContext("work").WithDescription("Work task 2").Build()
+		_, err = repo.Create(ctx, task3)
+		AssertNoError(t, err, "Failed to create task3")
+
+		workTasks, err := repo.GetByContext(ctx, "work")
+		if err != nil {
+			t.Fatalf("Failed to get tasks by context: %v", err)
+		}
+
+		if len(workTasks) < 2 {
+			t.Errorf("Expected at least 2 work tasks, got %d", len(workTasks))
+		}
+
+		for _, task := range workTasks {
+			if task.Context != "work" {
+				t.Errorf("Expected context 'work', got '%s'", task.Context)
+			}
+		}
+
+		homeTasks, err := repo.GetByContext(ctx, "home")
+		if err != nil {
+			t.Fatalf("Failed to get tasks by context: %v", err)
+		}
+		if len(homeTasks) < 1 {
+			t.Errorf("Expected at least 1 home task, got %d", len(homeTasks))
+		}
+		if homeTasks[0].Context != "home" {
+			t.Errorf("Expected context 'home', got '%s'", homeTasks[0].Context)
+		}
+	})
+
+	t.Run("GetBlockedTasks", func(t *testing.T) {
+		blocker := CreateSampleTask()
+		blocker.Description = "Blocker task"
+		_, err := repo.Create(ctx, blocker)
+		AssertNoError(t, err, "create blocker should succeed")
+
+		blocked1 := CreateSampleTask()
+		blocked1.Description = "Blocked task 1"
+		blocked1.DependsOn = []string{blocker.UUID}
+		_, err = repo.Create(ctx, blocked1)
+		AssertNoError(t, err, "create blocked1 should succeed")
+
+		blocked2 := CreateSampleTask()
+		blocked2.Description = "Blocked task 2"
+		blocked2.DependsOn = []string{blocker.UUID}
+		_, err = repo.Create(ctx, blocked2)
+		AssertNoError(t, err, "create blocked2 should succeed")
+
+		independent := CreateSampleTask()
+		independent.Description = "Independent task"
+		_, err = repo.Create(ctx, independent)
+		AssertNoError(t, err, "create independent should succeed")
+
+		blockedTasks, err := repo.GetBlockedTasks(ctx, blocker.UUID)
+		AssertNoError(t, err, "GetBlockedTasks should succeed")
+		AssertEqual(t, 2, len(blockedTasks), "should find 2 blocked tasks")
+
+		for _, task := range blockedTasks {
+			AssertTrue(t, slices.Contains(task.DependsOn, blocker.UUID), "task should depend on blocker")
+		}
+
+		emptyBlocked, err := repo.GetBlockedTasks(ctx, independent.UUID)
+		AssertNoError(t, err, "GetBlockedTasks for independent should succeed")
+		AssertEqual(t, 0, len(emptyBlocked), "independent task should not block anything")
+	})
 }

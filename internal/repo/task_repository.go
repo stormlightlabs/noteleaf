@@ -10,6 +10,13 @@ import (
 	"github.com/stormlightlabs/noteleaf/internal/models"
 )
 
+var (
+	marshalTaskTags          = (*models.Task).MarshalTags
+	marshalTaskAnnotations   = (*models.Task).MarshalAnnotations
+	unmarshalTaskTags        = (*models.Task).UnmarshalTags
+	unmarshalTaskAnnotations = (*models.Task).UnmarshalAnnotations
+)
+
 // TaskListOptions defines options for listing tasks
 type TaskListOptions struct {
 	Status    string
@@ -59,12 +66,12 @@ func (r *TaskRepository) Create(ctx context.Context, task *models.Task) (int64, 
 	task.Entry = now
 	task.Modified = now
 
-	tags, err := task.MarshalTags()
+	tags, err := marshalTaskTags(task)
 	if err != nil {
 		return 0, fmt.Errorf("failed to marshal tags: %w", err)
 	}
 
-	annotations, err := task.MarshalAnnotations()
+	annotations, err := marshalTaskAnnotations(task)
 	if err != nil {
 		return 0, fmt.Errorf("failed to marshal annotations: %w", err)
 	}
@@ -125,13 +132,13 @@ func (r *TaskRepository) Get(ctx context.Context, id int64) (*models.Task, error
 	}
 
 	if tags.Valid {
-		if err := task.UnmarshalTags(tags.String); err != nil {
+		if err := unmarshalTaskTags(task, tags.String); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal tags: %w", err)
 		}
 	}
 
 	if annotations.Valid {
-		if err := task.UnmarshalAnnotations(annotations.String); err != nil {
+		if err := unmarshalTaskAnnotations(task, annotations.String); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal annotations: %w", err)
 		}
 	}
@@ -151,12 +158,12 @@ func (r *TaskRepository) Get(ctx context.Context, id int64) (*models.Task, error
 func (r *TaskRepository) Update(ctx context.Context, task *models.Task) error {
 	task.Modified = time.Now()
 
-	tags, err := task.MarshalTags()
+	tags, err := marshalTaskTags(task)
 	if err != nil {
 		return fmt.Errorf("failed to marshal tags: %w", err)
 	}
 
-	annotations, err := task.MarshalAnnotations()
+	annotations, err := marshalTaskAnnotations(task)
 	if err != nil {
 		return fmt.Errorf("failed to marshal annotations: %w", err)
 	}
@@ -345,13 +352,13 @@ func (r *TaskRepository) scanTaskRow(rows *sql.Rows, task *models.Task) error {
 	}
 
 	if tags.Valid {
-		if err := task.UnmarshalTags(tags.String); err != nil {
+		if err := unmarshalTaskTags(task, tags.String); err != nil {
 			return fmt.Errorf("failed to unmarshal tags: %w", err)
 		}
 	}
 
 	if annotations.Valid {
-		if err := task.UnmarshalAnnotations(annotations.String); err != nil {
+		if err := unmarshalTaskAnnotations(task, annotations.String); err != nil {
 			return fmt.Errorf("failed to unmarshal annotations: %w", err)
 		}
 	}
@@ -443,13 +450,13 @@ func (r *TaskRepository) GetByUUID(ctx context.Context, uuid string) (*models.Ta
 	}
 
 	if tags.Valid {
-		if err := task.UnmarshalTags(tags.String); err != nil {
+		if err := unmarshalTaskTags(task, tags.String); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal tags: %w", err)
 		}
 	}
 
 	if annotations.Valid {
-		if err := task.UnmarshalAnnotations(annotations.String); err != nil {
+		if err := unmarshalTaskAnnotations(task, annotations.String); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal annotations: %w", err)
 		}
 	}
@@ -623,13 +630,9 @@ func (r *TaskRepository) GetAbandoned(ctx context.Context) ([]*models.Task, erro
 // GetByPriority retrieves all tasks with a specific priority with special handling for empty priority by using raw SQL
 func (r *TaskRepository) GetByPriority(ctx context.Context, priority string) ([]*models.Task, error) {
 	if priority == "" {
-		query := `
-			SELECT id, uuid, description, status, priority, project, context,
-			       tags, due, entry, modified, end, start, annotations,
-			       recur, until, parent_uuid
-			FROM tasks
-			WHERE priority = '' OR priority IS NULL
-			ORDER BY modified DESC`
+		query := `SELECT id, uuid, description, status, priority, project, context,
+			tags, due, entry, modified, end, start, annotations, recur, until, parent_uuid
+			FROM tasks WHERE priority = '' OR priority IS NULL ORDER BY modified DESC`
 
 		rows, err := r.db.QueryContext(ctx, query)
 		if err != nil {
@@ -668,11 +671,7 @@ func (r *TaskRepository) GetLowPriority(ctx context.Context) ([]*models.Task, er
 
 // GetStatusSummary returns a summary of tasks by status
 func (r *TaskRepository) GetStatusSummary(ctx context.Context) (map[string]int64, error) {
-	query := `
-		SELECT status, COUNT(*) as count
-		FROM tasks
-		GROUP BY status
-		ORDER BY status`
+	query := `SELECT status, COUNT(*) as count FROM tasks GROUP BY status ORDER BY status`
 
 	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
@@ -689,7 +688,6 @@ func (r *TaskRepository) GetStatusSummary(ctx context.Context) (map[string]int64
 		}
 		summary[status] = count
 	}
-
 	return summary, rows.Err()
 }
 
@@ -701,10 +699,7 @@ func (r *TaskRepository) GetPrioritySummary(ctx context.Context) (map[string]int
 				WHEN priority = '' OR priority IS NULL THEN 'No Priority'
 				ELSE priority
 			END as priority_group,
-			COUNT(*) as count
-		FROM tasks
-		GROUP BY priority_group
-		ORDER BY priority_group`
+			COUNT(*) as count FROM tasks GROUP BY priority_group ORDER BY priority_group`
 
 	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
@@ -721,47 +716,36 @@ func (r *TaskRepository) GetPrioritySummary(ctx context.Context) (map[string]int
 		}
 		summary[priority] = count
 	}
-
 	return summary, rows.Err()
 }
 
 // AddDependency creates a dependency relationship where taskUUID depends on dependsOnUUID.
 func (r *TaskRepository) AddDependency(ctx context.Context, taskUUID, dependsOnUUID string) error {
-	_, err := r.db.ExecContext(ctx,
-		`INSERT INTO task_dependencies (task_uuid, depends_on_uuid) VALUES (?, ?)`,
-		taskUUID, dependsOnUUID)
-	if err != nil {
-		err = fmt.Errorf("failed to add dependency: %w", err)
+	if _, err := r.db.ExecContext(ctx, `INSERT INTO task_dependencies (task_uuid, depends_on_uuid) VALUES (?, ?)`, taskUUID, dependsOnUUID); err != nil {
+		return fmt.Errorf("failed to add dependency: %w", err)
 	}
-	return err
+	return nil
 }
 
 // RemoveDependency deletes a specific dependency relationship.
 func (r *TaskRepository) RemoveDependency(ctx context.Context, taskUUID, dependsOnUUID string) error {
-	_, err := r.db.ExecContext(ctx,
-		`DELETE FROM task_dependencies WHERE task_uuid = ? AND depends_on_uuid = ?`,
-		taskUUID, dependsOnUUID)
-	if err != nil {
-		err = fmt.Errorf("failed to remove dependency: %w", err)
+	if _, err := r.db.ExecContext(ctx, `DELETE FROM task_dependencies WHERE task_uuid = ? AND depends_on_uuid = ?`, taskUUID, dependsOnUUID); err != nil {
+		return fmt.Errorf("failed to remove dependency: %w", err)
 	}
-	return err
+	return nil
 }
 
 // ClearDependencies removes all dependencies for a given task.
 func (r *TaskRepository) ClearDependencies(ctx context.Context, taskUUID string) error {
-	_, err := r.db.ExecContext(ctx,
-		`DELETE FROM task_dependencies WHERE task_uuid = ?`,
-		taskUUID)
-	if err != nil {
-		err = fmt.Errorf("failed to clear dependencies: %w", err)
+	if _, err := r.db.ExecContext(ctx, `DELETE FROM task_dependencies WHERE task_uuid = ?`, taskUUID); err != nil {
+		return fmt.Errorf("failed to clear dependencies: %w", err)
 	}
-	return err
+	return nil
 }
 
 // GetDependencies returns the UUIDs of tasks this task depends on.
 func (r *TaskRepository) GetDependencies(ctx context.Context, taskUUID string) ([]string, error) {
-	rows, err := r.db.QueryContext(ctx,
-		`SELECT depends_on_uuid FROM task_dependencies WHERE task_uuid = ?`, taskUUID)
+	rows, err := r.db.QueryContext(ctx, `SELECT depends_on_uuid FROM task_dependencies WHERE task_uuid = ?`, taskUUID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get dependencies: %w", err)
 	}
@@ -780,11 +764,11 @@ func (r *TaskRepository) GetDependencies(ctx context.Context, taskUUID string) (
 
 // PopulateDependencies loads dependency UUIDs from task_dependencies table into task.DependsOn
 func (r *TaskRepository) PopulateDependencies(ctx context.Context, task *models.Task) error {
-	deps, err := r.GetDependencies(ctx, task.UUID)
-	if err != nil {
+	if deps, err := r.GetDependencies(ctx, task.UUID); err != nil {
 		return err
+	} else {
+		task.DependsOn = deps
 	}
-	task.DependsOn = deps
 	return nil
 }
 
@@ -792,11 +776,8 @@ func (r *TaskRepository) PopulateDependencies(ctx context.Context, task *models.
 func (r *TaskRepository) GetDependents(ctx context.Context, blockingUUID string) ([]*models.Task, error) {
 	query := `
 		SELECT t.id, t.uuid, t.description, t.status, t.priority, t.project, t.context,
-		       t.tags, t.due, t.entry, t.modified, t.end, t.start, t.annotations,
-		       t.recur, t.until, t.parent_uuid
-		FROM tasks t
-		JOIN task_dependencies d ON t.uuid = d.task_uuid
-		WHERE d.depends_on_uuid = ?`
+		       t.tags, t.due, t.entry, t.modified, t.end, t.start, t.annotations, t.recur, t.until, t.parent_uuid
+		FROM tasks t JOIN task_dependencies d ON t.uuid = d.task_uuid WHERE d.depends_on_uuid = ?`
 
 	rows, err := r.db.QueryContext(ctx, query, blockingUUID)
 	if err != nil {
@@ -812,7 +793,16 @@ func (r *TaskRepository) GetDependents(ctx context.Context, blockingUUID string)
 		}
 		tasks = append(tasks, task)
 	}
-	return tasks, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	for _, task := range tasks {
+		if err := r.PopulateDependencies(ctx, task); err != nil {
+			return nil, fmt.Errorf("failed to populate dependencies: %w", err)
+		}
+	}
+	return tasks, nil
 }
 
 // GetBlockedTasks finds tasks that are blocked by a given UUID.
@@ -837,5 +827,14 @@ func (r *TaskRepository) GetBlockedTasks(ctx context.Context, blockingUUID strin
 		}
 		tasks = append(tasks, task)
 	}
-	return tasks, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	for _, task := range tasks {
+		if err := r.PopulateDependencies(ctx, task); err != nil {
+			return nil, fmt.Errorf("failed to populate dependencies: %w", err)
+		}
+	}
+	return tasks, nil
 }
