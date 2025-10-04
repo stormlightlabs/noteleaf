@@ -28,18 +28,28 @@ type FileSystem interface {
 type MigrationRunner struct {
 	db             *sql.DB
 	migrationFiles FileSystem
+	runFn          func() error // inject for testing
 }
 
 // NewMigrationRunner creates a new migration runner
 func NewMigrationRunner(db *sql.DB, files FileSystem) *MigrationRunner {
-	return &MigrationRunner{
+	mr := &MigrationRunner{
 		db:             db,
 		migrationFiles: files,
 	}
+	mr.runFn = mr.defaultRunMigrations
+	return mr
 }
 
-// RunMigrations applies all pending migrations
+// RunMigrations applies all pending migrations (delegates to runFn)
 func (mr *MigrationRunner) RunMigrations() error {
+	if mr.runFn != nil {
+		return mr.runFn()
+	}
+	return nil
+}
+
+func (mr *MigrationRunner) defaultRunMigrations() error {
 	entries, err := mr.migrationFiles.ReadDir("sql/migrations")
 	if err != nil {
 		return fmt.Errorf("failed to read migrations directory: %w", err)
@@ -214,7 +224,7 @@ func (mr *MigrationRunner) Rollback() error {
 	return nil
 }
 
-// extractVersionFromFilename extracts the 4-digit version from a migration filename
+// extractVersionFromFilename extracts the 4-digit version from a [Migration] filename
 func extractVersionFromFilename(filename string) string {
 	parts := strings.Split(filename, "_")
 	if len(parts) > 0 {

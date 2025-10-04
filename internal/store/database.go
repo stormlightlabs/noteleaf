@@ -11,6 +11,15 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
+var (
+	sqlOpen            = sql.Open
+	pragmaExec         = func(db *sql.DB, stmt string) (sql.Result, error) { return db.Exec(stmt) }
+	newMigrationRunner = NewMigrationRunner
+	getRuntime         = func() string { return runtime.GOOS }
+	getHomeDir         = os.UserHomeDir
+	mkdirAll           = os.MkdirAll
+)
+
 //go:embed sql/migrations
 var migrationFiles embed.FS
 
@@ -24,7 +33,7 @@ type Database struct {
 var GetConfigDir = func() (string, error) {
 	var configDir string
 
-	switch runtime.GOOS {
+	switch getRuntime() {
 	case "windows":
 		appData := os.Getenv("APPDATA")
 		if appData == "" {
@@ -32,7 +41,7 @@ var GetConfigDir = func() (string, error) {
 		}
 		configDir = filepath.Join(appData, "noteleaf")
 	case "darwin":
-		homeDir, err := os.UserHomeDir()
+		homeDir, err := getHomeDir()
 		if err != nil {
 			return "", fmt.Errorf("failed to get user home directory: %w", err)
 		}
@@ -40,7 +49,7 @@ var GetConfigDir = func() (string, error) {
 	default:
 		xdgConfigHome := os.Getenv("XDG_CONFIG_HOME")
 		if xdgConfigHome == "" {
-			homeDir, err := os.UserHomeDir()
+			homeDir, err := getHomeDir()
 			if err != nil {
 				return "", fmt.Errorf("failed to get user home directory: %w", err)
 			}
@@ -49,7 +58,7 @@ var GetConfigDir = func() (string, error) {
 		configDir = filepath.Join(xdgConfigHome, "noteleaf")
 	}
 
-	if err := os.MkdirAll(configDir, 0755); err != nil {
+	if err := mkdirAll(configDir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create config directory: %w", err)
 	}
 
@@ -59,7 +68,7 @@ var GetConfigDir = func() (string, error) {
 // GetDataDir returns the appropriate data directory based on [runtime.GOOS] or NOTELEAF_DATA_DIR
 var GetDataDir = func() (string, error) {
 	if envDataDir := os.Getenv("NOTELEAF_DATA_DIR"); envDataDir != "" {
-		if err := os.MkdirAll(envDataDir, 0755); err != nil {
+		if err := mkdirAll(envDataDir, 0755); err != nil {
 			return "", fmt.Errorf("failed to create data directory: %w", err)
 		}
 		return envDataDir, nil
@@ -67,7 +76,7 @@ var GetDataDir = func() (string, error) {
 
 	var dataDir string
 
-	switch runtime.GOOS {
+	switch getRuntime() {
 	case "windows":
 		localAppData := os.Getenv("LOCALAPPDATA")
 		if localAppData == "" {
@@ -75,7 +84,7 @@ var GetDataDir = func() (string, error) {
 		}
 		dataDir = filepath.Join(localAppData, "noteleaf")
 	case "darwin":
-		homeDir, err := os.UserHomeDir()
+		homeDir, err := getHomeDir()
 		if err != nil {
 			return "", fmt.Errorf("failed to get user home directory: %w", err)
 		}
@@ -83,7 +92,7 @@ var GetDataDir = func() (string, error) {
 	default:
 		xdgDataHome := os.Getenv("XDG_DATA_HOME")
 		if xdgDataHome == "" {
-			homeDir, err := os.UserHomeDir()
+			homeDir, err := getHomeDir()
 			if err != nil {
 				return "", fmt.Errorf("failed to get user home directory: %w", err)
 			}
@@ -92,7 +101,7 @@ var GetDataDir = func() (string, error) {
 		dataDir = filepath.Join(xdgDataHome, "noteleaf")
 	}
 
-	if err := os.MkdirAll(dataDir, 0755); err != nil {
+	if err := mkdirAll(dataDir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create data directory: %w", err)
 	}
 
@@ -118,7 +127,7 @@ func NewDatabaseWithConfig(config *Config) (*Database, error) {
 	if config.DatabasePath != "" {
 		dbPath = config.DatabasePath
 		dbDir := filepath.Dir(dbPath)
-		if err := os.MkdirAll(dbDir, 0755); err != nil {
+		if err := mkdirAll(dbDir, 0755); err != nil {
 			return nil, fmt.Errorf("failed to create database directory: %w", err)
 		}
 	} else if config.DataDir != "" {
@@ -131,23 +140,23 @@ func NewDatabaseWithConfig(config *Config) (*Database, error) {
 		dbPath = filepath.Join(dataDir, "noteleaf.db")
 	}
 
-	db, err := sql.Open("sqlite3", dbPath)
+	db, err := sqlOpen("sqlite3", dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
-	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
+	if _, err := pragmaExec(db, "PRAGMA foreign_keys = ON"); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("failed to enable foreign keys: %w", err)
 	}
 
-	if _, err := db.Exec("PRAGMA journal_mode = WAL"); err != nil {
+	if _, err := pragmaExec(db, "PRAGMA journal_mode = WAL"); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("failed to enable WAL mode: %w", err)
 	}
 
 	database := &Database{DB: db, path: dbPath}
-	runner := NewMigrationRunner(db, migrationFiles)
+	runner := newMigrationRunner(db, migrationFiles)
 	if err := runner.RunMigrations(); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("failed to run migrations: %w", err)
@@ -158,7 +167,7 @@ func NewDatabaseWithConfig(config *Config) (*Database, error) {
 
 // NewMigrationRunnerFromDB creates a new migration runner from a Database instance
 func (db *Database) NewMigrationRunner() *MigrationRunner {
-	return NewMigrationRunner(db.DB, migrationFiles)
+	return newMigrationRunner(db.DB, migrationFiles)
 }
 
 // GetPath returns the database file path

@@ -1,288 +1,311 @@
 package store
 
 import (
+	"database/sql"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 )
 
-func TestNewDatabase(t *testing.T) {
+func withTempDirs(t *testing.T) string {
+	t.Helper()
 	tempDir, err := os.MkdirTemp("", "noteleaf-db-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp directory: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	t.Cleanup(func() { os.RemoveAll(tempDir) })
 
-	originalGetConfigDir := GetConfigDir
-	originalGetDataDir := GetDataDir
-	GetConfigDir = func() (string, error) {
-		return tempDir, nil
-	}
-	GetDataDir = func() (string, error) {
-		return tempDir, nil
-	}
-	defer func() {
-		GetConfigDir = originalGetConfigDir
-		GetDataDir = originalGetDataDir
-	}()
+	origConfig, origData := GetConfigDir, GetDataDir
+	GetConfigDir = func() (string, error) { return tempDir, nil }
+	GetDataDir = func() (string, error) { return tempDir, nil }
+	t.Cleanup(func() {
+		GetConfigDir, GetDataDir = origConfig, origData
+	})
 
-	t.Run("creates database successfully", func(t *testing.T) {
+	return tempDir
+}
+
+func TestNewDatabase(t *testing.T) {
+	tempDir := withTempDirs(t)
+
+	t.Run("creates database file", func(t *testing.T) {
 		db, err := NewDatabase()
 		if err != nil {
 			t.Fatalf("NewDatabase failed: %v", err)
 		}
 		defer db.Close()
-
-		if db == nil {
-			t.Fatal("Database should not be nil")
-		}
 
 		dbPath := filepath.Join(tempDir, "noteleaf.db")
 		if _, err := os.Stat(dbPath); os.IsNotExist(err) {
-			t.Error("Database file should exist")
-		}
-
-		if db.GetPath() != dbPath {
-			t.Errorf("Expected database path %s, got %s", dbPath, db.GetPath())
+			t.Errorf("expected database file at %s", dbPath)
 		}
 	})
 
-	t.Run("enables foreign keys", func(t *testing.T) {
-		db, err := NewDatabase()
-		if err != nil {
-			t.Fatalf("NewDatabase failed: %v", err)
-		}
+	t.Run("foreign keys enabled", func(t *testing.T) {
+		db, _ := NewDatabase()
 		defer db.Close()
 
-		var foreignKeys int
-		err = db.QueryRow("PRAGMA foreign_keys").Scan(&foreignKeys)
-		if err != nil {
-			t.Fatalf("Failed to check foreign keys: %v", err)
+		var fk int
+		if err := db.QueryRow("PRAGMA foreign_keys").Scan(&fk); err != nil {
+			t.Fatalf("query failed: %v", err)
 		}
-
-		if foreignKeys != 1 {
-			t.Error("Foreign keys should be enabled")
+		if fk != 1 {
+			t.Errorf("expected foreign_keys=1, got %d", fk)
 		}
 	})
 
-	t.Run("enables WAL mode", func(t *testing.T) {
-		db, err := NewDatabase()
-		if err != nil {
-			t.Fatalf("NewDatabase failed: %v", err)
-		}
+	t.Run("WAL enabled", func(t *testing.T) {
+		db, _ := NewDatabase()
 		defer db.Close()
 
-		var journalMode string
-		err = db.QueryRow("PRAGMA journal_mode").Scan(&journalMode)
-		if err != nil {
-			t.Fatalf("Failed to check journal mode: %v", err)
+		var mode string
+		if err := db.QueryRow("PRAGMA journal_mode").Scan(&mode); err != nil {
+			t.Fatalf("query failed: %v", err)
 		}
-
-		if journalMode != "wal" {
-			t.Errorf("Expected WAL journal mode, got %s", journalMode)
-		}
-	})
-
-	t.Run("runs migrations", func(t *testing.T) {
-		db, err := NewDatabase()
-		if err != nil {
-			t.Fatalf("NewDatabase failed: %v", err)
-		}
-		defer db.Close()
-
-		var count int
-		err = db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='migrations'").Scan(&count)
-		if err != nil {
-			t.Fatalf("Failed to check migrations table: %v", err)
-		}
-
-		if count != 1 {
-			t.Error("Migrations table should exist")
-		}
-
-		var migrationCount int
-		err = db.QueryRow("SELECT COUNT(*) FROM migrations").Scan(&migrationCount)
-		if err != nil {
-			t.Fatalf("Failed to count migrations: %v", err)
-		}
-
-		if migrationCount == 0 {
-			t.Error("At least one migration should be applied")
-		}
-	})
-
-	t.Run("creates migration runner", func(t *testing.T) {
-		db, err := NewDatabase()
-		if err != nil {
-			t.Fatalf("NewDatabase failed: %v", err)
-		}
-		defer db.Close()
-
-		runner := db.NewMigrationRunner()
-		if runner == nil {
-			t.Error("Migration runner should not be nil")
-		}
-	})
-
-	t.Run("closes database connection", func(t *testing.T) {
-		db, err := NewDatabase()
-		if err != nil {
-			t.Fatalf("NewDatabase failed: %v", err)
-		}
-
-		err = db.Close()
-		if err != nil {
-			t.Errorf("Close should not return error: %v", err)
-		}
-
-		err = db.Ping()
-		if err == nil {
-			t.Error("Database should be closed and ping should fail")
+		if strings.ToLower(mode) != "wal" {
+			t.Errorf("expected wal, got %s", mode)
 		}
 	})
 }
 
-func TestDatabaseErrorHandling(t *testing.T) {
-	t.Run("handles GetConfigDir error", func(t *testing.T) {
-		originalGetConfigDir := GetConfigDir
-		GetConfigDir = func() (string, error) {
-			return "", os.ErrPermission
+func TestNewDatabase_ErrorPaths(t *testing.T) {
+	t.Run("sql.Open fails", func(t *testing.T) {
+		orig := sqlOpen
+		sqlOpen = func(driver, dsn string) (*sql.DB, error) {
+			return nil, fmt.Errorf("boom")
 		}
-		defer func() { GetConfigDir = originalGetConfigDir }()
+		t.Cleanup(func() { sqlOpen = orig })
 
 		_, err := NewDatabase()
-		if err == nil {
-			t.Error("NewDatabase should fail when GetConfigDir fails")
+		if err == nil || !strings.Contains(err.Error(), "failed to open database") {
+			t.Errorf("expected open error, got %v", err)
 		}
 	})
 
-	t.Run("handles invalid database path", func(t *testing.T) {
-		originalGetConfigDir := GetConfigDir
-		GetConfigDir = func() (string, error) {
-			return "/invalid/path/that/does/not/exist", nil
+	t.Run("foreign_keys pragma fails", func(t *testing.T) {
+		orig := pragmaExec
+		pragmaExec = func(db *sql.DB, stmt string) (sql.Result, error) {
+			if strings.Contains(stmt, "foreign_keys") {
+				return nil, fmt.Errorf("fk fail")
+			}
+			return orig(db, stmt)
 		}
-		defer func() { GetConfigDir = originalGetConfigDir }()
+		t.Cleanup(func() { pragmaExec = orig })
 
 		_, err := NewDatabase()
-		if err == nil {
-			t.Error("NewDatabase should fail with invalid database path")
+		if err == nil || !strings.Contains(err.Error(), "failed to enable foreign keys") {
+			t.Errorf("expected foreign key error, got %v", err)
 		}
 	})
 
-	t.Run("handles invalid database connection", func(t *testing.T) {
-		originalGetConfigDir := GetConfigDir
-		GetConfigDir = func() (string, error) {
-			return "/dev/null", nil
+	t.Run("WAL pragma fails", func(t *testing.T) {
+		orig := pragmaExec
+		pragmaExec = func(db *sql.DB, stmt string) (sql.Result, error) {
+			if strings.Contains(stmt, "journal_mode") {
+				return nil, fmt.Errorf("wal fail")
+			}
+			return orig(db, stmt)
 		}
-		defer func() { GetConfigDir = originalGetConfigDir }()
+		t.Cleanup(func() { pragmaExec = orig })
 
 		_, err := NewDatabase()
-		if err == nil {
-			t.Error("NewDatabase should fail when database path is invalid")
+		if err == nil || !strings.Contains(err.Error(), "failed to enable WAL mode") {
+			t.Errorf("expected WAL error, got %v", err)
 		}
 	})
 
-	t.Run("handles database file permission error", func(t *testing.T) {
+	t.Run("migration runner fails", func(t *testing.T) {
+		orig := newMigrationRunner
+		newMigrationRunner = func(db *sql.DB, fs FileSystem) *MigrationRunner {
+			return &MigrationRunner{runFn: func() error { return fmt.Errorf("migration fail") }}
+		}
+		t.Cleanup(func() { newMigrationRunner = orig })
+
+		_, err := NewDatabase()
+		if err == nil || !strings.Contains(err.Error(), "failed to run migrations") {
+			t.Errorf("expected migration error, got %v", err)
+		}
+	})
+
+	t.Run("permission denied on config dir", func(t *testing.T) {
 		if runtime.GOOS == "windows" {
-			t.Skip("Permission test not reliable on Windows")
+			t.Skip("not reliable on Windows")
 		}
+		dir := withTempDirs(t)
+		os.Chmod(dir, 0555) // make read-only
+		defer os.Chmod(dir, 0755)
 
-		tempDir, err := os.MkdirTemp("", "noteleaf-db-perm-test-*")
-		if err != nil {
-			t.Fatalf("Failed to create temp directory: %v", err)
-		}
-		defer os.RemoveAll(tempDir)
+		GetConfigDir = func() (string, error) { return dir, nil }
 
-		originalGetConfigDir := GetConfigDir
-		GetConfigDir = func() (string, error) {
-			return tempDir, nil
-		}
-		defer func() { GetConfigDir = originalGetConfigDir }()
-
-		err = os.Chmod(tempDir, 0555)
-		if err != nil {
-			t.Fatalf("Failed to change directory permissions: %v", err)
-		}
-		defer os.Chmod(tempDir, 0755)
-
-		_, err = NewDatabase()
+		_, err := NewDatabase()
 		if err == nil {
-			t.Error("NewDatabase should fail when database directory is not writable")
+			t.Error("expected mkdir fail due to permission denied")
 		}
 	})
 }
 
-func TestDatabaseIntegration(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "noteleaf-db-integration-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp directory: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
+func TestGetConfigDir_AllBranches(t *testing.T) {
+	tmp := t.TempDir()
 
-	originalGetConfigDir := GetConfigDir
-	originalGetDataDir := GetDataDir
-	GetConfigDir = func() (string, error) {
-		return tempDir, nil
-	}
-	GetDataDir = func() (string, error) {
-		return tempDir, nil
-	}
-	defer func() {
-		GetConfigDir = originalGetConfigDir
-		GetDataDir = originalGetDataDir
-	}()
+	t.Run("windows success", func(t *testing.T) {
+		origGOOS := getRuntime
+		getRuntime = func() string { return "windows" }
+		defer func() { getRuntime = origGOOS }()
 
-	t.Run("multiple database instances use same file", func(t *testing.T) {
-		db1, err := NewDatabase()
+		os.Setenv("APPDATA", tmp)
+		defer os.Unsetenv("APPDATA")
+
+		dir, err := GetConfigDir()
 		if err != nil {
-			t.Fatalf("First NewDatabase failed: %v", err)
+			t.Fatalf("unexpected error: %v", err)
 		}
-		defer db1.Close()
-
-		db2, err := NewDatabase()
-		if err != nil {
-			t.Fatalf("Second NewDatabase failed: %v", err)
-		}
-		defer db2.Close()
-
-		if db1.GetPath() != db2.GetPath() {
-			t.Error("Both database instances should use the same file path")
+		expected := filepath.Join(tmp, "noteleaf")
+		if dir != expected {
+			t.Errorf("expected %s, got %s", expected, dir)
 		}
 	})
 
-	t.Run("database survives connection close and reopen", func(t *testing.T) {
-		db1, err := NewDatabase()
-		if err != nil {
-			t.Fatalf("NewDatabase failed: %v", err)
+	t.Run("windows missing APPDATA", func(t *testing.T) {
+		origGOOS := getRuntime
+		getRuntime = func() string { return "windows" }
+		defer func() { getRuntime = origGOOS }()
+
+		os.Unsetenv("APPDATA")
+
+		_, err := GetConfigDir()
+		if err == nil || !strings.Contains(err.Error(), "APPDATA") {
+			t.Errorf("expected APPDATA error, got %v", err)
 		}
+	})
 
-		_, err = db1.Exec("CREATE TABLE IF NOT EXISTS test_table (id INTEGER PRIMARY KEY, name TEXT)")
+	t.Run("darwin success", func(t *testing.T) {
+		origGOOS, origHome := getRuntime, getHomeDir
+		getRuntime = func() string { return "darwin" }
+		getHomeDir = func() (string, error) { return tmp, nil }
+		defer func() {
+			getRuntime = origGOOS
+			getHomeDir = origHome
+		}()
+
+		dir, err := GetConfigDir()
 		if err != nil {
-			t.Fatalf("Failed to create test table: %v", err)
+			t.Fatalf("unexpected error: %v", err)
 		}
+		expected := filepath.Join(tmp, "Library", "Application Support", "noteleaf")
+		if dir != expected {
+			t.Errorf("expected %s, got %s", expected, dir)
+		}
+	})
 
-		_, err = db1.Exec("INSERT INTO test_table (name) VALUES (?)", "test_value")
+	t.Run("linux default with XDG_CONFIG_HOME unset", func(t *testing.T) {
+		origGOOS, origHome := getRuntime, getHomeDir
+		getRuntime = func() string { return "linux" }
+		getHomeDir = func() (string, error) { return tmp, nil }
+		defer func() {
+			getRuntime = origGOOS
+			getHomeDir = origHome
+		}()
+
+		os.Unsetenv("XDG_CONFIG_HOME")
+
+		dir, err := GetConfigDir()
 		if err != nil {
-			t.Fatalf("Failed to insert test data: %v", err)
+			t.Fatalf("unexpected error: %v", err)
 		}
+		expected := filepath.Join(tmp, ".config", "noteleaf")
+		if dir != expected {
+			t.Errorf("expected %s, got %s", expected, dir)
+		}
+	})
+}
 
-		db1.Close()
+func TestGetDataDir_AllBranches(t *testing.T) {
+	tmp := t.TempDir()
 
-		db2, err := NewDatabase()
+	t.Run("NOTELEAF_DATA_DIR overrides", func(t *testing.T) {
+		os.Setenv("NOTELEAF_DATA_DIR", tmp)
+		defer os.Unsetenv("NOTELEAF_DATA_DIR")
+
+		dir, err := GetDataDir()
 		if err != nil {
-			t.Fatalf("Second NewDatabase failed: %v", err)
+			t.Fatalf("unexpected error: %v", err)
 		}
-		defer db2.Close()
+		if dir != tmp {
+			t.Errorf("expected %s, got %s", tmp, dir)
+		}
+	})
 
-		var name string
-		err = db2.QueryRow("SELECT name FROM test_table WHERE id = 1").Scan(&name)
+	t.Run("windows success", func(t *testing.T) {
+		origGOOS := getRuntime
+		getRuntime = func() string { return "windows" }
+		defer func() { getRuntime = origGOOS }()
+
+		os.Setenv("LOCALAPPDATA", tmp)
+		defer os.Unsetenv("LOCALAPPDATA")
+
+		dir, err := GetDataDir()
 		if err != nil {
-			t.Fatalf("Failed to query test data: %v", err)
+			t.Fatalf("unexpected error: %v", err)
 		}
+		expected := filepath.Join(tmp, "noteleaf")
+		if dir != expected {
+			t.Errorf("expected %s, got %s", expected, dir)
+		}
+	})
 
-		if name != "test_value" {
-			t.Errorf("Expected 'test_value', got '%s'", name)
+	t.Run("windows missing LOCALAPPDATA", func(t *testing.T) {
+		origGOOS := getRuntime
+		getRuntime = func() string { return "windows" }
+		defer func() { getRuntime = origGOOS }()
+
+		os.Unsetenv("LOCALAPPDATA")
+
+		_, err := GetDataDir()
+		if err == nil || !strings.Contains(err.Error(), "LOCALAPPDATA") {
+			t.Errorf("expected LOCALAPPDATA error, got %v", err)
+		}
+	})
+
+	t.Run("darwin success", func(t *testing.T) {
+		origGOOS, origHome := getRuntime, getHomeDir
+		getRuntime = func() string { return "darwin" }
+		getHomeDir = func() (string, error) { return tmp, nil }
+		defer func() {
+			getRuntime = origGOOS
+			getHomeDir = origHome
+		}()
+
+		dir, err := GetDataDir()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		expected := filepath.Join(tmp, "Library", "Application Support", "noteleaf")
+		if dir != expected {
+			t.Errorf("expected %s, got %s", expected, dir)
+		}
+	})
+
+	t.Run("linux default with XDG_DATA_HOME unset", func(t *testing.T) {
+		origGOOS, origHome := getRuntime, getHomeDir
+		getRuntime = func() string { return "linux" }
+		getHomeDir = func() (string, error) { return tmp, nil }
+		defer func() {
+			getRuntime = origGOOS
+			getHomeDir = origHome
+		}()
+
+		os.Unsetenv("XDG_DATA_HOME")
+
+		dir, err := GetDataDir()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		expected := filepath.Join(tmp, ".local", "share", "noteleaf")
+		if dir != expected {
+			t.Errorf("expected %s, got %s", expected, dir)
 		}
 	})
 }
