@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -460,6 +461,306 @@ func (ath *ArticleTestHelper) AddTestRule(domain string, rule *articles.ParsingR
 
 var Expect = AssertionHelpers{}
 
+// Error Testing Helpers for Handlers
+//
+// These utilities provide systematic error testing for handler-specific scenarios
+// including constructor failures, repository errors, and file system operations.
+
+// HandlerErrorTester provides utilities for testing handler error scenarios
+type HandlerErrorTester struct {
+	t *testing.T
+}
+
+// NewHandlerErrorTester creates a handler error tester
+func NewHandlerErrorTester(t *testing.T) *HandlerErrorTester {
+	t.Helper()
+	return &HandlerErrorTester{t: t}
+}
+
+// TestConstructorDatabaseFailure tests handler constructor with database initialization failure
+//
+// Use this to verify handlers handle database connection errors gracefully.
+// Example:
+//
+//	tester := NewHandlerErrorTester(t)
+//	tester.TestConstructorDatabaseFailure(func() error {
+//	    // Close global database to simulate failure
+//	    _, err := NewTaskHandler()
+//	    return err
+//	})
+func (het *HandlerErrorTester) TestConstructorDatabaseFailure(constructor func() error) {
+	het.t.Helper()
+
+	err := constructor()
+	if err == nil {
+		het.t.Error("Handler constructor should fail when database initialization fails")
+	}
+}
+
+// TestConstructorConfigFailure tests handler constructor with config loading failure
+//
+// Use this to verify handlers handle config errors properly.
+func (het *HandlerErrorTester) TestConstructorConfigFailure(constructor func() error) {
+	het.t.Helper()
+
+	err := constructor()
+	if err == nil {
+		het.t.Error("Handler constructor should fail when config loading fails")
+	}
+}
+
+// TestRepositoryMethodError tests handler methods when repository operations fail
+//
+// Use this to verify handlers propagate repository errors correctly.
+// Example:
+//
+//	tester := NewHandlerErrorTester(t)
+//	tester.TestRepositoryMethodError("Create", func() error {
+//	    // Corrupt database to cause repository error
+//	    dbHelper.CorruptTable("tasks")
+//	    return handler.Create(ctx, "description", ...)
+//	})
+func (het *HandlerErrorTester) TestRepositoryMethodError(methodName string, operation func() error) {
+	het.t.Helper()
+
+	err := operation()
+	if err == nil {
+		het.t.Errorf("Handler %s should propagate repository errors", methodName)
+	}
+}
+
+// FileSystemErrorHelper provides utilities for testing file system errors in handlers
+type FileSystemErrorHelper struct {
+	t        *testing.T
+	tempDirs []string
+}
+
+// NewFileSystemErrorHelper creates a file system error helper
+func NewFileSystemErrorHelper(t *testing.T) *FileSystemErrorHelper {
+	t.Helper()
+	return &FileSystemErrorHelper{
+		t:        t,
+		tempDirs: make([]string, 0),
+	}
+}
+
+// CreateReadOnlyDirectory creates a read-only directory for testing permission errors
+//
+// Use this to test handler behavior when unable to write files.
+// Example:
+//
+//	helper := NewFileSystemErrorHelper(t)
+//	defer helper.Cleanup()
+//	readOnlyDir := helper.CreateReadOnlyDirectory()
+//	// Test operations that should fail with permission errors
+func (fseh *FileSystemErrorHelper) CreateReadOnlyDirectory() string {
+	fseh.t.Helper()
+
+	if runtime.GOOS == "windows" {
+		fseh.t.Skip("Permission test not reliable on Windows")
+	}
+
+	tempDir, err := os.MkdirTemp("", "noteleaf-readonly-*")
+	if err != nil {
+		fseh.t.Fatalf("Failed to create temp directory: %v", err)
+	}
+
+	fseh.tempDirs = append(fseh.tempDirs, tempDir)
+
+	if err := os.Chmod(tempDir, 0555); err != nil {
+		fseh.t.Fatalf("Failed to make directory read-only: %v", err)
+	}
+
+	return tempDir
+}
+
+// CreateUnwritableFile creates a file that cannot be written to
+//
+// Use this to test error handling when files cannot be modified.
+func (fseh *FileSystemErrorHelper) CreateUnwritableFile(content string) string {
+	fseh.t.Helper()
+
+	if runtime.GOOS == "windows" {
+		fseh.t.Skip("Permission test not reliable on Windows")
+	}
+
+	tempDir, err := os.MkdirTemp("", "noteleaf-unwritable-*")
+	if err != nil {
+		fseh.t.Fatalf("Failed to create temp directory: %v", err)
+	}
+
+	fseh.tempDirs = append(fseh.tempDirs, tempDir)
+
+	filePath := filepath.Join(tempDir, "test-file.txt")
+	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
+		fseh.t.Fatalf("Failed to create file: %v", err)
+	}
+
+	if err := os.Chmod(filePath, 0444); err != nil {
+		fseh.t.Fatalf("Failed to make file read-only: %v", err)
+	}
+
+	return filePath
+}
+
+// SimulateDiskFull simulates disk full errors using /dev/full on Unix systems
+//
+// Use this to test error handling when disk space is exhausted.
+// Note: This only works on Unix systems with /dev/full
+func (fseh *FileSystemErrorHelper) SimulateDiskFull() string {
+	fseh.t.Helper()
+
+	if runtime.GOOS == "windows" {
+		fseh.t.Skip("Disk full simulation not available on Windows")
+	}
+
+	if _, err := os.Stat("/dev/full"); os.IsNotExist(err) {
+		fseh.t.Skip("/dev/full not available on this system")
+	}
+
+	return "/dev/full"
+}
+
+// Cleanup removes temporary directories and restores permissions
+func (fseh *FileSystemErrorHelper) Cleanup() {
+	for _, dir := range fseh.tempDirs {
+		os.Chmod(dir, 0755)
+		os.RemoveAll(dir)
+	}
+}
+
+// RepositoryErrorSimulator simulates repository errors for handler testing
+type RepositoryErrorSimulator struct {
+	t        *testing.T
+	dbHelper *DatabaseTestHelper
+}
+
+// NewRepositoryErrorSimulator creates a repository error simulator
+func NewRepositoryErrorSimulator(t *testing.T, dbHelper *DatabaseTestHelper) *RepositoryErrorSimulator {
+	t.Helper()
+	return &RepositoryErrorSimulator{
+		t:        t,
+		dbHelper: dbHelper,
+	}
+}
+
+// SimulateCreateError simulates repository Create method failure
+//
+// Use this to test handler behavior when repository create operations fail.
+func (res *RepositoryErrorSimulator) SimulateCreateError(tableName string) {
+	res.t.Helper()
+	res.dbHelper.DropNotesTable()
+}
+
+// SimulateGetError simulates repository Get method failure
+//
+// Use this to test handler behavior when repository get operations fail.
+func (res *RepositoryErrorSimulator) SimulateGetError() {
+	res.t.Helper()
+	res.dbHelper.CloseDatabase()
+}
+
+// SimulateUpdateError simulates repository Update method failure
+//
+// Use this to test handler behavior when repository update operations fail.
+func (res *RepositoryErrorSimulator) SimulateUpdateError() {
+	res.t.Helper()
+	res.dbHelper.CloseDatabase()
+}
+
+// SimulateDeleteError simulates repository Delete method failure
+//
+// Use this to test handler behavior when repository delete operations fail.
+func (res *RepositoryErrorSimulator) SimulateDeleteError() {
+	res.t.Helper()
+	res.dbHelper.CloseDatabase()
+}
+
+// ValidationErrorHelper provides utilities for testing validation errors
+type ValidationErrorHelper struct {
+	t *testing.T
+}
+
+// NewValidationErrorHelper creates a validation error helper
+func NewValidationErrorHelper(t *testing.T) *ValidationErrorHelper {
+	t.Helper()
+	return &ValidationErrorHelper{t: t}
+}
+
+// AssertValidationError verifies that an operation fails with validation error
+//
+// Use this to test input validation in handlers.
+// Example:
+//
+//	helper := NewValidationErrorHelper(t)
+//	helper.AssertValidationError(func() error {
+//	    return handler.Create(ctx, "", ...) // Empty description
+//	}, "description")
+func (veh *ValidationErrorHelper) AssertValidationError(operation func() error, expectedField string) {
+	veh.t.Helper()
+
+	err := operation()
+	if err == nil {
+		veh.t.Errorf("Expected validation error for field %s", expectedField)
+		return
+	}
+
+	if expectedField != "" && !containsString(err.Error(), expectedField) {
+		veh.t.Logf("Validation error does not mention field %s: %v", expectedField, err)
+	}
+}
+
+// HandlerErrorScenario defines a common error testing scenario for handlers
+type HandlerErrorScenario struct {
+	Name        string
+	Setup       func(*testing.T) func()
+	Operation   func(*testing.T) error
+	ExpectError bool
+	ErrorCheck  func(*testing.T, error)
+}
+
+// RunHandlerErrorScenarios executes a set of error testing scenarios for handlers
+//
+// Use this to systematically test all error paths in a handler.
+// Example:
+//
+//	scenarios := []HandlerErrorScenario{
+//	    {
+//	        Name: "database connection failure",
+//	        Setup: func(t *testing.T) func() {
+//	            dbHelper.CloseDatabase()
+//	            return func() { dbHelper.RestoreDatabase(t) }
+//	        },
+//	        Operation: func(t *testing.T) error {
+//	            return handler.Create(ctx, "task")
+//	        },
+//	        ExpectError: true,
+//	    },
+//	}
+//	RunHandlerErrorScenarios(t, scenarios)
+func RunHandlerErrorScenarios(t *testing.T, scenarios []HandlerErrorScenario) {
+	t.Helper()
+
+	for _, scenario := range scenarios {
+		t.Run(scenario.Name, func(t *testing.T) {
+			cleanup := scenario.Setup(t)
+			defer cleanup()
+
+			err := scenario.Operation(t)
+
+			if scenario.ExpectError && err == nil {
+				t.Errorf("Expected error in scenario %s but got none", scenario.Name)
+			} else if !scenario.ExpectError && err != nil {
+				t.Errorf("Unexpected error in scenario %s: %v", scenario.Name, err)
+			}
+
+			if scenario.ErrorCheck != nil && err != nil {
+				scenario.ErrorCheck(t, err)
+			}
+		})
+	}
+}
+
 // HTTPMockServer provides utilities for mocking HTTP services in tests
 type HTTPMockServer struct {
 	server   *httptest.Server
@@ -728,7 +1029,8 @@ func CreateMockTVSearchResults() []services.Media {
 }
 
 // InputSimulator provides controlled input simulation for testing [fmt.Scanf] interactions
-// It implements [io.Reader] to provide predictable input sequences for interactive components
+//
+//	It implements [io.Reader] to provide predictable input sequences for interactive components
 type InputSimulator struct {
 	inputs   []string
 	position int
@@ -1169,25 +1471,9 @@ func RunTUIScenarios(t *testing.T, suite *ui.TUITestSuite, scenarios []TUITestSc
 // CommonTUIScenarios returns standard TUI testing scenarios
 func CommonTUIScenarios() []TUITestScenario {
 	return []TUITestScenario{
-		{
-			Name:        "help_toggle",
-			KeySequence: []tea.KeyType{tea.KeyRunes},
-			Timeout:     500 * time.Millisecond,
-		},
-		{
-			Name:        "navigation_down",
-			KeySequence: []tea.KeyType{tea.KeyDown, tea.KeyDown, tea.KeyUp},
-			Timeout:     500 * time.Millisecond,
-		},
-		{
-			Name:        "page_navigation",
-			KeySequence: []tea.KeyType{tea.KeyPgDown, tea.KeyPgUp},
-			Timeout:     500 * time.Millisecond,
-		},
-		{
-			Name:        "quit_sequence",
-			KeySequence: []tea.KeyType{tea.KeyCtrlC},
-			Timeout:     500 * time.Millisecond,
-		},
+		{Name: "help_toggle", KeySequence: []tea.KeyType{tea.KeyRunes}, Timeout: 500 * time.Millisecond},
+		{Name: "navigation_down", KeySequence: []tea.KeyType{tea.KeyDown, tea.KeyDown, tea.KeyUp}, Timeout: 500 * time.Millisecond},
+		{Name: "page_navigation", KeySequence: []tea.KeyType{tea.KeyPgDown, tea.KeyPgUp}, Timeout: 500 * time.Millisecond},
+		{Name: "quit_sequence", KeySequence: []tea.KeyType{tea.KeyCtrlC}, Timeout: 500 * time.Millisecond},
 	}
 }

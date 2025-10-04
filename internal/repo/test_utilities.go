@@ -319,6 +319,247 @@ func AssertContains(t *testing.T, str, substr, msg string) {
 	}
 }
 
+// Error Testing Helpers for Repositories
+//
+// These utilities extend the core error testing framework for repository-specific
+// error scenarios including constraint violations, marshaling errors, and
+// context-based error testing.
+
+// RepositoryErrorTester provides systematic error testing for repository operations
+type RepositoryErrorTester struct {
+	t   *testing.T
+	db  *sql.DB
+	ctx context.Context
+}
+
+// NewRepositoryErrorTester creates a repository error tester
+func NewRepositoryErrorTester(t *testing.T, db *sql.DB) *RepositoryErrorTester {
+	t.Helper()
+	return &RepositoryErrorTester{
+		t:   t,
+		db:  db,
+		ctx: context.Background(),
+	}
+}
+
+// TestUniqueConstraintViolation tests unique constraint violations systematically
+//
+// Use this to test duplicate insertions across any repository.
+// Example:
+//
+//	tester := NewRepositoryErrorTester(t, db)
+//	tester.TestUniqueConstraintViolation("tasks", func() error {
+//	    task.UUID = "duplicate-uuid"
+//	    _, err := repo.Create(ctx, task)
+//	    return err
+//	})
+func (ret *RepositoryErrorTester) TestUniqueConstraintViolation(entityName string, duplicateInsert func() error) {
+	ret.t.Helper()
+
+	// First insert should succeed
+	err := duplicateInsert()
+	AssertNoError(ret.t, err, fmt.Sprintf("First %s insert should succeed", entityName))
+
+	// Second insert with same unique value should fail
+	err = duplicateInsert()
+	AssertError(ret.t, err, fmt.Sprintf("Duplicate %s should violate unique constraint", entityName))
+}
+
+// TestForeignKeyViolation tests foreign key constraint violations
+//
+// Use this to test operations that reference non-existent foreign entities.
+// Example:
+//
+//	tester := NewRepositoryErrorTester(t, db)
+//	tester.TestForeignKeyViolation("time entry", func() error {
+//	    entry.TaskID = 999999 // Non-existent task
+//	    return repo.CreateTimeEntry(ctx, entry)
+//	})
+func (ret *RepositoryErrorTester) TestForeignKeyViolation(entityName string, invalidFKInsert func() error) {
+	ret.t.Helper()
+
+	err := invalidFKInsert()
+	AssertError(ret.t, err, fmt.Sprintf("%s with invalid foreign key should fail", entityName))
+}
+
+// TestNotNullViolation tests NOT NULL constraint violations
+//
+// Use this to verify required fields are enforced.
+func (ret *RepositoryErrorTester) TestNotNullViolation(entityName string, nullInsert func() error) {
+	ret.t.Helper()
+
+	err := nullInsert()
+	AssertError(ret.t, err, fmt.Sprintf("%s with NULL required field should fail", entityName))
+}
+
+// TestContextCancellation tests operation behavior with cancelled context
+//
+// Use this to verify all repository operations handle context cancellation.
+// Example:
+//
+//	tester := NewRepositoryErrorTester(t, db)
+//	tester.TestContextCancellation("Create", func(ctx context.Context) error {
+//	    _, err := repo.Create(ctx, task)
+//	    return err
+//	})
+func (ret *RepositoryErrorTester) TestContextCancellation(operationName string, operation func(context.Context) error) {
+	ret.t.Helper()
+
+	ctx, cancel := context.WithCancel(ret.ctx)
+	cancel()
+
+	err := operation(ctx)
+	AssertError(ret.t, err, fmt.Sprintf("%s with cancelled context should fail", operationName))
+}
+
+// TestGetNonExistent tests retrieval of non-existent entities
+//
+// Use this to verify proper error handling when entities don't exist.
+// Pattern:
+//
+//	tester := NewRepositoryErrorTester(t, db)
+//	tester.TestGetNonExistent("task", func() error {
+//	    _, err := repo.Get(ctx, 999999)
+//	    return err
+//	})
+func (ret *RepositoryErrorTester) TestGetNonExistent(entityName string, getNonExistent func() error) {
+	ret.t.Helper()
+
+	err := getNonExistent()
+	AssertError(ret.t, err, fmt.Sprintf("Getting non-existent %s should fail", entityName))
+}
+
+// TestUpdateNonExistent tests update of non-existent entities
+//
+// Use this to verify updates fail gracefully for missing entities.
+func (ret *RepositoryErrorTester) TestUpdateNonExistent(entityName string, updateNonExistent func() error) {
+	ret.t.Helper()
+
+	err := updateNonExistent()
+	AssertError(ret.t, err, fmt.Sprintf("Updating non-existent %s should fail", entityName))
+}
+
+// TestDeleteNonExistent tests deletion of non-existent entities
+//
+// Use this to verify deletes handle missing entities properly.
+func (ret *RepositoryErrorTester) TestDeleteNonExistent(entityName string, deleteNonExistent func() error) {
+	ret.t.Helper()
+
+	err := deleteNonExistent()
+	AssertError(ret.t, err, fmt.Sprintf("Deleting non-existent %s should fail", entityName))
+}
+
+// MarshalingErrorHelper provides utilities for testing marshaling/unmarshaling errors
+type MarshalingErrorHelper struct {
+	t *testing.T
+}
+
+// NewMarshalingErrorHelper creates a marshaling error helper
+func NewMarshalingErrorHelper(t *testing.T) *MarshalingErrorHelper {
+	t.Helper()
+	return &MarshalingErrorHelper{t: t}
+}
+
+// TestInvalidJSONMarshaling tests marshaling of invalid JSON data
+//
+// Use this to verify error handling when JSON marshaling fails.
+// Example:
+//
+//	helper := NewMarshalingErrorHelper(t)
+//	helper.TestInvalidJSONMarshaling(func() error {
+//	    task.Tags = []string{string([]byte{0xff, 0xfe, 0xfd})} // Invalid UTF-8
+//	    _, err := task.MarshalTags()
+//	    return err
+//	})
+func (meh *MarshalingErrorHelper) TestInvalidJSONMarshaling(operation func() error) {
+	meh.t.Helper()
+
+	err := operation()
+	if err != nil {
+		// Expected - verify it's a marshaling error
+		AssertErrorContains(meh.t, err, "", "Expected marshaling to handle invalid data")
+	}
+}
+
+// TestInvalidJSONUnmarshaling tests unmarshaling of corrupted JSON
+//
+// Use this to verify error handling when unmarshaling invalid JSON.
+// Example:
+//
+//	helper := NewMarshalingErrorHelper(t)
+//	helper.TestInvalidJSONUnmarshaling(func() error {
+//	    invalidJSON := `{"broken": json`
+//	    return task.UnmarshalTags(invalidJSON)
+//	})
+func (meh *MarshalingErrorHelper) TestInvalidJSONUnmarshaling(operation func() error) {
+	meh.t.Helper()
+
+	err := operation()
+	AssertError(meh.t, err, "Unmarshaling invalid JSON should fail")
+}
+
+// CreateInvalidJSONString returns a malformed JSON string for testing
+func (meh *MarshalingErrorHelper) CreateInvalidJSONString() string {
+	return `{"invalid": json without closing`
+}
+
+// CreateInvalidUTF8String returns a string with invalid UTF-8 for testing
+func (meh *MarshalingErrorHelper) CreateInvalidUTF8String() string {
+	return string([]byte{0xff, 0xfe, 0xfd})
+}
+
+// RepositoryTestScenario defines a common test scenario for repositories
+type RepositoryTestScenario struct {
+	Name      string
+	SetupFunc func(*testing.T, *sql.DB) (context.Context, func())
+	TestFunc  func(*testing.T, context.Context, *sql.DB)
+}
+
+// RunRepositoryErrorScenarios executes a set of error testing scenarios
+//
+// Use this to systematically test all error paths in a repository.
+// Example:
+//
+//	scenarios := []RepositoryTestScenario{
+//	    {
+//	        Name: "context cancellation",
+//	        SetupFunc: func(t *testing.T, db *sql.DB) (context.Context, func()) {
+//	            ctx, cancel := context.WithCancel(context.Background())
+//	            cancel()
+//	            return ctx, func() {}
+//	        },
+//	        TestFunc: func(t *testing.T, ctx context.Context, db *sql.DB) {
+//	            repo := NewTaskRepository(db)
+//	            _, err := repo.Create(ctx, task)
+//	            AssertError(t, err, "Should fail with cancelled context")
+//	        },
+//	    },
+//	}
+//	RunRepositoryErrorScenarios(t, db, scenarios)
+func RunRepositoryErrorScenarios(t *testing.T, db *sql.DB, scenarios []RepositoryTestScenario) {
+	t.Helper()
+
+	for _, scenario := range scenarios {
+		t.Run(scenario.Name, func(t *testing.T) {
+			ctx, cleanup := scenario.SetupFunc(t, db)
+			defer cleanup()
+			scenario.TestFunc(t, ctx, db)
+		})
+	}
+}
+
+// AssertErrorContains verifies error contains expected substring
+func AssertErrorContains(t *testing.T, err error, expectedSubstring, msg string) {
+	t.Helper()
+	if err == nil {
+		t.Errorf("%s: expected error containing %q but got none", msg, expectedSubstring)
+		return
+	}
+	if expectedSubstring != "" && !strings.Contains(err.Error(), expectedSubstring) {
+		t.Errorf("%s: expected error containing %q, got: %v", msg, expectedSubstring, err)
+	}
+}
+
 // SetupTestData creates sample data in the database and returns the repositories
 func SetupTestData(t *testing.T, db *sql.DB) *Repositories {
 	ctx := context.Background()

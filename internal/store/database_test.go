@@ -286,3 +286,206 @@ func TestDatabaseIntegration(t *testing.T) {
 		}
 	})
 }
+
+// TestNewDatabaseWithConfig tests database creation with custom config
+func TestNewDatabaseWithConfig(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "noteleaf-db-config-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	t.Run("creates database with custom database path", func(t *testing.T) {
+		customDBPath := filepath.Join(tempDir, "custom.db")
+		config := &Config{
+			DatabasePath: customDBPath,
+		}
+
+		db, err := NewDatabaseWithConfig(config)
+		if err != nil {
+			t.Fatalf("NewDatabaseWithConfig failed: %v", err)
+		}
+		defer db.Close()
+
+		if db.GetPath() != customDBPath {
+			t.Errorf("Expected database path %s, got %s", customDBPath, db.GetPath())
+		}
+
+		if _, err := os.Stat(customDBPath); os.IsNotExist(err) {
+			t.Error("Custom database file should exist")
+		}
+	})
+
+	t.Run("creates database with custom data dir", func(t *testing.T) {
+		customDataDir := filepath.Join(tempDir, "data")
+
+		// Create the custom data directory
+		if err := os.MkdirAll(customDataDir, 0755); err != nil {
+			t.Fatalf("Failed to create custom data dir: %v", err)
+		}
+
+		config := &Config{
+			DataDir: customDataDir,
+		}
+
+		db, err := NewDatabaseWithConfig(config)
+		if err != nil {
+			t.Fatalf("NewDatabaseWithConfig failed: %v", err)
+		}
+		defer db.Close()
+
+		expectedPath := filepath.Join(customDataDir, "noteleaf.db")
+		if db.GetPath() != expectedPath {
+			t.Errorf("Expected database path %s, got %s", expectedPath, db.GetPath())
+		}
+	})
+
+	t.Run("handles invalid custom database path", func(t *testing.T) {
+		config := &Config{
+			DatabasePath: "/invalid/path/that/does/not/exist/database.db",
+		}
+
+		_, err := NewDatabaseWithConfig(config)
+		if err == nil {
+			t.Error("NewDatabaseWithConfig should fail with invalid database path")
+		}
+	})
+
+	t.Run("creates nested directories for custom database path", func(t *testing.T) {
+		nestedPath := filepath.Join(tempDir, "nested", "deep", "database.db")
+		config := &Config{
+			DatabasePath: nestedPath,
+		}
+
+		db, err := NewDatabaseWithConfig(config)
+		if err != nil {
+			t.Fatalf("NewDatabaseWithConfig should create nested directories: %v", err)
+		}
+		defer db.Close()
+
+		if _, err := os.Stat(nestedPath); os.IsNotExist(err) {
+			t.Error("Database file should exist in nested directory")
+		}
+	})
+}
+
+// TestGetDataDirPlatformSpecific tests platform-specific GetDataDir behavior
+func TestGetDataDirPlatformSpecific(t *testing.T) {
+	t.Run("handles missing LOCALAPPDATA on Windows", func(t *testing.T) {
+		if runtime.GOOS != "windows" {
+			t.Skip("Windows-specific test")
+		}
+
+		originalEnv := os.Getenv("LOCALAPPDATA")
+		os.Unsetenv("LOCALAPPDATA")
+		defer os.Setenv("LOCALAPPDATA", originalEnv)
+
+		_, err := GetDataDir()
+		if err == nil {
+			t.Error("GetDataDir should fail when LOCALAPPDATA is not set on Windows")
+		}
+	})
+
+	t.Run("handles missing HOME on Unix", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("Unix-specific test")
+		}
+
+		originalXDG := os.Getenv("XDG_DATA_HOME")
+		originalHome := os.Getenv("HOME")
+		os.Unsetenv("XDG_DATA_HOME")
+		os.Unsetenv("HOME")
+
+		defer func() {
+			os.Setenv("XDG_DATA_HOME", originalXDG)
+			os.Setenv("HOME", originalHome)
+		}()
+
+		_, err := GetDataDir()
+		if err == nil {
+			t.Error("GetDataDir should fail when both XDG_DATA_HOME and HOME are not set on Unix")
+		}
+	})
+
+	t.Run("uses XDG_DATA_HOME when set on Linux", func(t *testing.T) {
+		if runtime.GOOS != "linux" {
+			t.Skip("Linux-specific test")
+		}
+
+		tempDir, err := os.MkdirTemp("", "noteleaf-xdg-test-*")
+		if err != nil {
+			t.Fatalf("Failed to create temp directory: %v", err)
+		}
+		defer os.RemoveAll(tempDir)
+
+		originalXDG := os.Getenv("XDG_DATA_HOME")
+		os.Setenv("XDG_DATA_HOME", tempDir)
+		defer os.Setenv("XDG_DATA_HOME", originalXDG)
+
+		dataDir, err := GetDataDir()
+		if err != nil {
+			t.Fatalf("GetDataDir failed: %v", err)
+		}
+
+		expectedPath := filepath.Join(tempDir, "noteleaf")
+		if dataDir != expectedPath {
+			t.Errorf("Expected data dir %s, got %s", expectedPath, dataDir)
+		}
+	})
+
+	t.Run("falls back to HOME/.local/share on Linux when XDG_DATA_HOME not set", func(t *testing.T) {
+		if runtime.GOOS != "linux" {
+			t.Skip("Linux-specific test")
+		}
+
+		tempHome, err := os.MkdirTemp("", "noteleaf-home-test-*")
+		if err != nil {
+			t.Fatalf("Failed to create temp home: %v", err)
+		}
+		defer os.RemoveAll(tempHome)
+
+		originalXDG := os.Getenv("XDG_DATA_HOME")
+		originalHome := os.Getenv("HOME")
+		os.Unsetenv("XDG_DATA_HOME")
+		os.Setenv("HOME", tempHome)
+
+		defer func() {
+			os.Setenv("XDG_DATA_HOME", originalXDG)
+			os.Setenv("HOME", originalHome)
+		}()
+
+		dataDir, err := GetDataDir()
+		if err != nil {
+			t.Fatalf("GetDataDir failed: %v", err)
+		}
+
+		expectedPath := filepath.Join(tempHome, ".local", "share", "noteleaf")
+		if dataDir != expectedPath {
+			t.Errorf("Expected data dir %s, got %s", expectedPath, dataDir)
+		}
+	})
+}
+
+// TestDatabaseConstraintViolations tests database constraint handling
+func TestDatabaseConstraintViolations(t *testing.T) {
+	env := NewIsolatedEnvironment(t)
+	defer env.Cleanup()
+
+	t.Run("handles foreign key constraint violations", func(t *testing.T) {
+		db, err := NewDatabase()
+		if err != nil {
+			t.Fatalf("NewDatabase failed: %v", err)
+		}
+		defer db.Close()
+
+		var foreignKeys int
+		err = db.QueryRow("PRAGMA foreign_keys").Scan(&foreignKeys)
+		if err != nil {
+			t.Fatalf("Failed to check foreign keys: %v", err)
+		}
+
+		if foreignKeys != 1 {
+			t.Error("Foreign keys should be enabled by default")
+		}
+	})
+}
