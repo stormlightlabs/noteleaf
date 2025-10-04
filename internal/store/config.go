@@ -11,10 +11,14 @@ import (
 // Config holds application configuration
 type Config struct {
 	DatabasePath    string `toml:"database_path,omitempty"`
+	DataDir         string `toml:"data_dir,omitempty"`
 	DateFormat      string `toml:"date_format"`
 	ColorScheme     string `toml:"color_scheme"`
 	DefaultView     string `toml:"default_view"`
 	DefaultPriority string `toml:"default_priority,omitempty"`
+	Editor          string `toml:"editor,omitempty"`
+	ArticlesDir     string `toml:"articles_dir,omitempty"`
+	NotesDir        string `toml:"notes_dir,omitempty"`
 	AutoArchive     bool   `toml:"auto_archive"`
 	SyncEnabled     bool   `toml:"sync_enabled"`
 	SyncEndpoint    string `toml:"sync_endpoint,omitempty"`
@@ -36,14 +40,20 @@ func DefaultConfig() *Config {
 	}
 }
 
-// LoadConfig loads configuration from the config directory
+// LoadConfig loads configuration from the config directory or NOTELEAF_CONFIG path
 func LoadConfig() (*Config, error) {
-	configDir, err := GetConfigDir()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get config directory: %w", err)
-	}
+	var configPath string
 
-	configPath := filepath.Join(configDir, ".noteleaf.conf.toml")
+	// Check for NOTELEAF_CONFIG environment variable
+	if envConfigPath := os.Getenv("NOTELEAF_CONFIG"); envConfigPath != "" {
+		configPath = envConfigPath
+	} else {
+		configDir, err := GetConfigDir()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get config directory: %w", err)
+		}
+		configPath = filepath.Join(configDir, ".noteleaf.conf.toml")
+	}
 
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		config := DefaultConfig()
@@ -66,14 +76,25 @@ func LoadConfig() (*Config, error) {
 	return config, nil
 }
 
-// SaveConfig saves the configuration to the config directory
+// SaveConfig saves the configuration to the config directory or NOTELEAF_CONFIG path
 func SaveConfig(config *Config) error {
-	configDir, err := GetConfigDir()
-	if err != nil {
-		return fmt.Errorf("failed to get config directory: %w", err)
-	}
+	var configPath string
 
-	configPath := filepath.Join(configDir, ".noteleaf.conf.toml")
+	// Check for NOTELEAF_CONFIG environment variable
+	if envConfigPath := os.Getenv("NOTELEAF_CONFIG"); envConfigPath != "" {
+		configPath = envConfigPath
+		// Ensure the directory exists for custom config path
+		configDir := filepath.Dir(configPath)
+		if err := os.MkdirAll(configDir, 0755); err != nil {
+			return fmt.Errorf("failed to create config directory: %w", err)
+		}
+	} else {
+		configDir, err := GetConfigDir()
+		if err != nil {
+			return fmt.Errorf("failed to get config directory: %w", err)
+		}
+		configPath = filepath.Join(configDir, ".noteleaf.conf.toml")
+	}
 
 	data, err := toml.Marshal(config)
 	if err != nil {
@@ -89,6 +110,11 @@ func SaveConfig(config *Config) error {
 
 // GetConfigPath returns the path to the configuration file
 func GetConfigPath() (string, error) {
+	// Check for NOTELEAF_CONFIG environment variable
+	if envConfigPath := os.Getenv("NOTELEAF_CONFIG"); envConfigPath != "" {
+		return envConfigPath, nil
+	}
+
 	configDir, err := GetConfigDir()
 	if err != nil {
 		return "", err

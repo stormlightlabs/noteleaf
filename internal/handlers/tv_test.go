@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -171,9 +172,14 @@ func TestTVHandler(t *testing.T) {
 			}
 			defer os.RemoveAll(tempDir)
 
-			oldConfigHome := os.Getenv("XDG_CONFIG_HOME")
-			os.Setenv("XDG_CONFIG_HOME", tempDir)
-			defer os.Setenv("XDG_CONFIG_HOME", oldConfigHome)
+			oldNoteleafConfig := os.Getenv("NOTELEAF_CONFIG")
+			oldNoteleafDataDir := os.Getenv("NOTELEAF_DATA_DIR")
+			os.Setenv("NOTELEAF_CONFIG", filepath.Join(tempDir, ".noteleaf.conf.toml"))
+			os.Setenv("NOTELEAF_DATA_DIR", tempDir)
+			defer func() {
+				os.Setenv("NOTELEAF_CONFIG", oldNoteleafConfig)
+				os.Setenv("NOTELEAF_DATA_DIR", oldNoteleafDataDir)
+			}()
 
 			ctx := context.Background()
 			err = Setup(ctx, []string{})
@@ -220,9 +226,14 @@ func TestTVHandler(t *testing.T) {
 			}
 			defer os.RemoveAll(tempDir)
 
-			oldConfigHome := os.Getenv("XDG_CONFIG_HOME")
-			os.Setenv("XDG_CONFIG_HOME", tempDir)
-			defer os.Setenv("XDG_CONFIG_HOME", oldConfigHome)
+			oldNoteleafConfig := os.Getenv("NOTELEAF_CONFIG")
+			oldNoteleafDataDir := os.Getenv("NOTELEAF_DATA_DIR")
+			os.Setenv("NOTELEAF_CONFIG", filepath.Join(tempDir, ".noteleaf.conf.toml"))
+			os.Setenv("NOTELEAF_DATA_DIR", tempDir)
+			defer func() {
+				os.Setenv("NOTELEAF_CONFIG", oldNoteleafConfig)
+				os.Setenv("NOTELEAF_DATA_DIR", oldNoteleafDataDir)
+			}()
 
 			ctx := context.Background()
 			if err = Setup(ctx, []string{}); err != nil {

@@ -319,14 +319,25 @@ func (r *TaskRepository) buildListArgs(opts TaskListOptions) []any {
 func (r *TaskRepository) scanTaskRow(rows *sql.Rows, task *models.Task) error {
 	var tags, annotations sql.NullString
 	var parentUUID sql.NullString
+	var priority, project, context sql.NullString
 
 	if err := rows.Scan(
-		&task.ID, &task.UUID, &task.Description, &task.Status, &task.Priority,
-		&task.Project, &task.Context, &tags,
+		&task.ID, &task.UUID, &task.Description, &task.Status, &priority,
+		&project, &context, &tags,
 		&task.Due, &task.Entry, &task.Modified, &task.End, &task.Start, &annotations,
 		&task.Recur, &task.Until, &parentUUID,
 	); err != nil {
 		return fmt.Errorf("failed to scan task row: %w", err)
+	}
+
+	if priority.Valid {
+		task.Priority = priority.String
+	}
+	if project.Valid {
+		task.Project = project.String
+	}
+	if context.Valid {
+		task.Context = context.String
 	}
 
 	if parentUUID.Valid {

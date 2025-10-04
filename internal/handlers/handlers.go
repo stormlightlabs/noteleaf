@@ -24,7 +24,26 @@ func Setup(ctx context.Context, args []string) error {
 	logger.Info("Using config directory", "path", configDir)
 	fmt.Printf("Config directory: %s\n", configDir)
 
-	dbPath := filepath.Join(configDir, "noteleaf.db")
+	// Load or create config to determine the actual database path
+	config, err := store.LoadConfig()
+	if err != nil {
+		return fmt.Errorf("failed to load configuration: %w", err)
+	}
+
+	// Determine database path using the same logic as NewDatabase
+	var dbPath string
+	if config.DatabasePath != "" {
+		dbPath = config.DatabasePath
+	} else if config.DataDir != "" {
+		dbPath = filepath.Join(config.DataDir, "noteleaf.db")
+	} else {
+		dataDir, err := store.GetDataDir()
+		if err != nil {
+			return fmt.Errorf("failed to get data directory: %w", err)
+		}
+		dbPath = filepath.Join(dataDir, "noteleaf.db")
+	}
+
 	if _, err := os.Stat(dbPath); err == nil {
 		fmt.Println("Database already exists. Use --force to recreate.")
 		return nil
@@ -37,11 +56,6 @@ func Setup(ctx context.Context, args []string) error {
 	defer db.Close()
 
 	fmt.Printf("Database created: %s\n", db.GetPath())
-
-	config, err := store.LoadConfig()
-	if err != nil {
-		return fmt.Errorf("failed to create configuration: %w", err)
-	}
 
 	configPath, err := store.GetConfigPath()
 	if err != nil {
@@ -77,12 +91,27 @@ func Setup(ctx context.Context, args []string) error {
 func Reset(ctx context.Context, args []string) error {
 	fmt.Println("Resetting noteleaf...")
 
-	configDir, err := store.GetConfigDir()
+	// Load config to determine the actual database path
+	config, err := store.LoadConfig()
 	if err != nil {
-		return fmt.Errorf("failed to get config directory: %w", err)
+		// If config doesn't exist, try to determine paths anyway
+		config = store.DefaultConfig()
 	}
 
-	dbPath := filepath.Join(configDir, "noteleaf.db")
+	// Determine database path using the same logic as NewDatabase
+	var dbPath string
+	if config.DatabasePath != "" {
+		dbPath = config.DatabasePath
+	} else if config.DataDir != "" {
+		dbPath = filepath.Join(config.DataDir, "noteleaf.db")
+	} else {
+		dataDir, err := store.GetDataDir()
+		if err != nil {
+			return fmt.Errorf("failed to get data directory: %w", err)
+		}
+		dbPath = filepath.Join(dataDir, "noteleaf.db")
+	}
+
 	if err := os.Remove(dbPath); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to remove database: %w", err)
 	}
@@ -109,7 +138,26 @@ func Status(ctx context.Context, args []string) error {
 
 	fmt.Printf("Config directory: %s\n", configDir)
 
-	dbPath := filepath.Join(configDir, "noteleaf.db")
+	// Load config to determine the actual database path
+	config, err := store.LoadConfig()
+	if err != nil {
+		return fmt.Errorf("failed to load configuration: %w", err)
+	}
+
+	// Determine database path using the same logic as NewDatabase
+	var dbPath string
+	if config.DatabasePath != "" {
+		dbPath = config.DatabasePath
+	} else if config.DataDir != "" {
+		dbPath = filepath.Join(config.DataDir, "noteleaf.db")
+	} else {
+		dataDir, err := store.GetDataDir()
+		if err != nil {
+			return fmt.Errorf("failed to get data directory: %w", err)
+		}
+		dbPath = filepath.Join(dataDir, "noteleaf.db")
+	}
+
 	if _, err := os.Stat(dbPath); err != nil {
 		fmt.Println("Database: Not found")
 		fmt.Println("Run 'noteleaf setup' to initialize.")

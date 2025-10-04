@@ -188,8 +188,18 @@ func (r *BookRepository) buildListArgs(opts BookListOptions) []any {
 }
 
 func (r *BookRepository) scanBookRow(rows *sql.Rows, book *models.Book) error {
-	return rows.Scan(&book.ID, &book.Title, &book.Author, &book.Status, &book.Progress, &book.Pages,
-		&book.Rating, &book.Notes, &book.Added, &book.Started, &book.Finished)
+	var pages sql.NullInt64
+
+	if err := rows.Scan(&book.ID, &book.Title, &book.Author, &book.Status, &book.Progress, &pages,
+		&book.Rating, &book.Notes, &book.Added, &book.Started, &book.Finished); err != nil {
+		return err
+	}
+
+	if pages.Valid {
+		book.Pages = int(pages.Int64)
+	}
+
+	return nil
 }
 
 // Find retrieves books matching specific conditions

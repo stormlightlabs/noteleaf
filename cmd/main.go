@@ -117,16 +117,11 @@ func setupCmd() *cobra.Command {
 }
 
 func confCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "config [key] [value]",
-		Short: "Manage configuration",
-		Args:  cobra.ExactArgs(2),
-		RunE: func(c *cobra.Command, args []string) error {
-			key, value := args[0], args[1]
-			fmt.Printf("Setting config %s = %s\n", key, value)
-			return nil
-		},
+	handler, err := handlers.NewConfigHandler()
+	if err != nil {
+		log.Fatalf("failed to create config handler: %v", err)
 	}
+	return NewConfigCommand(handler).Create()
 }
 
 func main() {

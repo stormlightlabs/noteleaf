@@ -1,6 +1,3 @@
-/*
-TODO: Implement config management
-*/
 package main
 
 import (
@@ -198,7 +195,7 @@ type BookCommand struct {
 	handler *handlers.BookHandler
 }
 
-// NewBookCommand creates a new BookCommand with the given handler
+// NewBookCommand creates a new [BookCommand] with the given handler
 func NewBookCommand(handler *handlers.BookHandler) *BookCommand {
 	return &BookCommand{handler: handler}
 }
@@ -520,6 +517,88 @@ This displays the complete article content using syntax highlighting and proper 
 		fmt.Println()
 		defer c.handler.Close()
 		c.handler.Help()
+	})
+
+	return root
+}
+
+// ConfigCommand implements [CommandGroup] for configuration management commands
+type ConfigCommand struct {
+	handler *handlers.ConfigHandler
+}
+
+// NewConfigCommand creates a new [ConfigCommand] with the given handler
+func NewConfigCommand(handler *handlers.ConfigHandler) *ConfigCommand {
+	return &ConfigCommand{handler: handler}
+}
+
+func (c *ConfigCommand) Create() *cobra.Command {
+	root := &cobra.Command{
+		Use:   "config",
+		Short: "Manage noteleaf configuration",
+	}
+
+	root.AddCommand(&cobra.Command{
+		Use:   "get [key]",
+		Short: "Get configuration value(s)",
+		Long: `Display configuration values.
+
+If no key is provided, displays all configuration values.
+Otherwise, displays the value for the specified key.`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			var key string
+			if len(args) > 0 {
+				key = args[0]
+			}
+			return c.handler.Get(key)
+		},
+	})
+
+	root.AddCommand(&cobra.Command{
+		Use:   "set <key> <value>",
+		Short: "Set configuration value",
+		Long: `Update a configuration value.
+
+Available keys:
+  database_path      - Custom database file path
+  data_dir           - Custom data directory
+  date_format        - Date format string (default: 2006-01-02)
+  color_scheme       - Color scheme (default: default)
+  default_view       - Default view mode (default: list)
+  default_priority   - Default task priority
+  editor             - Preferred text editor
+  articles_dir       - Articles storage directory
+  notes_dir          - Notes storage directory
+  auto_archive       - Auto-archive completed items (true/false)
+  sync_enabled       - Enable synchronization (true/false)
+  sync_endpoint      - Synchronization endpoint URL
+  sync_token         - Synchronization token
+  export_format      - Default export format (default: json)
+  movie_api_key      - API key for movie database
+  book_api_key       - API key for book database`,
+		Args: cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return c.handler.Set(args[0], args[1])
+		},
+	})
+
+	root.AddCommand(&cobra.Command{
+		Use:   "path",
+		Short: "Show configuration file path",
+		Long:  "Display the path to the configuration file being used.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return c.handler.Path()
+		},
+	})
+
+	root.AddCommand(&cobra.Command{
+		Use:   "reset",
+		Short: "Reset configuration to defaults",
+		Long:  "Reset all configuration values to their defaults.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return c.handler.Reset()
+		},
 	})
 
 	return root

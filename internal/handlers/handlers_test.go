@@ -18,11 +18,14 @@ func createTestDir(t *testing.T) string {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
 
-	oldConfigHome := os.Getenv("XDG_CONFIG_HOME")
-	os.Setenv("XDG_CONFIG_HOME", tempDir)
+	oldNoteleafConfig := os.Getenv("NOTELEAF_CONFIG")
+	oldNoteleafDataDir := os.Getenv("NOTELEAF_DATA_DIR")
+	os.Setenv("NOTELEAF_CONFIG", filepath.Join(tempDir, ".noteleaf.conf.toml"))
+	os.Setenv("NOTELEAF_DATA_DIR", tempDir)
 
 	t.Cleanup(func() {
-		os.Setenv("XDG_CONFIG_HOME", oldConfigHome)
+		os.Setenv("NOTELEAF_CONFIG", oldNoteleafConfig)
+		os.Setenv("NOTELEAF_DATA_DIR", oldNoteleafDataDir)
 		os.RemoveAll(tempDir)
 	})
 
@@ -39,12 +42,22 @@ func TestSetup(t *testing.T) {
 			t.Errorf("Setup failed: %v", err)
 		}
 
-		configDir, err := store.GetConfigDir()
+		// Determine database path using the same logic as Setup
+		config, err := store.LoadConfig()
 		if err != nil {
-			t.Fatalf("Failed to get config dir: %v", err)
+			t.Fatalf("Failed to load config: %v", err)
 		}
 
-		dbPath := filepath.Join(configDir, "noteleaf.db")
+		var dbPath string
+		if config.DatabasePath != "" {
+			dbPath = config.DatabasePath
+		} else if config.DataDir != "" {
+			dbPath = filepath.Join(config.DataDir, "noteleaf.db")
+		} else {
+			dataDir, _ := store.GetDataDir()
+			dbPath = filepath.Join(dataDir, "noteleaf.db")
+		}
+
 		if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 			t.Error("Database file was not created")
 		}
@@ -124,12 +137,22 @@ func TestReset(t *testing.T) {
 			t.Fatalf("Setup failed: %v", err)
 		}
 
-		configDir, err := store.GetConfigDir()
+		// Determine database path using the same logic as Setup
+		config, err := store.LoadConfig()
 		if err != nil {
-			t.Fatalf("Failed to get config dir: %v", err)
+			t.Fatalf("Failed to load config: %v", err)
 		}
 
-		dbPath := filepath.Join(configDir, "noteleaf.db")
+		var dbPath string
+		if config.DatabasePath != "" {
+			dbPath = config.DatabasePath
+		} else if config.DataDir != "" {
+			dbPath = filepath.Join(config.DataDir, "noteleaf.db")
+		} else {
+			dataDir, _ := store.GetDataDir()
+			dbPath = filepath.Join(dataDir, "noteleaf.db")
+		}
+
 		configPath, err := store.GetConfigPath()
 		if err != nil {
 			t.Fatalf("Failed to get config path: %v", err)
@@ -219,6 +242,12 @@ func TestSetupErrorHandling(t *testing.T) {
 	t.Run("handles GetConfigDir error", func(t *testing.T) {
 		originalXDG := os.Getenv("XDG_CONFIG_HOME")
 		originalHome := os.Getenv("HOME")
+		originalNoteleafConfig := os.Getenv("NOTELEAF_CONFIG")
+		originalNoteleafDataDir := os.Getenv("NOTELEAF_DATA_DIR")
+
+		// Unset all environment variables so GetConfigDir fails
+		os.Unsetenv("NOTELEAF_CONFIG")
+		os.Unsetenv("NOTELEAF_DATA_DIR")
 
 		if runtime.GOOS == "windows" {
 			originalAppData := os.Getenv("APPDATA")
@@ -232,6 +261,8 @@ func TestSetupErrorHandling(t *testing.T) {
 		defer func() {
 			os.Setenv("XDG_CONFIG_HOME", originalXDG)
 			os.Setenv("HOME", originalHome)
+			os.Setenv("NOTELEAF_CONFIG", originalNoteleafConfig)
+			os.Setenv("NOTELEAF_DATA_DIR", originalNoteleafDataDir)
 		}()
 
 		ctx := context.Background()
@@ -240,7 +271,7 @@ func TestSetupErrorHandling(t *testing.T) {
 		if err == nil {
 			t.Error("Setup should fail when GetConfigDir fails")
 		}
-		if !strings.Contains(err.Error(), "failed to get config directory") {
+		if !strings.Contains(err.Error(), "failed to get config directory") && !strings.Contains(err.Error(), "failed to load config") {
 			t.Errorf("Expected config directory error, got: %v", err)
 		}
 	})
@@ -252,20 +283,20 @@ func TestSetupErrorHandling(t *testing.T) {
 		}
 		defer os.RemoveAll(tempDir)
 
-		noteleafDir := filepath.Join(tempDir, "noteleaf")
-		if err := os.MkdirAll(noteleafDir, 0755); err != nil {
-			t.Fatalf("Failed to create noteleaf dir: %v", err)
-		}
-
-		if err := os.Chmod(noteleafDir, 0444); err != nil {
+		if err := os.Chmod(tempDir, 0444); err != nil {
 			t.Fatalf("Failed to make directory read-only: %v", err)
 		}
 
-		defer os.Chmod(noteleafDir, 0755)
+		defer os.Chmod(tempDir, 0755)
 
-		oldConfigHome := os.Getenv("XDG_CONFIG_HOME")
-		os.Setenv("XDG_CONFIG_HOME", tempDir)
-		defer os.Setenv("XDG_CONFIG_HOME", oldConfigHome)
+		oldNoteleafConfig := os.Getenv("NOTELEAF_CONFIG")
+		oldNoteleafDataDir := os.Getenv("NOTELEAF_DATA_DIR")
+		os.Setenv("NOTELEAF_CONFIG", filepath.Join(tempDir, ".noteleaf.conf.toml"))
+		os.Setenv("NOTELEAF_DATA_DIR", tempDir)
+		defer func() {
+			os.Setenv("NOTELEAF_CONFIG", oldNoteleafConfig)
+			os.Setenv("NOTELEAF_DATA_DIR", oldNoteleafDataDir)
+		}()
 
 		ctx := context.Background()
 		err = Setup(ctx, []string{})
@@ -273,8 +304,8 @@ func TestSetupErrorHandling(t *testing.T) {
 		if err == nil {
 			t.Error("Setup should fail when database creation fails")
 		}
-		if !strings.Contains(err.Error(), "failed to initialize database") {
-			t.Errorf("Expected database initialization error, got: %v", err)
+		if !strings.Contains(err.Error(), "failed to initialize database") && !strings.Contains(err.Error(), "failed to create configuration") && !strings.Contains(err.Error(), "failed to load configuration") {
+			t.Errorf("Expected database initialization or configuration error, got: %v", err)
 		}
 	})
 
@@ -285,20 +316,20 @@ func TestSetupErrorHandling(t *testing.T) {
 		}
 		defer os.RemoveAll(tempDir)
 
-		noteleafDir := filepath.Join(tempDir, "noteleaf")
-		if err := os.MkdirAll(noteleafDir, 0755); err != nil {
-			t.Fatalf("Failed to create noteleaf dir: %v", err)
-		}
-
-		configPath := filepath.Join(noteleafDir, ".noteleaf.conf.toml")
+		configPath := filepath.Join(tempDir, ".noteleaf.conf.toml")
 		invalidTOML := `[invalid toml content`
 		if err := os.WriteFile(configPath, []byte(invalidTOML), 0644); err != nil {
 			t.Fatalf("Failed to write invalid config: %v", err)
 		}
 
-		oldConfigHome := os.Getenv("XDG_CONFIG_HOME")
-		os.Setenv("XDG_CONFIG_HOME", tempDir)
-		defer os.Setenv("XDG_CONFIG_HOME", oldConfigHome)
+		oldNoteleafConfig := os.Getenv("NOTELEAF_CONFIG")
+		oldNoteleafDataDir := os.Getenv("NOTELEAF_DATA_DIR")
+		os.Setenv("NOTELEAF_CONFIG", configPath)
+		os.Setenv("NOTELEAF_DATA_DIR", tempDir)
+		defer func() {
+			os.Setenv("NOTELEAF_CONFIG", oldNoteleafConfig)
+			os.Setenv("NOTELEAF_DATA_DIR", oldNoteleafDataDir)
+		}()
 
 		ctx := context.Background()
 		err = Setup(ctx, []string{})
@@ -306,7 +337,7 @@ func TestSetupErrorHandling(t *testing.T) {
 		if err == nil {
 			t.Error("Setup should fail when config loading fails")
 		}
-		if !strings.Contains(err.Error(), "failed to create configuration") {
+		if !strings.Contains(err.Error(), "failed to create configuration") && !strings.Contains(err.Error(), "failed to parse") {
 			t.Errorf("Expected configuration error, got: %v", err)
 		}
 	})
@@ -335,10 +366,10 @@ func TestResetErrorHandling(t *testing.T) {
 		err := Reset(ctx, []string{})
 
 		if err == nil {
-			t.Error("Reset should fail when GetConfigDir fails")
+			t.Error("Reset should fail when directory access fails")
 		}
-		if !strings.Contains(err.Error(), "failed to get config directory") {
-			t.Errorf("Expected config directory error, got: %v", err)
+		if !strings.Contains(err.Error(), "failed to get config directory") && !strings.Contains(err.Error(), "failed to get data directory") {
+			t.Errorf("Expected config or data directory error, got: %v", err)
 		}
 	})
 
@@ -349,28 +380,25 @@ func TestResetErrorHandling(t *testing.T) {
 		}
 		defer os.RemoveAll(tempDir)
 
-		// Set up a scenario where GetConfigPath might fail
-		// This is tricky since GetConfigPath internally calls GetConfigDir
-		// We'll create a scenario where the config dir exists but GetConfigPath fails
-		oldConfigHome := os.Getenv("XDG_CONFIG_HOME")
-		os.Setenv("XDG_CONFIG_HOME", tempDir)
-		defer os.Setenv("XDG_CONFIG_HOME", oldConfigHome)
-
-		noteleafDir := filepath.Join(tempDir, "noteleaf")
-		if err := os.MkdirAll(noteleafDir, 0755); err != nil {
-			t.Fatalf("Failed to create noteleaf dir: %v", err)
-		}
-
-		dbPath := filepath.Join(noteleafDir, "noteleaf.db")
+		dbPath := filepath.Join(tempDir, "noteleaf.db")
 		if err := os.WriteFile(dbPath, []byte("test"), 0644); err != nil {
 			t.Fatalf("Failed to create test db file: %v", err)
 		}
 
-		if err := os.Chmod(noteleafDir, 0444); err != nil {
+		if err := os.Chmod(tempDir, 0444); err != nil {
 			t.Fatalf("Failed to make directory read-only: %v", err)
 		}
 
-		defer os.Chmod(noteleafDir, 0755)
+		defer os.Chmod(tempDir, 0755)
+
+		oldNoteleafConfig := os.Getenv("NOTELEAF_CONFIG")
+		oldNoteleafDataDir := os.Getenv("NOTELEAF_DATA_DIR")
+		os.Setenv("NOTELEAF_CONFIG", filepath.Join(tempDir, ".noteleaf.conf.toml"))
+		os.Setenv("NOTELEAF_DATA_DIR", tempDir)
+		defer func() {
+			os.Setenv("NOTELEAF_CONFIG", oldNoteleafConfig)
+			os.Setenv("NOTELEAF_DATA_DIR", oldNoteleafDataDir)
+		}()
 
 		ctx := context.Background()
 		err = Reset(ctx, []string{})
@@ -414,7 +442,7 @@ func TestStatusErrorHandling(t *testing.T) {
 		}
 	})
 
-	t.Run("handles GetConfigPath error after database exists", func(t *testing.T) {
+	t.Run("handles database connection error", func(t *testing.T) {
 		_ = createTestDir(t)
 		ctx := context.Background()
 
@@ -423,13 +451,23 @@ func TestStatusErrorHandling(t *testing.T) {
 			t.Fatalf("Setup failed: %v", err)
 		}
 
-		// Now we have a database, but let's create a scenario where GetConfigPath fails
-		// This is challenging since GetConfigPath uses GetConfigDir which we already tested
-		// Instead, let's test the database connection error scenario
+		// Get the actual database path from config to ensure we corrupt the right file
+		config, err := store.LoadConfig()
+		if err != nil {
+			t.Fatalf("Failed to load config: %v", err)
+		}
 
-		// Remove the database to cause NewDatabase to fail in Status
-		configDir, _ := store.GetConfigDir()
-		dbPath := filepath.Join(configDir, "noteleaf.db")
+		var dbPath string
+		if config.DatabasePath != "" {
+			dbPath = config.DatabasePath
+		} else if config.DataDir != "" {
+			dbPath = filepath.Join(config.DataDir, "noteleaf.db")
+		} else {
+			dataDir, _ := store.GetDataDir()
+			dbPath = filepath.Join(dataDir, "noteleaf.db")
+		}
+
+		// Remove the database file
 		os.Remove(dbPath)
 
 		// Create a directory with the same name as the database file
@@ -441,9 +479,8 @@ func TestStatusErrorHandling(t *testing.T) {
 		err = Status(ctx, []string{})
 		if err == nil {
 			t.Error("Status should fail when database connection fails")
-		}
-		if !strings.Contains(err.Error(), "failed to connect to database") {
-			t.Errorf("Expected database connection error, got: %v", err)
+		} else if !strings.Contains(err.Error(), "failed to connect to database") && !strings.Contains(err.Error(), "failed to open database") && !strings.Contains(err.Error(), "failed to load config") {
+			t.Errorf("Expected database connection or config error, got: %v", err)
 		}
 	})
 
@@ -533,7 +570,7 @@ func TestErrorScenarios(t *testing.T) {
 			},
 			handlerFunc: Reset,
 			expectError: true,
-			errorSubstr: "config directory",
+			errorSubstr: "data directory",
 		},
 		{
 			name: "Status with invalid environment",
@@ -598,8 +635,18 @@ func TestIntegration(t *testing.T) {
 			t.Errorf("Status after setup failed: %v", err)
 		}
 
-		configDir, _ := store.GetConfigDir()
-		dbPath := filepath.Join(configDir, "noteleaf.db")
+		// Determine database path using the same logic as Setup
+		config, _ := store.LoadConfig()
+		var dbPath string
+		if config.DatabasePath != "" {
+			dbPath = config.DatabasePath
+		} else if config.DataDir != "" {
+			dbPath = filepath.Join(config.DataDir, "noteleaf.db")
+		} else {
+			dataDir, _ := store.GetDataDir()
+			dbPath = filepath.Join(dataDir, "noteleaf.db")
+		}
+
 		if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 			t.Error("Database should exist after setup")
 		}

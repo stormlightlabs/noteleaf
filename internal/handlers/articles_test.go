@@ -165,12 +165,18 @@ func TestArticleHandler(t *testing.T) {
 			envHelper := NewEnvironmentTestHelper()
 			defer envHelper.RestoreEnv()
 
+			// Unset all environment variables that could provide a storage directory
+			envHelper.UnsetEnv("NOTELEAF_DATA_DIR")
+			envHelper.UnsetEnv("NOTELEAF_CONFIG")
+
 			if runtime.GOOS == "windows" {
 				envHelper.UnsetEnv("USERPROFILE")
 				envHelper.UnsetEnv("HOMEDRIVE")
 				envHelper.UnsetEnv("HOMEPATH")
+				envHelper.UnsetEnv("LOCALAPPDATA")
 			} else {
 				envHelper.UnsetEnv("HOME")
+				envHelper.UnsetEnv("XDG_DATA_HOME")
 			}
 
 			err := helper.Add(ctx, "https://example.com/test-article")
@@ -446,12 +452,18 @@ func TestArticleHandler(t *testing.T) {
 			envHelper := NewEnvironmentTestHelper()
 			defer envHelper.RestoreEnv()
 
+			// Unset all environment variables that could provide a storage directory
+			envHelper.UnsetEnv("NOTELEAF_DATA_DIR")
+			envHelper.UnsetEnv("NOTELEAF_CONFIG")
+
 			if runtime.GOOS == "windows" {
 				envHelper.UnsetEnv("USERPROFILE")
 				envHelper.UnsetEnv("HOMEDRIVE")
 				envHelper.UnsetEnv("HOMEPATH")
+				envHelper.UnsetEnv("LOCALAPPDATA")
 			} else {
 				envHelper.UnsetEnv("HOME")
+				envHelper.UnsetEnv("XDG_DATA_HOME")
 			}
 
 			err := helper.Help()
@@ -484,8 +496,8 @@ func TestArticleHandler(t *testing.T) {
 				t.Error("Storage directory should not be empty")
 			}
 
-			if !strings.Contains(dir, "Documents/Leaf") {
-				t.Errorf("Expected storage directory to contain 'Documents/Leaf', got: %s", dir)
+			if !strings.Contains(dir, "articles") {
+				t.Errorf("Expected storage directory to contain 'articles', got: %s", dir)
 			}
 		})
 
@@ -495,11 +507,17 @@ func TestArticleHandler(t *testing.T) {
 			envHelper := NewEnvironmentTestHelper()
 			defer envHelper.RestoreEnv()
 
-			if runtime.GOOS == "windows" {
-				envHelper.UnsetEnv("USERPROFILE")
-				envHelper.UnsetEnv("HOMEDRIVE")
-				envHelper.UnsetEnv("HOMEPATH")
-			} else {
+			// Unset NOTELEAF_DATA_DIR to force GetDataDir to use OS-specific variables
+			envHelper.UnsetEnv("NOTELEAF_DATA_DIR")
+
+			switch runtime.GOOS {
+			case "windows":
+				envHelper.UnsetEnv("LOCALAPPDATA")
+				envHelper.UnsetEnv("APPDATA")
+			case "darwin":
+				envHelper.UnsetEnv("HOME")
+			default:
+				envHelper.UnsetEnv("XDG_DATA_HOME")
 				envHelper.UnsetEnv("HOME")
 			}
 

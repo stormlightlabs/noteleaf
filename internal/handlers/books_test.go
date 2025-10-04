@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -19,11 +20,14 @@ func setupBookTest(t *testing.T) (string, func()) {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
 
-	oldConfigHome := os.Getenv("XDG_CONFIG_HOME")
-	os.Setenv("XDG_CONFIG_HOME", tempDir)
+	oldNoteleafConfig := os.Getenv("NOTELEAF_CONFIG")
+	oldNoteleafDataDir := os.Getenv("NOTELEAF_DATA_DIR")
+	os.Setenv("NOTELEAF_CONFIG", filepath.Join(tempDir, ".noteleaf.conf.toml"))
+	os.Setenv("NOTELEAF_DATA_DIR", tempDir)
 
 	cleanup := func() {
-		os.Setenv("XDG_CONFIG_HOME", oldConfigHome)
+		os.Setenv("NOTELEAF_CONFIG", oldNoteleafConfig)
+		os.Setenv("NOTELEAF_DATA_DIR", oldNoteleafDataDir)
 		os.RemoveAll(tempDir)
 	}
 

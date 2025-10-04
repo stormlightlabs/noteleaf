@@ -292,13 +292,17 @@ func (h *ArticleHandler) Read(ctx context.Context, id int64) error {
 
 }
 
-// TODO: Try to get from config first (could be added later)
-// For now, use default ~/Documents/Leaf/
 func (h *ArticleHandler) getStorageDirectory() (string, error) {
-	homeDir, err := os.UserHomeDir()
+	// Check config first
+	if h.config.ArticlesDir != "" {
+		return h.config.ArticlesDir, nil
+	}
+
+	// Fall back to data directory
+	dataDir, err := store.GetDataDir()
 	if err != nil {
 		return "", err
 	}
 
-	return filepath.Join(homeDir, "Documents", "Leaf"), nil
+	return filepath.Join(dataDir, "articles"), nil
 }

@@ -4,7 +4,10 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
+
+	"github.com/BurntSushi/toml"
 )
 
 func TestDefaultConfig(t *testing.T) {
@@ -383,15 +386,23 @@ func TestGetConfigDir(t *testing.T) {
 
 		var originalEnv string
 		var envVar string
+		var expectedPath string
 		switch runtime.GOOS {
 		case "windows":
 			envVar = "APPDATA"
 			originalEnv = os.Getenv("APPDATA")
 			os.Setenv("APPDATA", tempDir)
+			expectedPath = filepath.Join(tempDir, "noteleaf")
+		case "darwin":
+			envVar = "HOME"
+			originalEnv = os.Getenv("HOME")
+			os.Setenv("HOME", tempDir)
+			expectedPath = filepath.Join(tempDir, "Library", "Application Support", "noteleaf")
 		default:
 			envVar = "XDG_CONFIG_HOME"
 			originalEnv = os.Getenv("XDG_CONFIG_HOME")
 			os.Setenv("XDG_CONFIG_HOME", tempDir)
+			expectedPath = filepath.Join(tempDir, "noteleaf")
 		}
 		defer os.Setenv(envVar, originalEnv)
 
@@ -400,7 +411,6 @@ func TestGetConfigDir(t *testing.T) {
 			t.Fatalf("GetConfigDir failed: %v", err)
 		}
 
-		expectedPath := filepath.Join(tempDir, "noteleaf")
 		if configDir != expectedPath {
 			t.Errorf("Expected config dir %s, got %s", expectedPath, configDir)
 		}
@@ -420,6 +430,26 @@ func TestGetConfigDir(t *testing.T) {
 			_, err := GetConfigDir()
 			if err == nil {
 				t.Error("GetConfigDir should fail when APPDATA is not set on Windows")
+			}
+		case "darwin":
+			originalHome := os.Getenv("HOME")
+
+			tempHome, err := os.MkdirTemp("", "noteleaf-home-test-*")
+			if err != nil {
+				t.Fatalf("Failed to create temp home: %v", err)
+			}
+			defer os.RemoveAll(tempHome)
+			os.Setenv("HOME", tempHome)
+			defer os.Setenv("HOME", originalHome)
+
+			configDir, err := GetConfigDir()
+			if err != nil {
+				t.Fatalf("GetConfigDir should work with HOME on macOS: %v", err)
+			}
+
+			expectedPath := filepath.Join(tempHome, "Library", "Application Support", "noteleaf")
+			if configDir != expectedPath {
+				t.Errorf("Expected config dir %s, got %s", expectedPath, configDir)
 			}
 		default:
 			originalXDG := os.Getenv("XDG_CONFIG_HOME")
@@ -476,6 +506,10 @@ func TestGetConfigDir(t *testing.T) {
 			t.Skip("Permission test not reliable on Windows")
 		}
 
+		if runtime.GOOS == "darwin" {
+			t.Skip("Permission test not reliable on macOS with nested Library/Application Support paths")
+		}
+
 		tempParent, err := os.MkdirTemp("", "noteleaf-parent-test-*")
 		if err != nil {
 			t.Fatalf("Failed to create temp parent directory: %v", err)
@@ -489,22 +523,246 @@ func TestGetConfigDir(t *testing.T) {
 		defer os.Chmod(tempParent, 0755)
 
 		var originalEnv string
-		var envVar string
-		switch runtime.GOOS {
-		case "windows":
-			envVar = "APPDATA"
-			originalEnv = os.Getenv("APPDATA")
-			os.Setenv("APPDATA", tempParent)
-		default:
-			envVar = "XDG_CONFIG_HOME"
-			originalEnv = os.Getenv("XDG_CONFIG_HOME")
-			os.Setenv("XDG_CONFIG_HOME", tempParent)
-		}
+		envVar := "XDG_CONFIG_HOME"
+		originalEnv = os.Getenv("XDG_CONFIG_HOME")
+		os.Setenv("XDG_CONFIG_HOME", tempParent)
 		defer os.Setenv(envVar, originalEnv)
 
 		_, err = GetConfigDir()
 		if err == nil {
 			t.Error("GetConfigDir should fail when directory creation is not permitted")
+		}
+	})
+}
+
+func TestEnvironmentVariableOverrides(t *testing.T) {
+	t.Run("NOTELEAF_CONFIG overrides default config path for LoadConfig", func(t *testing.T) {
+		tempDir, err := os.MkdirTemp("", "noteleaf-env-config-test-*")
+		if err != nil {
+			t.Fatalf("Failed to create temp directory: %v", err)
+		}
+		defer os.RemoveAll(tempDir)
+
+		customConfigPath := filepath.Join(tempDir, "custom-config.toml")
+		originalEnv := os.Getenv("NOTELEAF_CONFIG")
+		os.Setenv("NOTELEAF_CONFIG", customConfigPath)
+		defer os.Setenv("NOTELEAF_CONFIG", originalEnv)
+
+		// Create a custom config
+		customConfig := DefaultConfig()
+		customConfig.ColorScheme = "custom-env-test"
+		if err := SaveConfig(customConfig); err != nil {
+			t.Fatalf("Failed to save custom config: %v", err)
+		}
+
+		// Load config should use the custom path
+		loadedConfig, err := LoadConfig()
+		if err != nil {
+			t.Fatalf("LoadConfig failed: %v", err)
+		}
+
+		if loadedConfig.ColorScheme != "custom-env-test" {
+			t.Errorf("Expected ColorScheme 'custom-env-test', got '%s'", loadedConfig.ColorScheme)
+		}
+	})
+
+	t.Run("NOTELEAF_CONFIG overrides default config path for SaveConfig", func(t *testing.T) {
+		tempDir, err := os.MkdirTemp("", "noteleaf-env-save-test-*")
+		if err != nil {
+			t.Fatalf("Failed to create temp directory: %v", err)
+		}
+		defer os.RemoveAll(tempDir)
+
+		customConfigPath := filepath.Join(tempDir, "subdir", "config.toml")
+		originalEnv := os.Getenv("NOTELEAF_CONFIG")
+		os.Setenv("NOTELEAF_CONFIG", customConfigPath)
+		defer os.Setenv("NOTELEAF_CONFIG", originalEnv)
+
+		config := DefaultConfig()
+		config.DefaultView = "kanban-env"
+		if err := SaveConfig(config); err != nil {
+			t.Fatalf("SaveConfig failed: %v", err)
+		}
+
+		// Verify the file was created at the custom path
+		if _, err := os.Stat(customConfigPath); os.IsNotExist(err) {
+			t.Error("Config file should be created at custom NOTELEAF_CONFIG path")
+		}
+
+		// Verify the content
+		data, err := os.ReadFile(customConfigPath)
+		if err != nil {
+			t.Fatalf("Failed to read config file: %v", err)
+		}
+
+		loadedConfig := DefaultConfig()
+		if err := toml.Unmarshal(data, loadedConfig); err != nil {
+			t.Fatalf("Failed to parse config: %v", err)
+		}
+
+		if loadedConfig.DefaultView != "kanban-env" {
+			t.Errorf("Expected DefaultView 'kanban-env', got '%s'", loadedConfig.DefaultView)
+		}
+	})
+
+	t.Run("NOTELEAF_CONFIG overrides default config path for GetConfigPath", func(t *testing.T) {
+		tempDir, err := os.MkdirTemp("", "noteleaf-env-path-test-*")
+		if err != nil {
+			t.Fatalf("Failed to create temp directory: %v", err)
+		}
+		defer os.RemoveAll(tempDir)
+
+		customConfigPath := filepath.Join(tempDir, "my-config.toml")
+		originalEnv := os.Getenv("NOTELEAF_CONFIG")
+		os.Setenv("NOTELEAF_CONFIG", customConfigPath)
+		defer os.Setenv("NOTELEAF_CONFIG", originalEnv)
+
+		path, err := GetConfigPath()
+		if err != nil {
+			t.Fatalf("GetConfigPath failed: %v", err)
+		}
+
+		if path != customConfigPath {
+			t.Errorf("Expected config path '%s', got '%s'", customConfigPath, path)
+		}
+	})
+
+	t.Run("NOTELEAF_CONFIG creates parent directories if needed", func(t *testing.T) {
+		tempDir, err := os.MkdirTemp("", "noteleaf-env-mkdir-test-*")
+		if err != nil {
+			t.Fatalf("Failed to create temp directory: %v", err)
+		}
+		defer os.RemoveAll(tempDir)
+
+		customConfigPath := filepath.Join(tempDir, "nested", "deep", "config.toml")
+		originalEnv := os.Getenv("NOTELEAF_CONFIG")
+		os.Setenv("NOTELEAF_CONFIG", customConfigPath)
+		defer os.Setenv("NOTELEAF_CONFIG", originalEnv)
+
+		config := DefaultConfig()
+		if err := SaveConfig(config); err != nil {
+			t.Fatalf("SaveConfig should create parent directories: %v", err)
+		}
+
+		if _, err := os.Stat(customConfigPath); os.IsNotExist(err) {
+			t.Error("Config file should be created with parent directories")
+		}
+	})
+}
+
+func TestGetDataDir(t *testing.T) {
+	t.Run("NOTELEAF_DATA_DIR overrides default data directory", func(t *testing.T) {
+		tempDir, err := os.MkdirTemp("", "noteleaf-data-dir-test-*")
+		if err != nil {
+			t.Fatalf("Failed to create temp directory: %v", err)
+		}
+		defer os.RemoveAll(tempDir)
+
+		customDataDir := filepath.Join(tempDir, "my-data")
+		originalEnv := os.Getenv("NOTELEAF_DATA_DIR")
+		os.Setenv("NOTELEAF_DATA_DIR", customDataDir)
+		defer os.Setenv("NOTELEAF_DATA_DIR", originalEnv)
+
+		dataDir, err := GetDataDir()
+		if err != nil {
+			t.Fatalf("GetDataDir failed: %v", err)
+		}
+
+		if dataDir != customDataDir {
+			t.Errorf("Expected data dir '%s', got '%s'", customDataDir, dataDir)
+		}
+
+		// Verify directory was created
+		if _, err := os.Stat(customDataDir); os.IsNotExist(err) {
+			t.Error("Data directory should be created")
+		}
+	})
+
+	t.Run("GetDataDir returns correct directory based on OS", func(t *testing.T) {
+		// Temporarily unset NOTELEAF_DATA_DIR
+		originalEnv := os.Getenv("NOTELEAF_DATA_DIR")
+		os.Unsetenv("NOTELEAF_DATA_DIR")
+		defer os.Setenv("NOTELEAF_DATA_DIR", originalEnv)
+
+		dataDir, err := GetDataDir()
+		if err != nil {
+			t.Fatalf("GetDataDir failed: %v", err)
+		}
+
+		if dataDir == "" {
+			t.Error("Data directory should not be empty")
+		}
+
+		if filepath.Base(dataDir) != "noteleaf" {
+			t.Errorf("Data directory should end with 'noteleaf', got: %s", dataDir)
+		}
+	})
+
+	t.Run("GetDataDir handles NOTELEAF_DATA_DIR with nested path", func(t *testing.T) {
+		tempDir, err := os.MkdirTemp("", "noteleaf-nested-data-test-*")
+		if err != nil {
+			t.Fatalf("Failed to create temp directory: %v", err)
+		}
+		defer os.RemoveAll(tempDir)
+
+		customDataDir := filepath.Join(tempDir, "level1", "level2", "data")
+		originalEnv := os.Getenv("NOTELEAF_DATA_DIR")
+		os.Setenv("NOTELEAF_DATA_DIR", customDataDir)
+		defer os.Setenv("NOTELEAF_DATA_DIR", originalEnv)
+
+		dataDir, err := GetDataDir()
+		if err != nil {
+			t.Fatalf("GetDataDir should create nested directories: %v", err)
+		}
+
+		if dataDir != customDataDir {
+			t.Errorf("Expected data dir '%s', got '%s'", customDataDir, dataDir)
+		}
+
+		// Verify nested directories were created
+		if _, err := os.Stat(customDataDir); os.IsNotExist(err) {
+			t.Error("Nested data directories should be created")
+		}
+	})
+
+	t.Run("GetDataDir uses platform-specific defaults", func(t *testing.T) {
+		// Temporarily unset NOTELEAF_DATA_DIR
+		originalEnv := os.Getenv("NOTELEAF_DATA_DIR")
+		os.Unsetenv("NOTELEAF_DATA_DIR")
+		defer os.Setenv("NOTELEAF_DATA_DIR", originalEnv)
+
+		// Create temporary environment for testing
+		tempHome, err := os.MkdirTemp("", "noteleaf-home-test-*")
+		if err != nil {
+			t.Fatalf("Failed to create temp home: %v", err)
+		}
+		defer os.RemoveAll(tempHome)
+
+		var envVar, originalValue string
+		switch runtime.GOOS {
+		case "windows":
+			envVar = "LOCALAPPDATA"
+			originalValue = os.Getenv("LOCALAPPDATA")
+			os.Setenv("LOCALAPPDATA", tempHome)
+		case "darwin":
+			envVar = "HOME"
+			originalValue = os.Getenv("HOME")
+			os.Setenv("HOME", tempHome)
+		default:
+			envVar = "XDG_DATA_HOME"
+			originalValue = os.Getenv("XDG_DATA_HOME")
+			os.Setenv("XDG_DATA_HOME", tempHome)
+		}
+		defer os.Setenv(envVar, originalValue)
+
+		dataDir, err := GetDataDir()
+		if err != nil {
+			t.Fatalf("GetDataDir failed: %v", err)
+		}
+
+		// Verify the path contains our temp directory
+		if !strings.Contains(dataDir, tempHome) {
+			t.Errorf("Data directory should be under temp home, got: %s", dataDir)
 		}
 	})
 }

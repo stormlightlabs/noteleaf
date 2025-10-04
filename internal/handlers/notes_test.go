@@ -20,11 +20,14 @@ func setupNoteTest(t *testing.T) (string, func()) {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
 
-	oldConfigHome := os.Getenv("XDG_CONFIG_HOME")
-	os.Setenv("XDG_CONFIG_HOME", tempDir)
+	oldNoteleafConfig := os.Getenv("NOTELEAF_CONFIG")
+	oldNoteleafDataDir := os.Getenv("NOTELEAF_DATA_DIR")
+	os.Setenv("NOTELEAF_CONFIG", filepath.Join(tempDir, ".noteleaf.conf.toml"))
+	os.Setenv("NOTELEAF_DATA_DIR", tempDir)
 
 	cleanup := func() {
-		os.Setenv("XDG_CONFIG_HOME", oldConfigHome)
+		os.Setenv("NOTELEAF_CONFIG", oldNoteleafConfig)
+		os.Setenv("NOTELEAF_DATA_DIR", oldNoteleafDataDir)
 		os.RemoveAll(tempDir)
 	}
 
@@ -87,6 +90,8 @@ func TestNoteHandler(t *testing.T) {
 				envHelper.UnsetEnv("XDG_CONFIG_HOME")
 				envHelper.UnsetEnv("HOME")
 			}
+			envHelper.UnsetEnv("NOTELEAF_CONFIG")
+			envHelper.UnsetEnv("NOTELEAF_DATA_DIR")
 
 			_, err := NewNoteHandler()
 			Expect.AssertError(t, err, "failed to initialize database", "NewNoteHandler should fail when database initialization fails")

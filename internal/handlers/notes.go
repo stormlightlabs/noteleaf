@@ -258,12 +258,17 @@ func (h *NoteHandler) Edit(ctx context.Context, id int64) error {
 }
 
 func (h *NoteHandler) getEditor() string {
-	// TODO: Add editor to config structure
-	// For now, check environment variable
+	// Check config first
+	if h.config.Editor != "" {
+		return h.config.Editor
+	}
+
+	// Fall back to EDITOR environment variable
 	if editor := os.Getenv("EDITOR"); editor != "" {
 		return editor
 	}
 
+	// Try common editors
 	editors := []string{"vim", "nano", "code", "emacs"}
 	for _, editor := range editors {
 		if _, err := exec.LookPath(editor); err == nil {
