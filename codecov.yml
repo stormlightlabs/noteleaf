@@ -20,5 +20,4 @@ ignore:
   - "**/*_test.go"
   - "**/testdata/**"
   - "**/vendor/**"
-  - "cmd/main.go"
   - "internal/**/test_utilities.go"

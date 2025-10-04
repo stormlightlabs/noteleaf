@@ -115,7 +115,7 @@ type TVService struct {
 }
 
 // ParseSearch parses Rotten Tomatoes search results HTML into Media entries.
-func ParseSearch(r io.Reader) ([]Media, error) {
+var ParseSearch = func(r io.Reader) ([]Media, error) {
 	doc, err := goquery.NewDocumentFromReader(r)
 	if err != nil {
 		return nil, err
@@ -173,7 +173,7 @@ func ParseSearch(r io.Reader) ([]Media, error) {
 	return results, nil
 }
 
-func ExtractTVSeriesMetadata(r io.Reader) (*TVSeries, error) {
+var ExtractTVSeriesMetadata = func(r io.Reader) (*TVSeries, error) {
 	doc, err := goquery.NewDocumentFromReader(r)
 	if err != nil {
 		return nil, err
@@ -196,7 +196,7 @@ func ExtractTVSeriesMetadata(r io.Reader) (*TVSeries, error) {
 	return &series, nil
 }
 
-func ExtractMovieMetadata(r io.Reader) (*Movie, error) {
+var ExtractMovieMetadata = func(r io.Reader) (*Movie, error) {
 	doc, err := goquery.NewDocumentFromReader(r)
 	if err != nil {
 		return nil, err
@@ -219,7 +219,7 @@ func ExtractMovieMetadata(r io.Reader) (*Movie, error) {
 	return &movie, nil
 }
 
-func ExtractTVSeasonMetadata(r io.Reader) (*TVSeason, error) {
+var ExtractTVSeasonMetadata = func(r io.Reader) (*TVSeason, error) {
 	doc, err := goquery.NewDocumentFromReader(r)
 	if err != nil {
 		return nil, err

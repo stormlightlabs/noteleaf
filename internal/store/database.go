@@ -100,7 +100,7 @@ var GetDataDir = func() (string, error) {
 }
 
 // NewDatabase creates and initializes a new database connection
-func NewDatabase() (*Database, error) {
+var NewDatabase = func() (*Database, error) {
 	return NewDatabaseWithConfig(nil)
 }
 

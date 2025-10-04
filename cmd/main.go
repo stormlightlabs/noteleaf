@@ -15,24 +15,35 @@ import (
 	"github.com/stormlightlabs/noteleaf/internal/utils"
 )
 
+var (
+	newTaskHandler    = handlers.NewTaskHandler
+	newMovieHandler   = handlers.NewMovieHandler
+	newTVHandler      = handlers.NewTVHandler
+	newNoteHandler    = handlers.NewNoteHandler
+	newBookHandler    = handlers.NewBookHandler
+	newArticleHandler = handlers.NewArticleHandler
+	exc               = fang.Execute
+)
+
 // App represents the main CLI application
 type App struct {
 	db     *store.Database
 	config *store.Config
 }
 
-// NewApp creates a new CLI application instance
+// NewApp creates a new CLI application instance ([App])
 func NewApp() (*App, error) {
 	db, err := store.NewDatabase()
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize database: %w", err)
 	}
 
-	if config, err := store.LoadConfig(); err != nil {
+	config, err := store.LoadConfig()
+	if err != nil {
 		return nil, fmt.Errorf("failed to load configuration: %w", err)
-	} else {
-		return &App{db, config}, nil
 	}
+
+	return &App{db, config}, nil
 }
 
 // Close cleans up application resources
@@ -48,7 +59,7 @@ func statusCmd() *cobra.Command {
 		Use:   "status",
 		Short: "Show application status and configuration",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return handlers.Status(cmd.Context(), args)
+			return handlers.Status(cmd.Context(), args, cmd.OutOrStdout())
 		},
 	}
 }
@@ -74,7 +85,7 @@ func rootCmd() *cobra.Command {
 			}
 
 			output := strings.Join(args, " ")
-			fmt.Println(output)
+			fmt.Fprintln(c.OutOrStdout(), output)
 			return nil
 		},
 	}
@@ -124,52 +135,57 @@ func confCmd() *cobra.Command {
 	return NewConfigCommand(handler).Create()
 }
 
-func main() {
+func run() int {
 	logger := utils.NewLogger("info", "text")
 	utils.Logger = logger
 
 	app, err := NewApp()
 	if err != nil {
-		logger.Fatal("Failed to initialize application", "error", err)
+		logger.Error("Failed to initialize application", "error", err)
+		return 1
 	}
 	defer app.Close()
 
-	taskHandler, err := handlers.NewTaskHandler()
+	taskHandler, err := newTaskHandler()
 	if err != nil {
-		log.Fatalf("failed to create task handler: %v", err)
+		log.Error("failed to create task handler", "err", err)
+		return 1
 	}
 
-	movieHandler, err := handlers.NewMovieHandler()
+	movieHandler, err := newMovieHandler()
 	if err != nil {
-		log.Fatalf("failed to create movie handler: %v", err)
+		log.Error("failed to create movie handler", "err", err)
+		return 1
 	}
 
-	tvHandler, err := handlers.NewTVHandler()
+	tvHandler, err := newTVHandler()
 	if err != nil {
-		log.Fatalf("failed to create TV handler: %v", err)
+		log.Error("failed to create TV handler", "err", err)
+		return 1
 	}
 
-	noteHandler, err := handlers.NewNoteHandler()
+	noteHandler, err := newNoteHandler()
 	if err != nil {
-		log.Fatalf("failed to create note handler: %v", err)
+		log.Error("failed to create note handler", "err", err)
+		return 1
 	}
 
-	bookHandler, err := handlers.NewBookHandler()
+	bookHandler, err := newBookHandler()
 	if err != nil {
-		log.Fatalf("failed to create book handler: %v", err)
+		log.Error("failed to create book handler", "err", err)
+		return 1
 	}
 
-	articleHandler, err := handlers.NewArticleHandler()
+	articleHandler, err := newArticleHandler()
 	if err != nil {
-		log.Fatalf("failed to create article handler: %v", err)
+		log.Error("failed to create article handler", "err", err)
+		return 1
 	}
 
 	root := rootCmd()
 
 	coreGroups := []CommandGroup{
-		NewTaskCommand(taskHandler),
-		NewNoteCommand(noteHandler),
-		NewArticleCommand(articleHandler),
+		NewTaskCommand(taskHandler), NewNoteCommand(noteHandler), NewArticleCommand(articleHandler),
 	}
 
 	for _, group := range coreGroups {
@@ -198,7 +214,12 @@ func main() {
 		fang.WithColorSchemeFunc(ui.NoteleafColorScheme),
 	}
 
-	if err := fang.Execute(context.Background(), root, opts...); err != nil {
-		os.Exit(1)
+	if err := exc(context.Background(), root, opts...); err != nil {
+		return 1
 	}
+	return 0
+}
+
+func main() {
+	os.Exit(run())
 }

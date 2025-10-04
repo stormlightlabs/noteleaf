@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -130,7 +131,7 @@ func Reset(ctx context.Context, args []string) error {
 }
 
 // Status shows the current application status
-func Status(ctx context.Context, args []string) error {
+func Status(ctx context.Context, args []string, w io.Writer) error {
 	configDir, err := store.GetConfigDir()
 	if err != nil {
 		return fmt.Errorf("failed to get config directory: %w", err)
@@ -138,13 +139,11 @@ func Status(ctx context.Context, args []string) error {
 
 	fmt.Printf("Config directory: %s\n", configDir)
 
-	// Load config to determine the actual database path
 	config, err := store.LoadConfig()
 	if err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 
-	// Determine database path using the same logic as NewDatabase
 	var dbPath string
 	if config.DatabasePath != "" {
 		dbPath = config.DatabasePath
@@ -159,12 +158,12 @@ func Status(ctx context.Context, args []string) error {
 	}
 
 	if _, err := os.Stat(dbPath); err != nil {
-		fmt.Println("Database: Not found")
-		fmt.Println("Run 'noteleaf setup' to initialize.")
+		fmt.Fprintln(w, "Database: Not found")
+		fmt.Fprintln(w, "Run 'noteleaf setup' to initialize.")
 		return nil
 	}
 
-	fmt.Printf("Database: %s\n", dbPath)
+	fmt.Fprintf(w, "Database: %s\n", dbPath)
 
 	configPath, err := store.GetConfigPath()
 	if err != nil {
@@ -172,9 +171,9 @@ func Status(ctx context.Context, args []string) error {
 	}
 
 	if _, err := os.Stat(configPath); err != nil {
-		fmt.Println("Configuration: Not found")
+		fmt.Fprintln(w, "Configuration: Not found")
 	} else {
-		fmt.Printf("Configuration: %s\n", configPath)
+		fmt.Fprintf(w, "Configuration: %s\n", configPath)
 	}
 
 	db, err := store.NewDatabase()
@@ -194,7 +193,7 @@ func Status(ctx context.Context, args []string) error {
 		return fmt.Errorf("failed to get available migrations: %w", err)
 	}
 
-	fmt.Printf("Migrations: %d/%d applied\n", len(applied), len(available))
+	fmt.Fprintf(w, "Migrations: %d/%d applied\n", len(applied), len(available))
 
 	return nil
 }

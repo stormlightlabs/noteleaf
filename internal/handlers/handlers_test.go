@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"path/filepath"
@@ -197,13 +198,14 @@ func TestStatus(t *testing.T) {
 	t.Run("reports status when setup", func(t *testing.T) {
 		_ = createTestDir(t)
 		ctx := context.Background()
+		var buf bytes.Buffer
 
 		err := Setup(ctx, []string{})
 		if err != nil {
 			t.Fatalf("Setup failed: %v", err)
 		}
 
-		err = Status(ctx, []string{})
+		err = Status(ctx, []string{}, &buf)
 		if err != nil {
 			t.Errorf("Status failed: %v", err)
 		}
@@ -213,8 +215,9 @@ func TestStatus(t *testing.T) {
 	t.Run("reports status when not setup", func(t *testing.T) {
 		_ = createTestDir(t)
 		ctx := context.Background()
+		var buf bytes.Buffer
 
-		err := Status(ctx, []string{})
+		err := Status(ctx, []string{}, &buf)
 		if err != nil {
 			t.Errorf("Status should not fail when not setup: %v", err)
 		}
@@ -224,13 +227,14 @@ func TestStatus(t *testing.T) {
 	t.Run("shows migration information", func(t *testing.T) {
 		_ = createTestDir(t)
 		ctx := context.Background()
+		var buf bytes.Buffer
 
 		err := Setup(ctx, []string{})
 		if err != nil {
 			t.Fatalf("Setup failed: %v", err)
 		}
 
-		err = Status(ctx, []string{})
+		err = Status(ctx, []string{}, &buf)
 		if err != nil {
 			t.Errorf("Status failed: %v", err)
 		}
@@ -245,7 +249,6 @@ func TestSetupErrorHandling(t *testing.T) {
 		originalNoteleafConfig := os.Getenv("NOTELEAF_CONFIG")
 		originalNoteleafDataDir := os.Getenv("NOTELEAF_DATA_DIR")
 
-		// Unset all environment variables so GetConfigDir fails
 		os.Unsetenv("NOTELEAF_CONFIG")
 		os.Unsetenv("NOTELEAF_DATA_DIR")
 
@@ -431,8 +434,9 @@ func TestStatusErrorHandling(t *testing.T) {
 			os.Setenv("HOME", originalHome)
 		}()
 
+		var buf bytes.Buffer
 		ctx := context.Background()
-		err := Status(ctx, []string{})
+		err := Status(ctx, []string{}, &buf)
 
 		if err == nil {
 			t.Error("Status should fail when GetConfigDir fails")
@@ -467,16 +471,14 @@ func TestStatusErrorHandling(t *testing.T) {
 			dbPath = filepath.Join(dataDir, "noteleaf.db")
 		}
 
-		// Remove the database file
 		os.Remove(dbPath)
 
-		// Create a directory with the same name as the database file
-		// This will cause database connection to fail
 		if err := os.MkdirAll(dbPath, 0755); err != nil {
 			t.Fatalf("Failed to create directory: %v", err)
 		}
 
-		err = Status(ctx, []string{})
+		var buf bytes.Buffer
+		err = Status(ctx, []string{}, &buf)
 		if err == nil {
 			t.Error("Status should fail when database connection fails")
 		} else if !strings.Contains(err.Error(), "failed to connect to database") && !strings.Contains(err.Error(), "failed to open database") && !strings.Contains(err.Error(), "failed to load config") {
@@ -510,7 +512,8 @@ func TestStatusErrorHandling(t *testing.T) {
 		}
 		db.Close()
 
-		err = Status(ctx, []string{})
+		var buf bytes.Buffer
+		err = Status(ctx, []string{}, &buf)
 		if err == nil {
 			t.Error("Status should fail when migration queries fail")
 		}
@@ -590,7 +593,10 @@ func TestErrorScenarios(t *testing.T) {
 					}
 				}
 			},
-			handlerFunc: Status,
+			handlerFunc: func(ctx context.Context, args []string) error {
+				var buf bytes.Buffer
+				return Status(ctx, args, &buf)
+			},
 			expectError: true,
 			errorSubstr: "config directory",
 		},
@@ -620,7 +626,8 @@ func TestIntegration(t *testing.T) {
 		_ = createTestDir(t)
 		ctx := context.Background()
 
-		err := Status(ctx, []string{})
+		var buf bytes.Buffer
+		err := Status(ctx, []string{}, &buf)
 		if err != nil {
 			t.Errorf("Initial status failed: %v", err)
 		}
@@ -630,12 +637,12 @@ func TestIntegration(t *testing.T) {
 			t.Errorf("Setup failed: %v", err)
 		}
 
-		err = Status(ctx, []string{})
+		buf.Reset()
+		err = Status(ctx, []string{}, &buf)
 		if err != nil {
 			t.Errorf("Status after setup failed: %v", err)
 		}
 
-		// Determine database path using the same logic as Setup
 		config, _ := store.LoadConfig()
 		var dbPath string
 		if config.DatabasePath != "" {
@@ -660,7 +667,8 @@ func TestIntegration(t *testing.T) {
 			t.Error("Database should not exist after reset")
 		}
 
-		err = Status(ctx, []string{})
+		buf.Reset()
+		err = Status(ctx, []string{}, &buf)
 		if err != nil {
 			t.Errorf("Status after reset failed: %v", err)
 		}
@@ -678,10 +686,11 @@ func TestIntegration(t *testing.T) {
 
 		done := make(chan error, 3)
 
+		var buf bytes.Buffer
 		for range 3 {
 			go func() {
 				time.Sleep(time.Millisecond * 10)
-				done <- Status(ctx, []string{})
+				done <- Status(ctx, []string{}, &buf)
 			}()
 		}
 

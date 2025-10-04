@@ -8,31 +8,27 @@ import (
 	"github.com/stormlightlabs/noteleaf/internal/store"
 )
 
-// ConfigHandler handles configuration-related operations
+// ConfigHandler handles [store.Config]-related operations
 type ConfigHandler struct {
 	config *store.Config
 }
 
-// NewConfigHandler creates a new ConfigHandler
+// NewConfigHandler creates a new [ConfigHandler]
 func NewConfigHandler() (*ConfigHandler, error) {
 	config, err := store.LoadConfig()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
-	return &ConfigHandler{
-		config: config,
-	}, nil
+	return &ConfigHandler{config: config}, nil
 }
 
 // Get displays one or all configuration values
 func (h *ConfigHandler) Get(key string) error {
 	if key == "" {
-		// Display all configuration values
 		return h.displayAll()
 	}
 
-	// Display specific key
 	value, err := h.getConfigValue(key)
 	if err != nil {
 		return err
@@ -87,16 +83,13 @@ func (h *ConfigHandler) displayAll() error {
 		field := t.Field(i)
 		value := v.Field(i)
 
-		// Get the TOML tag name
 		tomlTag := field.Tag.Get("toml")
 		if tomlTag == "" {
 			continue
 		}
 
-		// Remove ",omitempty" suffix if present
 		tagName := strings.Split(tomlTag, ",")[0]
 
-		// Format the output based on field type
 		switch value.Kind() {
 		case reflect.String:
 			if value.String() != "" {
@@ -118,7 +111,6 @@ func (h *ConfigHandler) getConfigValue(key string) (interface{}, error) {
 	v := reflect.ValueOf(*h.config)
 	t := reflect.TypeOf(*h.config)
 
-	// Find the field with matching TOML tag
 	for i := 0; i < v.NumField(); i++ {
 		field := t.Field(i)
 		tomlTag := field.Tag.Get("toml")
@@ -139,7 +131,6 @@ func (h *ConfigHandler) setConfigValue(key, value string) error {
 	v := reflect.ValueOf(h.config).Elem()
 	t := reflect.TypeOf(*h.config)
 
-	// Find the field with matching TOML tag
 	for i := 0; i < v.NumField(); i++ {
 		field := t.Field(i)
 		tomlTag := field.Tag.Get("toml")
@@ -151,7 +142,6 @@ func (h *ConfigHandler) setConfigValue(key, value string) error {
 		if tagName == key {
 			fieldValue := v.Field(i)
 
-			// Set the value based on field type
 			switch fieldValue.Kind() {
 			case reflect.String:
 				fieldValue.SetString(value)

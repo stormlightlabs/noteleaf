@@ -6,8 +6,16 @@ import (
 	"github.com/charmbracelet/glamour"
 )
 
+type MarkdownRenderer interface {
+	Render(string) (string, error)
+}
+
+var newRenderer = func() (MarkdownRenderer, error) {
+	return glamour.NewTermRenderer(glamour.WithAutoStyle(), glamour.WithWordWrap(80))
+}
+
 func renderMarkdown(content string) (string, error) {
-	renderer, err := glamour.NewTermRenderer(glamour.WithAutoStyle(), glamour.WithWordWrap(80))
+	renderer, err := newRenderer()
 	if err != nil {
 		return "", fmt.Errorf("failed to create markdown renderer: %w", err)
 	}
@@ -16,6 +24,5 @@ func renderMarkdown(content string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to render markdown: %w", err)
 	}
-
 	return rendered, nil
 }

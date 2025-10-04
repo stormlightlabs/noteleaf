@@ -41,10 +41,9 @@ func DefaultConfig() *Config {
 }
 
 // LoadConfig loads configuration from the config directory or NOTELEAF_CONFIG path
-func LoadConfig() (*Config, error) {
+var LoadConfig = func() (*Config, error) {
 	var configPath string
 
-	// Check for NOTELEAF_CONFIG environment variable
 	if envConfigPath := os.Getenv("NOTELEAF_CONFIG"); envConfigPath != "" {
 		configPath = envConfigPath
 	} else {

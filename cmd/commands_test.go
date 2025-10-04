@@ -117,6 +117,16 @@ func createTestArticleHandler(t *testing.T) (*handlers.ArticleHandler, func()) {
 	}
 }
 
+func createTestConfigHandler(t *testing.T) (*handlers.ConfigHandler, func()) {
+	cleanup := setupCommandTest(t)
+	handler, err := handlers.NewConfigHandler()
+	if err != nil {
+		cleanup()
+		t.Fatalf("failed to create test config handler: %v", err)
+	}
+	return handler, cleanup
+}
+
 func findSubcommand(commands []string, target string) bool {
 	return slices.Contains(commands, target)
 }
@@ -1029,6 +1039,56 @@ func TestCommandExecution(t *testing.T) {
 			err := cmd.Execute()
 			if err == nil {
 				t.Error("expected task done command to fail with non-existent ID")
+			}
+		})
+	})
+
+	t.Run("Config Command", func(t *testing.T) {
+		handler, cleanup := createTestConfigHandler(t)
+		defer cleanup()
+
+		cmd := NewConfigCommand(handler).Create()
+
+		if cmd.Use != "config" {
+			t.Errorf("expected Use 'config', got %s", cmd.Use)
+		}
+		if cmd.Short == "" {
+			t.Errorf("expected Short description to be set")
+		}
+		if len(cmd.Commands()) == 0 {
+			t.Errorf("expected subcommands to be registered")
+		}
+
+		t.Run("path command", func(t *testing.T) {
+			cmd.SetArgs([]string{"path"})
+			if err := cmd.Execute(); err != nil {
+				t.Errorf("config path failed: %v", err)
+			}
+		})
+
+		t.Run("get with no args", func(t *testing.T) {
+			cmd.SetArgs([]string{"get"})
+			if err := cmd.Execute(); err != nil {
+				t.Errorf("config get with no args failed: %v", err)
+			}
+		})
+
+		t.Run("set and get roundtrip", func(t *testing.T) {
+			cmd.SetArgs([]string{"set", "editor", "vim"})
+			if err := cmd.Execute(); err != nil {
+				t.Fatalf("config set failed: %v", err)
+			}
+
+			cmd.SetArgs([]string{"get", "editor"})
+			if err := cmd.Execute(); err != nil {
+				t.Errorf("config get after set failed: %v", err)
+			}
+		})
+
+		t.Run("reset command", func(t *testing.T) {
+			cmd.SetArgs([]string{"reset"})
+			if err := cmd.Execute(); err != nil {
+				t.Errorf("config reset failed: %v", err)
 			}
 		})
 	})
