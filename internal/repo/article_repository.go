@@ -11,6 +11,10 @@ import (
 	"github.com/stormlightlabs/noteleaf/internal/services"
 )
 
+func ArticleNotFoundError(id int64) error {
+	return fmt.Errorf("article with id %d not found", id)
+}
+
 // ArticleRepository provides database operations for articles
 type ArticleRepository struct {
 	db *sql.DB
@@ -32,137 +36,57 @@ type ArticleListOptions struct {
 	Offset   int
 }
 
-// Create stores a new article and returns its assigned ID
-func (r *ArticleRepository) Create(ctx context.Context, article *models.Article) (int64, error) {
-	if err := r.Validate(article); err != nil {
-		return 0, err
-	}
-
-	now := time.Now()
-	article.Created = now
-	article.Modified = now
-
-	query := `
-		INSERT INTO articles (url, title, author, date, markdown_path, html_path, created, modified)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-
-	result, err := r.db.ExecContext(ctx, query,
-		article.URL, article.Title, article.Author, article.Date,
-		article.MarkdownPath, article.HTMLPath, article.Created, article.Modified)
-	if err != nil {
-		return 0, fmt.Errorf("failed to insert article: %w", err)
-	}
-
-	id, err := result.LastInsertId()
-	if err != nil {
-		return 0, fmt.Errorf("failed to get last insert id: %w", err)
-	}
-
-	article.ID = id
-	return id, nil
-}
-
-// Get retrieves an article by its ID
-func (r *ArticleRepository) Get(ctx context.Context, id int64) (*models.Article, error) {
-	query := `
-		SELECT id, url, title, author, date, markdown_path, html_path, created, modified
-		FROM articles WHERE id = ?`
-
-	row := r.db.QueryRowContext(ctx, query, id)
-
+// scanArticle scans a database row into an Article model
+func (r *ArticleRepository) scanArticle(s scanner) (*models.Article, error) {
 	var article models.Article
-	err := row.Scan(&article.ID, &article.URL, &article.Title, &article.Author, &article.Date,
+	err := s.Scan(&article.ID, &article.URL, &article.Title, &article.Author, &article.Date,
 		&article.MarkdownPath, &article.HTMLPath, &article.Created, &article.Modified)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("article with id %d not found", id)
-		}
-		return nil, fmt.Errorf("failed to scan article: %w", err)
+		return nil, err
 	}
-
 	return &article, nil
 }
 
-// GetByURL retrieves an article by its URL
-func (r *ArticleRepository) GetByURL(ctx context.Context, url string) (*models.Article, error) {
-	query := `
-		SELECT id, url, title, author, date, markdown_path, html_path, created, modified
-		FROM articles WHERE url = ?`
-
-	row := r.db.QueryRowContext(ctx, query, url)
-
-	var article models.Article
-	err := row.Scan(&article.ID, &article.URL, &article.Title, &article.Author, &article.Date,
-		&article.MarkdownPath, &article.HTMLPath, &article.Created, &article.Modified)
+// queryOne executes a query that returns a single article
+func (r *ArticleRepository) queryOne(ctx context.Context, query string, args ...any) (*models.Article, error) {
+	row := r.db.QueryRowContext(ctx, query, args...)
+	article, err := r.scanArticle(row)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("article with url %s not found", url)
+			return nil, fmt.Errorf("article not found")
 		}
 		return nil, fmt.Errorf("failed to scan article: %w", err)
 	}
-
-	return &article, nil
+	return article, nil
 }
 
-// Update modifies an existing article
-func (r *ArticleRepository) Update(ctx context.Context, article *models.Article) error {
-	if err := r.Validate(article); err != nil {
-		return err
-	}
-
-	article.Modified = time.Now()
-
-	query := `
-		UPDATE articles
-		SET title = ?, author = ?, date = ?, markdown_path = ?, html_path = ?, modified = ?
-		WHERE id = ?`
-
-	result, err := r.db.ExecContext(ctx, query,
-		article.Title, article.Author, article.Date, article.MarkdownPath,
-		article.HTMLPath, article.Modified, article.ID)
+// queryMany executes a query that returns multiple articles
+func (r *ArticleRepository) queryMany(ctx context.Context, query string, args ...any) ([]*models.Article, error) {
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
-		return fmt.Errorf("failed to update article: %w", err)
+		return nil, fmt.Errorf("failed to query articles: %w", err)
+	}
+	defer rows.Close()
+
+	var articles []*models.Article
+	for rows.Next() {
+		article, err := r.scanArticle(rows)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan article: %w", err)
+		}
+		articles = append(articles, article)
 	}
 
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to get rows affected: %w", err)
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over articles: %w", err)
 	}
 
-	if rowsAffected == 0 {
-		return fmt.Errorf("article with id %d not found", article.ID)
-	}
-
-	return nil
+	return articles, nil
 }
 
-// Delete removes an article from the database
-func (r *ArticleRepository) Delete(ctx context.Context, id int64) error {
-	query := "DELETE FROM articles WHERE id = ?"
-
-	result, err := r.db.ExecContext(ctx, query, id)
-	if err != nil {
-		return fmt.Errorf("failed to delete article: %w", err)
-	}
-
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to get rows affected: %w", err)
-	}
-
-	if rowsAffected == 0 {
-		return fmt.Errorf("article with id %d not found", id)
-	}
-
-	return nil
-}
-
-// List retrieves articles with optional filtering
-func (r *ArticleRepository) List(ctx context.Context, opts *ArticleListOptions) ([]*models.Article, error) {
-	query := `
-		SELECT id, url, title, author, date, markdown_path, html_path, created, modified
-		FROM articles`
-
+// buildListQuery constructs a query and arguments for the List method
+func (r *ArticleRepository) buildListQuery(opts *ArticleListOptions) (string, []any) {
+	query := queryArticlesList
 	var conditions []string
 	var args []any
 
@@ -204,34 +128,12 @@ func (r *ArticleRepository) List(ctx context.Context, opts *ArticleListOptions) 
 		}
 	}
 
-	rows, err := r.db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query articles: %w", err)
-	}
-	defer rows.Close()
-
-	var articles []*models.Article
-	for rows.Next() {
-		var article models.Article
-		err := rows.Scan(&article.ID, &article.URL, &article.Title, &article.Author, &article.Date,
-			&article.MarkdownPath, &article.HTMLPath, &article.Created, &article.Modified)
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan article: %w", err)
-		}
-		articles = append(articles, &article)
-	}
-
-	if err = rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating over articles: %w", err)
-	}
-
-	return articles, nil
+	return query, args
 }
 
-// Count returns the total number of articles matching the given options
-func (r *ArticleRepository) Count(ctx context.Context, opts *ArticleListOptions) (int64, error) {
-	query := "SELECT COUNT(*) FROM articles"
-
+// buildCountQuery constructs a count query and arguments
+func (r *ArticleRepository) buildCountQuery(opts *ArticleListOptions) (string, []any) {
+	query := queryArticlesCount
 	var conditions []string
 	var args []any
 
@@ -261,6 +163,109 @@ func (r *ArticleRepository) Count(ctx context.Context, opts *ArticleListOptions)
 	if len(conditions) > 0 {
 		query += " WHERE " + strings.Join(conditions, " AND ")
 	}
+
+	return query, args
+}
+
+// Create stores a new article and returns its assigned ID
+func (r *ArticleRepository) Create(ctx context.Context, article *models.Article) (int64, error) {
+	if err := r.Validate(article); err != nil {
+		return 0, err
+	}
+
+	now := time.Now()
+	article.Created = now
+	article.Modified = now
+
+	result, err := r.db.ExecContext(ctx, queryArticleInsert,
+		article.URL, article.Title, article.Author, article.Date,
+		article.MarkdownPath, article.HTMLPath, article.Created, article.Modified)
+	if err != nil {
+		return 0, fmt.Errorf("failed to insert article: %w", err)
+	}
+
+	id, err := result.LastInsertId()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get last insert id: %w", err)
+	}
+
+	article.ID = id
+	return id, nil
+}
+
+// Get retrieves an article by its ID
+func (r *ArticleRepository) Get(ctx context.Context, id int64) (*models.Article, error) {
+	article, err := r.queryOne(ctx, queryArticleByID, id)
+	if err != nil {
+		return nil, ArticleNotFoundError(id)
+	}
+	return article, nil
+}
+
+// GetByURL retrieves an article by its URL
+func (r *ArticleRepository) GetByURL(ctx context.Context, url string) (*models.Article, error) {
+	article, err := r.queryOne(ctx, queryArticleByURL, url)
+	if err != nil {
+		return nil, fmt.Errorf("article with url %s not found", url)
+	}
+	return article, nil
+}
+
+// Update modifies an existing article
+func (r *ArticleRepository) Update(ctx context.Context, article *models.Article) error {
+	if err := r.Validate(article); err != nil {
+		return err
+	}
+
+	article.Modified = time.Now()
+
+	result, err := r.db.ExecContext(ctx, queryArticleUpdate,
+		article.Title, article.Author, article.Date, article.MarkdownPath,
+		article.HTMLPath, article.Modified, article.ID)
+	if err != nil {
+		return fmt.Errorf("failed to update article: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return ArticleNotFoundError(article.ID)
+	}
+
+	return nil
+}
+
+// Delete removes an article from the database
+func (r *ArticleRepository) Delete(ctx context.Context, id int64) error {
+	result, err := r.db.ExecContext(ctx, queryArticleDelete, id)
+	if err != nil {
+		return fmt.Errorf("failed to delete article: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return ArticleNotFoundError(id)
+	}
+
+	return nil
+}
+
+// List retrieves articles with optional filtering
+func (r *ArticleRepository) List(ctx context.Context, opts *ArticleListOptions) ([]*models.Article, error) {
+	query, args := r.buildListQuery(opts)
+	return r.queryMany(ctx, query, args...)
+}
+
+// Count returns the total number of articles matching the given options
+func (r *ArticleRepository) Count(ctx context.Context, opts *ArticleListOptions) (int64, error) {
+	query, args := r.buildCountQuery(opts)
 
 	var count int64
 	err := r.db.QueryRowContext(ctx, query, args...).Scan(&count)

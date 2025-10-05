@@ -107,7 +107,7 @@ func (h *ConfigHandler) displayAll() error {
 	return nil
 }
 
-func (h *ConfigHandler) getConfigValue(key string) (interface{}, error) {
+func (h *ConfigHandler) getConfigValue(key string) (any, error) {
 	v := reflect.ValueOf(*h.config)
 	t := reflect.TypeOf(*h.config)
 

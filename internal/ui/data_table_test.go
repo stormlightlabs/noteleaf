@@ -119,6 +119,10 @@ func createTestFields() []Field {
 	}
 }
 
+func testViewHandler(record DataRecord) string {
+	return fmt.Sprintf("Viewing: %v", record.GetField("name"))
+}
+
 func TestDataTable(t *testing.T) {
 	t.Run("TestDataTableOptions", func(t *testing.T) {
 		t.Run("default options", func(t *testing.T) {
@@ -143,13 +147,11 @@ func TestDataTable(t *testing.T) {
 			var buf bytes.Buffer
 			source := &MockDataSource{records: createMockRecords()}
 			opts := DataTableOptions{
-				Output: &buf,
-				Static: true,
-				Title:  "Test Table",
-				Fields: createTestFields(),
-				ViewHandler: func(record DataRecord) string {
-					return fmt.Sprintf("Viewing: %v", record.GetField("name"))
-				},
+				Output:      &buf,
+				Static:      true,
+				Title:       "Test Table",
+				Fields:      createTestFields(),
+				ViewHandler: testViewHandler,
 			}
 
 			table := NewDataTable(source, opts)
@@ -392,13 +394,9 @@ func TestDataTable(t *testing.T) {
 		})
 
 		t.Run("view record command", func(t *testing.T) {
-			viewHandler := func(record DataRecord) string {
-				return fmt.Sprintf("Viewing: %v", record.GetField("name"))
-			}
-
 			model := dataTableModel{
 				opts: DataTableOptions{
-					ViewHandler: viewHandler,
+					ViewHandler: testViewHandler,
 					Fields:      createTestFields(),
 				},
 			}

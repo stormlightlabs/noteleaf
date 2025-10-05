@@ -327,6 +327,13 @@ func (ah *AssertionHelpers) AssertViewNotContains(t *testing.T, suite *TUITestSu
 	}
 }
 
+func (ah *AssertionHelpers) AssertZeroTime(t *testing.T, getter func() time.Time, label string) {
+	t.Helper()
+	if !getter().IsZero() {
+		t.Errorf("%v() should return zero time", label)
+	}
+}
+
 var Expect = AssertionHelpers{}
 
 func containsString(haystack, needle string) bool {

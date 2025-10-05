@@ -14,32 +14,7 @@ import (
 	"github.com/stormlightlabs/noteleaf/internal/store"
 )
 
-func setupNoteTest(t *testing.T) (string, func()) {
-	tempDir, err := os.MkdirTemp("", "noteleaf-note-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-
-	oldNoteleafConfig := os.Getenv("NOTELEAF_CONFIG")
-	oldNoteleafDataDir := os.Getenv("NOTELEAF_DATA_DIR")
-	os.Setenv("NOTELEAF_CONFIG", filepath.Join(tempDir, ".noteleaf.conf.toml"))
-	os.Setenv("NOTELEAF_DATA_DIR", tempDir)
-
-	cleanup := func() {
-		os.Setenv("NOTELEAF_CONFIG", oldNoteleafConfig)
-		os.Setenv("NOTELEAF_DATA_DIR", oldNoteleafDataDir)
-		os.RemoveAll(tempDir)
-	}
-
-	ctx := context.Background()
-	err = Setup(ctx, []string{})
-	if err != nil {
-		cleanup()
-		t.Fatalf("Failed to setup database: %v", err)
-	}
-
-	return tempDir, cleanup
-}
+// setupNoteTest removed - use NewHandlerTestSuite(t) instead
 
 func createTestMarkdownFile(t *testing.T, dir, filename, content string) string {
 	filePath := filepath.Join(dir, filename)
@@ -51,8 +26,7 @@ func createTestMarkdownFile(t *testing.T, dir, filename, content string) string 
 }
 
 func TestNoteHandler(t *testing.T) {
-	tempDir, cleanup := setupNoteTest(t)
-	defer cleanup()
+	suite := NewHandlerTestSuite(t)
 
 	handler, err := NewNoteHandler()
 	if err != nil {
@@ -116,7 +90,7 @@ func TestNoteHandler(t *testing.T) {
 <!-- tags: personal, work -->
 
 This is the content of my note.`
-			filePath := createTestMarkdownFile(t, tempDir, "test.md", content)
+			filePath := createTestMarkdownFile(t, suite.TempDir(), "test.md", content)
 
 			err := handler.Create(ctx, "", "", filePath, false)
 			Expect.AssertNoError(t, err, "Create from file should succeed")
@@ -378,7 +352,7 @@ This is the modified content.
 					err := handler.Edit(ctx, noteID)
 
 					Expect.AssertNoError(t, err, "Edit should succeed")
-					Expect.AssertNoteExists(t, handler, noteID)
+					AssertExists(t, handler.repos.Notes.Get, noteID, "note")
 				})
 
 				t.Run("handles no changes made", func(t *testing.T) {
@@ -477,8 +451,7 @@ This is the modified content.
 		})
 
 		t.Run("handles empty note list", func(t *testing.T) {
-			_, emptyCleanup := setupNoteTest(t)
-			defer emptyCleanup()
+			_ = NewHandlerTestSuite(t)
 
 			emptyHandler, err := NewNoteHandler()
 			if err != nil {
@@ -493,8 +466,7 @@ This is the modified content.
 		})
 
 		t.Run("interactive mode path", func(t *testing.T) {
-			_, cleanup := setupNoteTest(t)
-			defer cleanup()
+			_ = NewHandlerTestSuite(t)
 
 			testHandler, err := NewNoteHandler()
 			if err != nil {
@@ -516,8 +488,7 @@ This is the modified content.
 		})
 
 		t.Run("interactive mode path with filters", func(t *testing.T) {
-			_, cleanup := setupNoteTest(t)
-			defer cleanup()
+			_ = NewHandlerTestSuite(t)
 
 			testHandler, err := NewNoteHandler()
 			if err != nil {
@@ -578,8 +549,7 @@ This is the modified content.
 		})
 
 		t.Run("deletes note with file path", func(t *testing.T) {
-			testTempDir, testCleanup := setupNoteTest(t)
-			defer testCleanup()
+			testSuite := NewHandlerTestSuite(t)
 
 			testHandler, err := NewNoteHandler()
 			if err != nil {
@@ -587,7 +557,7 @@ This is the modified content.
 			}
 			defer testHandler.Close()
 
-			filePath := createTestMarkdownFile(t, testTempDir, "delete-test.md", "# Test Note\n\nTest content")
+			filePath := createTestMarkdownFile(t, testSuite.TempDir(), "delete-test.md", "# Test Note\n\nTest content")
 
 			err = testHandler.Create(ctx, "", "", filePath, false)
 			if err != nil {

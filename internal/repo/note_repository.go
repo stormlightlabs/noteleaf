@@ -11,6 +11,10 @@ import (
 	"github.com/stormlightlabs/noteleaf/internal/models"
 )
 
+func NoteNotFoundError(id int64) error {
+	return fmt.Errorf("note with id %d not found", id)
+}
+
 // NoteRepository provides database operations for notes
 type NoteRepository struct {
 	db *sql.DB
@@ -31,6 +35,57 @@ type NoteListOptions struct {
 	Offset   int
 }
 
+func (r *NoteRepository) scanNote(s scanner) (*models.Note, error) {
+	var note models.Note
+	var tags string
+	err := s.Scan(&note.ID, &note.Title, &note.Content, &tags, &note.Archived,
+		&note.Created, &note.Modified, &note.FilePath)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := note.UnmarshalTags(tags); err != nil {
+		return nil, UnmarshalTagsError(err)
+	}
+
+	return &note, nil
+}
+
+func (r *NoteRepository) queryOne(ctx context.Context, query string, args ...any) (*models.Note, error) {
+	row := r.db.QueryRowContext(ctx, query, args...)
+	note, err := r.scanNote(row)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("note not found")
+		}
+		return nil, fmt.Errorf("failed to scan note: %w", err)
+	}
+	return note, nil
+}
+
+func (r *NoteRepository) queryMany(ctx context.Context, query string, args ...any) ([]*models.Note, error) {
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query notes: %w", err)
+	}
+	defer rows.Close()
+
+	var notes []*models.Note
+	for rows.Next() {
+		note, err := r.scanNote(rows)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan note: %w", err)
+		}
+		notes = append(notes, note)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over notes: %w", err)
+	}
+
+	return notes, nil
+}
+
 // Create stores a new note and returns its assigned ID
 func (r *NoteRepository) Create(ctx context.Context, note *models.Note) (int64, error) {
 	now := time.Now()
@@ -42,11 +97,7 @@ func (r *NoteRepository) Create(ctx context.Context, note *models.Note) (int64, 
 		return 0, fmt.Errorf("failed to marshal tags: %w", err)
 	}
 
-	query := `
-		INSERT INTO notes (title, content, tags, archived, created, modified, file_path)
-		VALUES (?, ?, ?, ?, ?, ?, ?)`
-
-	result, err := r.db.ExecContext(ctx, query,
+	result, err := r.db.ExecContext(ctx, queryNoteInsert,
 		note.Title, note.Content, tags, note.Archived, note.Created, note.Modified, note.FilePath)
 	if err != nil {
 		return 0, fmt.Errorf("failed to insert note: %w", err)
@@ -63,28 +114,11 @@ func (r *NoteRepository) Create(ctx context.Context, note *models.Note) (int64, 
 
 // Get retrieves a note by its ID
 func (r *NoteRepository) Get(ctx context.Context, id int64) (*models.Note, error) {
-	query := `
-		SELECT id, title, content, tags, archived, created, modified, file_path
-		FROM notes WHERE id = ?`
-
-	row := r.db.QueryRowContext(ctx, query, id)
-
-	var note models.Note
-	var tags string
-	err := row.Scan(&note.ID, &note.Title, &note.Content, &tags, &note.Archived,
-		&note.Created, &note.Modified, &note.FilePath)
+	note, err := r.queryOne(ctx, queryNoteByID, id)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("note with id %d not found", id)
-		}
-		return nil, fmt.Errorf("failed to scan note: %w", err)
+		return nil, NoteNotFoundError(id)
 	}
-
-	if err := note.UnmarshalTags(tags); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal tags: %w", err)
-	}
-
-	return &note, nil
+	return note, nil
 }
 
 // Update modifies an existing note
@@ -96,12 +130,7 @@ func (r *NoteRepository) Update(ctx context.Context, note *models.Note) error {
 		return fmt.Errorf("failed to marshal tags: %w", err)
 	}
 
-	query := `
-		UPDATE notes
-		SET title = ?, content = ?, tags = ?, archived = ?, modified = ?, file_path = ?
-		WHERE id = ?`
-
-	result, err := r.db.ExecContext(ctx, query,
+	result, err := r.db.ExecContext(ctx, queryNoteUpdate,
 		note.Title, note.Content, tags, note.Archived, note.Modified, note.FilePath, note.ID)
 	if err != nil {
 		return fmt.Errorf("failed to update note: %w", err)
@@ -113,7 +142,7 @@ func (r *NoteRepository) Update(ctx context.Context, note *models.Note) error {
 	}
 
 	if rowsAffected == 0 {
-		return fmt.Errorf("note with id %d not found", note.ID)
+		return NoteNotFoundError(note.ID)
 	}
 
 	return nil
@@ -121,9 +150,7 @@ func (r *NoteRepository) Update(ctx context.Context, note *models.Note) error {
 
 // Delete removes a note by its ID
 func (r *NoteRepository) Delete(ctx context.Context, id int64) error {
-	query := `DELETE FROM notes WHERE id = ?`
-
-	result, err := r.db.ExecContext(ctx, query, id)
+	result, err := r.db.ExecContext(ctx, queryNoteDelete, id)
 	if err != nil {
 		return fmt.Errorf("failed to delete note: %w", err)
 	}
@@ -134,15 +161,14 @@ func (r *NoteRepository) Delete(ctx context.Context, id int64) error {
 	}
 
 	if rowsAffected == 0 {
-		return fmt.Errorf("note with id %d not found", id)
+		return NoteNotFoundError(id)
 	}
 
 	return nil
 }
 
-// List retrieves notes with optional filtering
-func (r *NoteRepository) List(ctx context.Context, options NoteListOptions) ([]*models.Note, error) {
-	query := "SELECT id, title, content, tags, archived, created, modified, file_path FROM notes"
+func (r *NoteRepository) buildListQuery(options NoteListOptions) (string, []any) {
+	query := queryNotesList
 	args := []any{}
 	conditions := []string{}
 
@@ -174,34 +200,13 @@ func (r *NoteRepository) List(ctx context.Context, options NoteListOptions) ([]*
 		}
 	}
 
-	rows, err := r.db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query notes: %w", err)
-	}
-	defer rows.Close()
+	return query, args
+}
 
-	var notes []*models.Note
-	for rows.Next() {
-		var note models.Note
-		var tags string
-		err := rows.Scan(&note.ID, &note.Title, &note.Content, &tags, &note.Archived,
-			&note.Created, &note.Modified, &note.FilePath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan note: %w", err)
-		}
-
-		if err := note.UnmarshalTags(tags); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal tags: %w", err)
-		}
-
-		notes = append(notes, &note)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating over notes: %w", err)
-	}
-
-	return notes, nil
+// List retrieves notes with optional filtering
+func (r *NoteRepository) List(ctx context.Context, options NoteListOptions) ([]*models.Note, error) {
+	query, args := r.buildListQuery(options)
+	return r.queryMany(ctx, query, args...)
 }
 
 // GetByTitle searches for notes by title pattern
@@ -274,15 +279,23 @@ func (r *NoteRepository) RemoveTag(ctx context.Context, id int64, tag string) er
 	if err != nil {
 		return err
 	}
-
 	for i, existingTag := range note.Tags {
 		if existingTag == tag {
 			note.Tags = append(note.Tags[:i], note.Tags[i+1:]...)
 			break
 		}
 	}
-
 	return r.Update(ctx, note)
+}
+
+func (r *NoteRepository) buildTagsQuery(tags []string) (string, []any) {
+	conditions := make([]string, len(tags))
+	args := make([]any, len(tags))
+	for i, tag := range tags {
+		conditions[i] = "tags LIKE ?"
+		args[i] = "%\"" + tag + "\"%"
+	}
+	return fmt.Sprintf(`SELECT %s FROM notes WHERE %s ORDER BY modified DESC`, noteColumns, strings.Join(conditions, " OR ")), args
 }
 
 // GetByTags retrieves notes that have any of the specified tags
@@ -290,53 +303,6 @@ func (r *NoteRepository) GetByTags(ctx context.Context, tags []string) ([]*model
 	if len(tags) == 0 {
 		return []*models.Note{}, nil
 	}
-
-	placeholders := make([]string, len(tags))
-	args := make([]any, len(tags))
-	for i, tag := range tags {
-		placeholders[i] = "?"
-		args[i] = "%\"" + tag + "\"%"
-	}
-
-	query := fmt.Sprintf(`
-		SELECT id, title, content, tags, archived, created, modified, file_path
-		FROM notes
-		WHERE %s
-		ORDER BY modified DESC`,
-		strings.Join(func() []string {
-			conditions := make([]string, len(tags))
-			for i := range tags {
-				conditions[i] = "tags LIKE ?"
-			}
-			return conditions
-		}(), " OR "))
-
-	rows, err := r.db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query notes by tags: %w", err)
-	}
-	defer rows.Close()
-
-	var notes []*models.Note
-	for rows.Next() {
-		var note models.Note
-		var tagsJSON string
-		err := rows.Scan(&note.ID, &note.Title, &note.Content, &tagsJSON, &note.Archived,
-			&note.Created, &note.Modified, &note.FilePath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan note: %w", err)
-		}
-
-		if err := note.UnmarshalTags(tagsJSON); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal tags: %w", err)
-		}
-
-		notes = append(notes, &note)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating over notes: %w", err)
-	}
-
-	return notes, nil
+	query, args := r.buildTagsQuery(tags)
+	return r.queryMany(ctx, query, args...)
 }

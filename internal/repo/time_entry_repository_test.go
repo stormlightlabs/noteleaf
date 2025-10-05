@@ -317,42 +317,42 @@ func TestTimeEntryRepository(t *testing.T) {
 			task := createTestTask(t, db)
 
 			_, err := repo.Start(NewCanceledContext(), task.ID, "Cancelled")
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("Get with cancelled context", func(t *testing.T) {
 			_, err := repo.Get(NewCanceledContext(), entry.ID)
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("Stop with cancelled context", func(t *testing.T) {
 			_, err := repo.Stop(NewCanceledContext(), entry.ID)
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("GetActiveByTaskID with cancelled context", func(t *testing.T) {
 			_, err := repo.GetActiveByTaskID(NewCanceledContext(), task.ID)
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("StopActiveByTaskID with cancelled context", func(t *testing.T) {
 			_, err := repo.StopActiveByTaskID(NewCanceledContext(), task.ID)
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("GetByTaskID with cancelled context", func(t *testing.T) {
 			_, err := repo.GetByTaskID(NewCanceledContext(), task.ID)
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("GetTotalTimeByTaskID with cancelled context", func(t *testing.T) {
 			_, err := repo.GetTotalTimeByTaskID(NewCanceledContext(), task.ID)
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("Delete with cancelled context", func(t *testing.T) {
 			err := repo.Delete(NewCanceledContext(), entry.ID)
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("GetByDateRange with cancelled context", func(t *testing.T) {
@@ -360,7 +360,7 @@ func TestTimeEntryRepository(t *testing.T) {
 			end := time.Now()
 
 			_, err := repo.GetByDateRange(NewCanceledContext(), start, end)
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 	})
 

@@ -395,38 +395,38 @@ func TestArticleRepository(t *testing.T) {
 		t.Run("Create with cancelled context", func(t *testing.T) {
 			newArticle := CreateSampleArticle()
 			_, err := repo.Create(NewCanceledContext(), newArticle)
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("Get with cancelled context", func(t *testing.T) {
 			_, err := repo.Get(NewCanceledContext(), id)
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("GetByURL with cancelled context", func(t *testing.T) {
 			_, err := repo.GetByURL(NewCanceledContext(), article.URL)
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("Update with cancelled context", func(t *testing.T) {
 			article.Title = "Updated"
 			err := repo.Update(NewCanceledContext(), article)
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("Delete with cancelled context", func(t *testing.T) {
 			err := repo.Delete(NewCanceledContext(), id)
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("List with cancelled context", func(t *testing.T) {
 			_, err := repo.List(NewCanceledContext(), nil)
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("Count with cancelled context", func(t *testing.T) {
 			_, err := repo.Count(NewCanceledContext(), nil)
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 	})
 

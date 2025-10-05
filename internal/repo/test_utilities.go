@@ -29,10 +29,6 @@ func CreateTestDB(t *testing.T) *sql.DB {
 		t.Fatalf("Failed to enable foreign keys: %v", err)
 	}
 
-	// if _, err := db.Exec(testSchema); err != nil {
-	// 	t.Fatalf("Failed to create schema: %v", err)
-	// }
-
 	mr := store.NewMigrationRunner(&store.Database{DB: db})
 	if err := mr.RunMigrations(); err != nil {
 		t.Errorf("failed to run migrations %v", err)
@@ -187,6 +183,10 @@ func AssertError(t *testing.T, err error, msg string) {
 	}
 }
 
+func AssertCancelledContext(t *testing.T, err error) {
+	AssertError(t, err, "Expected error with cancelled context")
+}
+
 func AssertEqual[T comparable](t *testing.T, expected, actual T, msg string) {
 	t.Helper()
 	if expected != actual {
@@ -222,14 +222,14 @@ func AssertContains(t *testing.T, str, substr, msg string) {
 	}
 }
 
-func AssertNil(t *testing.T, value interface{}, msg string) {
+func AssertNil(t *testing.T, value any, msg string) {
 	t.Helper()
 	if value != nil {
 		t.Fatalf("%s: expected nil, got %v", msg, value)
 	}
 }
 
-func AssertNotNil(t *testing.T, value interface{}, msg string) {
+func AssertNotNil(t *testing.T, value any, msg string) {
 	t.Helper()
 	if value == nil {
 		t.Fatalf("%s: expected non-nil value", msg)
@@ -247,13 +247,6 @@ func AssertLessThan[T interface{ int | int64 | float64 }](t *testing.T, actual, 
 	t.Helper()
 	if actual >= threshold {
 		t.Fatalf("%s: expected %v < %v", msg, actual, threshold)
-	}
-}
-
-func AssertStringContains(t *testing.T, str, substr, msg string) {
-	t.Helper()
-	if !strings.Contains(str, substr) {
-		t.Fatalf("%s: expected string to contain '%s', got '%s'", msg, substr, str)
 	}
 }
 

@@ -27,7 +27,6 @@ type BookHandler struct {
 	reader  io.Reader
 }
 
-// Ensure BookHandler implements MediaHandler interface
 var _ MediaHandler = (*BookHandler)(nil)
 
 // NewBookHandler creates a new book handler

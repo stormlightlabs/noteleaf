@@ -345,78 +345,78 @@ func TestNoteRepository(t *testing.T) {
 		t.Run("Create with cancelled context", func(t *testing.T) {
 			newNote := NewNoteBuilder().WithTitle("Cancelled").Build()
 			_, err := repo.Create(NewCanceledContext(), newNote)
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("Get with cancelled context", func(t *testing.T) {
 			_, err := repo.Get(NewCanceledContext(), id)
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("Update with cancelled context", func(t *testing.T) {
 			note.Title = "Updated"
 			err := repo.Update(NewCanceledContext(), note)
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("Delete with cancelled context", func(t *testing.T) {
 			err := repo.Delete(NewCanceledContext(), id)
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("List with cancelled context", func(t *testing.T) {
 			_, err := repo.List(NewCanceledContext(), NoteListOptions{})
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("GetByTitle with cancelled context", func(t *testing.T) {
 			_, err := repo.GetByTitle(NewCanceledContext(), "Test")
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("GetArchived with cancelled context", func(t *testing.T) {
 			_, err := repo.GetArchived(NewCanceledContext())
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("GetActive with cancelled context", func(t *testing.T) {
 			_, err := repo.GetActive(NewCanceledContext())
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("Archive with cancelled context", func(t *testing.T) {
 			err := repo.Archive(NewCanceledContext(), id)
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("Unarchive with cancelled context", func(t *testing.T) {
 			err := repo.Unarchive(NewCanceledContext(), id)
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("SearchContent with cancelled context", func(t *testing.T) {
 			_, err := repo.SearchContent(NewCanceledContext(), "test")
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("GetRecent with cancelled context", func(t *testing.T) {
 			_, err := repo.GetRecent(NewCanceledContext(), 10)
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("AddTag with cancelled context", func(t *testing.T) {
 			err := repo.AddTag(NewCanceledContext(), id, "tag")
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("RemoveTag with cancelled context", func(t *testing.T) {
 			err := repo.RemoveTag(NewCanceledContext(), id, "tag")
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("GetByTags with cancelled context", func(t *testing.T) {
 			_, err := repo.GetByTags(NewCanceledContext(), []string{"tag"})
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 	})
 

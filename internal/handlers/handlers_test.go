@@ -33,6 +33,20 @@ func createTestDir(t *testing.T) string {
 	return tempDir
 }
 
+func getDbPath(config *store.Config) string {
+	var dbPath string
+	if config.DatabasePath != "" {
+		dbPath = config.DatabasePath
+	} else if config.DataDir != "" {
+		dbPath = filepath.Join(config.DataDir, "noteleaf.db")
+	} else {
+		dataDir, _ := store.GetDataDir()
+		dbPath = filepath.Join(dataDir, "noteleaf.db")
+	}
+
+	return dbPath
+}
+
 func TestSetup(t *testing.T) {
 	t.Run("creates database and config files", func(t *testing.T) {
 		_ = createTestDir(t)
@@ -43,21 +57,12 @@ func TestSetup(t *testing.T) {
 			t.Errorf("Setup failed: %v", err)
 		}
 
-		// Determine database path using the same logic as Setup
 		config, err := store.LoadConfig()
 		if err != nil {
 			t.Fatalf("Failed to load config: %v", err)
 		}
 
-		var dbPath string
-		if config.DatabasePath != "" {
-			dbPath = config.DatabasePath
-		} else if config.DataDir != "" {
-			dbPath = filepath.Join(config.DataDir, "noteleaf.db")
-		} else {
-			dataDir, _ := store.GetDataDir()
-			dbPath = filepath.Join(dataDir, "noteleaf.db")
-		}
+		dbPath := getDbPath(config)
 
 		if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 			t.Error("Database file was not created")
@@ -144,15 +149,7 @@ func TestReset(t *testing.T) {
 			t.Fatalf("Failed to load config: %v", err)
 		}
 
-		var dbPath string
-		if config.DatabasePath != "" {
-			dbPath = config.DatabasePath
-		} else if config.DataDir != "" {
-			dbPath = filepath.Join(config.DataDir, "noteleaf.db")
-		} else {
-			dataDir, _ := store.GetDataDir()
-			dbPath = filepath.Join(dataDir, "noteleaf.db")
-		}
+		dbPath := getDbPath(config)
 
 		configPath, err := store.GetConfigPath()
 		if err != nil {
@@ -461,15 +458,7 @@ func TestStatusErrorHandling(t *testing.T) {
 			t.Fatalf("Failed to load config: %v", err)
 		}
 
-		var dbPath string
-		if config.DatabasePath != "" {
-			dbPath = config.DatabasePath
-		} else if config.DataDir != "" {
-			dbPath = filepath.Join(config.DataDir, "noteleaf.db")
-		} else {
-			dataDir, _ := store.GetDataDir()
-			dbPath = filepath.Join(dataDir, "noteleaf.db")
-		}
+		dbPath := getDbPath(config)
 
 		os.Remove(dbPath)
 
@@ -644,15 +633,7 @@ func TestIntegration(t *testing.T) {
 		}
 
 		config, _ := store.LoadConfig()
-		var dbPath string
-		if config.DatabasePath != "" {
-			dbPath = config.DatabasePath
-		} else if config.DataDir != "" {
-			dbPath = filepath.Join(config.DataDir, "noteleaf.db")
-		} else {
-			dataDir, _ := store.GetDataDir()
-			dbPath = filepath.Join(dataDir, "noteleaf.db")
-		}
+		dbPath := getDbPath(config)
 
 		if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 			t.Error("Database should exist after setup")

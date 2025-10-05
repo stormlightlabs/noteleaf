@@ -231,7 +231,7 @@ func TestMovieRepository(t *testing.T) {
 
 		t.Run("Count with context cancellation", func(t *testing.T) {
 			_, err := repo.Count(NewCanceledContext(), MovieListOptions{})
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 	})
 
@@ -247,43 +247,43 @@ func TestMovieRepository(t *testing.T) {
 		t.Run("Create with cancelled context", func(t *testing.T) {
 			newMovie := NewMovieBuilder().WithTitle("Cancelled").Build()
 			_, err := repo.Create(NewCanceledContext(), newMovie)
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("Get with cancelled context", func(t *testing.T) {
 			_, err := repo.Get(NewCanceledContext(), id)
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("Update with cancelled context", func(t *testing.T) {
 			movie.Title = "Updated"
 			err := repo.Update(NewCanceledContext(), movie)
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("Delete with cancelled context", func(t *testing.T) {
 			err := repo.Delete(NewCanceledContext(), id)
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("List with cancelled context", func(t *testing.T) {
 			_, err := repo.List(NewCanceledContext(), MovieListOptions{})
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("GetQueued with cancelled context", func(t *testing.T) {
 			_, err := repo.GetQueued(NewCanceledContext())
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("GetWatched with cancelled context", func(t *testing.T) {
 			_, err := repo.GetWatched(NewCanceledContext())
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("MarkWatched with cancelled context", func(t *testing.T) {
 			err := repo.MarkWatched(NewCanceledContext(), id)
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 	})
 

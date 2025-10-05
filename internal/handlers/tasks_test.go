@@ -21,8 +21,8 @@ func TestTaskHandler(t *testing.T) {
 	ctx := context.Background()
 	t.Run("New", func(t *testing.T) {
 		t.Run("creates handler successfully", func(t *testing.T) {
-			_, cleanup := SetupHandlerTest(t)
-			defer cleanup()
+			suite := NewHandlerTestSuite(t)
+			defer suite.cleanup()
 
 			handler, err := NewTaskHandler()
 			if err != nil {
@@ -70,10 +70,10 @@ func TestTaskHandler(t *testing.T) {
 	})
 
 	t.Run("Create", func(t *testing.T) {
-		_, cleanup := SetupHandlerTest(t)
-		defer cleanup()
+		suite := NewHandlerTestSuite(t)
+		defer suite.cleanup()
 
-		handler := CreateTaskHandler(t)
+		handler := CreateHandler(t, NewTaskHandler)
 
 		t.Run("creates task successfully", func(t *testing.T) {
 			desc := "Buy groceries and cook dinner"
@@ -197,8 +197,8 @@ func TestTaskHandler(t *testing.T) {
 	})
 
 	t.Run("List", func(t *testing.T) {
-		_, cleanup := SetupHandlerTest(t)
-		defer cleanup()
+		suite := NewHandlerTestSuite(t)
+		defer suite.cleanup()
 
 		handler, err := NewTaskHandler()
 		if err != nil {
@@ -283,9 +283,8 @@ func TestTaskHandler(t *testing.T) {
 	})
 
 	t.Run("Update", func(t *testing.T) {
-		_, cleanup := SetupHandlerTest(t)
-		defer cleanup()
-
+		suite := NewHandlerTestSuite(t)
+		defer suite.cleanup()
 		handler, err := NewTaskHandler()
 		if err != nil {
 			t.Fatalf("Failed to create handler: %v", err)
@@ -461,10 +460,10 @@ func TestTaskHandler(t *testing.T) {
 	})
 
 	t.Run("Delete", func(t *testing.T) {
-		_, cleanup := SetupHandlerTest(t)
-		defer cleanup()
+		suite := NewHandlerTestSuite(t)
+		defer suite.cleanup()
 
-		handler := CreateTaskHandler(t)
+		handler := CreateHandler(t, NewTaskHandler)
 
 		task := &models.Task{
 			UUID:        uuid.New().String(),
@@ -542,8 +541,8 @@ func TestTaskHandler(t *testing.T) {
 	})
 
 	t.Run("View", func(t *testing.T) {
-		_, cleanup := SetupHandlerTest(t)
-		defer cleanup()
+		suite := NewHandlerTestSuite(t)
+		defer suite.cleanup()
 
 		handler, err := NewTaskHandler()
 		if err != nil {
@@ -637,8 +636,8 @@ func TestTaskHandler(t *testing.T) {
 	})
 
 	t.Run("Done", func(t *testing.T) {
-		_, cleanup := SetupHandlerTest(t)
-		defer cleanup()
+		suite := NewHandlerTestSuite(t)
+		defer suite.cleanup()
 
 		handler, err := NewTaskHandler()
 		if err != nil {
@@ -776,8 +775,8 @@ func TestTaskHandler(t *testing.T) {
 	})
 
 	t.Run("Print", func(t *testing.T) {
-		_, cleanup := SetupHandlerTest(t)
-		defer cleanup()
+		suite := NewHandlerTestSuite(t)
+		defer suite.cleanup()
 
 		handler, err := NewTaskHandler()
 		if err != nil {
@@ -823,8 +822,8 @@ func TestTaskHandler(t *testing.T) {
 	})
 
 	t.Run("ListProjects", func(t *testing.T) {
-		_, cleanup := SetupHandlerTest(t)
-		defer cleanup()
+		suite := NewHandlerTestSuite(t)
+		defer suite.cleanup()
 
 		handler, err := NewTaskHandler()
 		if err != nil {
@@ -854,8 +853,8 @@ func TestTaskHandler(t *testing.T) {
 		})
 
 		t.Run("returns no projects when none exist", func(t *testing.T) {
-			_, cleanup2 := SetupHandlerTest(t)
-			defer cleanup2()
+			suite := NewHandlerTestSuite(t)
+			defer suite.cleanup()
 
 			err := handler.ListProjects(ctx, true)
 			if err != nil {
@@ -879,8 +878,8 @@ func TestTaskHandler(t *testing.T) {
 	})
 
 	t.Run("ListTags", func(t *testing.T) {
-		_, cleanup := SetupHandlerTest(t)
-		defer cleanup()
+		suite := NewHandlerTestSuite(t)
+		defer suite.cleanup()
 
 		handler, err := NewTaskHandler()
 		if err != nil {
@@ -910,8 +909,8 @@ func TestTaskHandler(t *testing.T) {
 		})
 
 		t.Run("returns no tags when none exist", func(t *testing.T) {
-			_, cleanup2 := SetupHandlerTest(t)
-			defer cleanup2()
+			suite := NewHandlerTestSuite(t)
+			defer suite.cleanup()
 
 			err := handler.ListTags(ctx, true)
 			if err != nil {
@@ -961,8 +960,8 @@ func TestTaskHandler(t *testing.T) {
 	})
 
 	t.Run("InteractiveComponentsStatic", func(t *testing.T) {
-		_, cleanup := SetupHandlerTest(t)
-		defer cleanup()
+		suite := NewHandlerTestSuite(t)
+		defer suite.cleanup()
 
 		handler, err := NewTaskHandler()
 		if err != nil {
@@ -1107,8 +1106,8 @@ func TestTaskHandler(t *testing.T) {
 			})
 
 			t.Run("handles no contexts", func(t *testing.T) {
-				_, cleanup2 := SetupHandlerTest(t)
-				defer cleanup2()
+				suite := NewHandlerTestSuite(t)
+				defer suite.cleanup()
 
 				handler2, err := NewTaskHandler()
 				if err != nil {
@@ -1174,8 +1173,8 @@ func TestTaskHandler(t *testing.T) {
 	})
 
 	t.Run("ListContexts", func(t *testing.T) {
-		_, cleanup := SetupHandlerTest(t)
-		defer cleanup()
+		suite := NewHandlerTestSuite(t)
+		defer suite.cleanup()
 
 		handler, err := NewTaskHandler()
 		if err != nil {
@@ -1251,8 +1250,8 @@ func TestTaskHandler(t *testing.T) {
 		})
 
 		t.Run("returns no contexts when none exist", func(t *testing.T) {
-			_, cleanup_ := SetupHandlerTest(t)
-			defer cleanup_()
+			suite := NewHandlerTestSuite(t)
+			defer suite.cleanup()
 
 			handler_, err := NewTaskHandler()
 			if err != nil {
@@ -1268,8 +1267,8 @@ func TestTaskHandler(t *testing.T) {
 	})
 
 	t.Run("SetRecur", func(t *testing.T) {
-		_, cleanup := SetupHandlerTest(t)
-		defer cleanup()
+		suite := NewHandlerTestSuite(t)
+		defer suite.cleanup()
 
 		handler, err := NewTaskHandler()
 		if err != nil {
@@ -1347,8 +1346,8 @@ func TestTaskHandler(t *testing.T) {
 	})
 
 	t.Run("ClearRecur", func(t *testing.T) {
-		_, cleanup := SetupHandlerTest(t)
-		defer cleanup()
+		suite := NewHandlerTestSuite(t)
+		defer suite.cleanup()
 
 		handler, err := NewTaskHandler()
 		if err != nil {
@@ -1421,8 +1420,8 @@ func TestTaskHandler(t *testing.T) {
 	})
 
 	t.Run("ShowRecur", func(t *testing.T) {
-		_, cleanup := SetupHandlerTest(t)
-		defer cleanup()
+		suite := NewHandlerTestSuite(t)
+		defer suite.cleanup()
 
 		handler, err := NewTaskHandler()
 		if err != nil {
@@ -1463,8 +1462,8 @@ func TestTaskHandler(t *testing.T) {
 	})
 
 	t.Run("AddDep", func(t *testing.T) {
-		_, cleanup := SetupHandlerTest(t)
-		defer cleanup()
+		suite := NewHandlerTestSuite(t)
+		defer suite.cleanup()
 
 		handler, err := NewTaskHandler()
 		if err != nil {
@@ -1508,8 +1507,8 @@ func TestTaskHandler(t *testing.T) {
 	})
 
 	t.Run("RemoveDep", func(t *testing.T) {
-		_, cleanup := SetupHandlerTest(t)
-		defer cleanup()
+		suite := NewHandlerTestSuite(t)
+		defer suite.cleanup()
 
 		handler, err := NewTaskHandler()
 		if err != nil {
@@ -1553,8 +1552,8 @@ func TestTaskHandler(t *testing.T) {
 	})
 
 	t.Run("ListDeps", func(t *testing.T) {
-		_, cleanup := SetupHandlerTest(t)
-		defer cleanup()
+		suite := NewHandlerTestSuite(t)
+		defer suite.cleanup()
 
 		handler, err := NewTaskHandler()
 		if err != nil {
@@ -1589,8 +1588,8 @@ func TestTaskHandler(t *testing.T) {
 	})
 
 	t.Run("BlockedByDep", func(t *testing.T) {
-		_, cleanup := SetupHandlerTest(t)
-		defer cleanup()
+		suite := NewHandlerTestSuite(t)
+		defer suite.cleanup()
 
 		handler, err := NewTaskHandler()
 		if err != nil {

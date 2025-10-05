@@ -3,7 +3,6 @@ package handlers
 import (
 	"context"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -14,32 +13,7 @@ import (
 	"github.com/stormlightlabs/noteleaf/internal/services"
 )
 
-func setupBookTest(t *testing.T) (string, func()) {
-	tempDir, err := os.MkdirTemp("", "noteleaf-book-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-
-	oldNoteleafConfig := os.Getenv("NOTELEAF_CONFIG")
-	oldNoteleafDataDir := os.Getenv("NOTELEAF_DATA_DIR")
-	os.Setenv("NOTELEAF_CONFIG", filepath.Join(tempDir, ".noteleaf.conf.toml"))
-	os.Setenv("NOTELEAF_DATA_DIR", tempDir)
-
-	cleanup := func() {
-		os.Setenv("NOTELEAF_CONFIG", oldNoteleafConfig)
-		os.Setenv("NOTELEAF_DATA_DIR", oldNoteleafDataDir)
-		os.RemoveAll(tempDir)
-	}
-
-	ctx := context.Background()
-	err = Setup(ctx, []string{})
-	if err != nil {
-		cleanup()
-		t.Fatalf("Failed to setup database: %v", err)
-	}
-
-	return tempDir, cleanup
-}
+// setupBookTest removed - use NewHandlerTestSuite(t) instead
 
 func createTestBook(t *testing.T, handler *BookHandler, ctx context.Context) *models.Book {
 	t.Helper()
@@ -63,8 +37,7 @@ func createTestBook(t *testing.T, handler *BookHandler, ctx context.Context) *mo
 func TestBookHandler(t *testing.T) {
 	t.Run("New", func(t *testing.T) {
 		t.Run("creates handler successfully", func(t *testing.T) {
-			_, cleanup := setupBookTest(t)
-			defer cleanup()
+			_ = NewHandlerTestSuite(t)
 
 			handler, err := NewBookHandler()
 			if err != nil {
@@ -111,8 +84,7 @@ func TestBookHandler(t *testing.T) {
 	})
 
 	t.Run("BookHandler instance methods", func(t *testing.T) {
-		_, cleanup := setupBookTest(t)
-		defer cleanup()
+		_ = NewHandlerTestSuite(t)
 
 		handler, err := NewBookHandler()
 		if err != nil {
@@ -223,8 +195,7 @@ func TestBookHandler(t *testing.T) {
 			})
 
 			t.Run("handles interactive mode", func(t *testing.T) {
-				_, cleanup := setupBookTest(t)
-				defer cleanup()
+				_ = NewHandlerTestSuite(t)
 
 				handler, err := NewBookHandler()
 				if err != nil {
@@ -251,8 +222,7 @@ func TestBookHandler(t *testing.T) {
 			})
 
 			t.Run("interactive mode path", func(t *testing.T) {
-				_, cleanup := setupBookTest(t)
-				defer cleanup()
+				_ = NewHandlerTestSuite(t)
 
 				handler, err := NewBookHandler()
 				if err != nil {
@@ -528,8 +498,7 @@ func TestBookHandler(t *testing.T) {
 			})
 
 			t.Run("progress", func(t *testing.T) {
-				_, cleanup := setupBookTest(t)
-				defer cleanup()
+				_ = NewHandlerTestSuite(t)
 
 				ctx := context.Background()
 
@@ -659,8 +628,7 @@ func TestBookHandler(t *testing.T) {
 
 	t.Run("Close", func(t *testing.T) {
 		t.Run("closes handler resources", func(t *testing.T) {
-			_, cleanup := setupBookTest(t)
-			defer cleanup()
+			_ = NewHandlerTestSuite(t)
 
 			handler, err := NewBookHandler()
 			if err != nil {
@@ -674,8 +642,7 @@ func TestBookHandler(t *testing.T) {
 		})
 
 		t.Run("handles service close gracefully", func(t *testing.T) {
-			_, cleanup := setupBookTest(t)
-			defer cleanup()
+			_ = NewHandlerTestSuite(t)
 
 			handler, err := NewBookHandler()
 			if err != nil {
@@ -689,8 +656,7 @@ func TestBookHandler(t *testing.T) {
 	})
 
 	t.Run("Print", func(t *testing.T) {
-		_, cleanup := setupBookTest(t)
-		defer cleanup()
+		_ = NewHandlerTestSuite(t)
 
 		handler, err := NewBookHandler()
 		if err != nil {
@@ -763,8 +729,7 @@ func TestBookHandler(t *testing.T) {
 
 	t.Run("Integration", func(t *testing.T) {
 		t.Run("full book lifecycle", func(t *testing.T) {
-			_, cleanup := setupBookTest(t)
-			defer cleanup()
+			_ = NewHandlerTestSuite(t)
 
 			ctx := context.Background()
 
@@ -818,8 +783,7 @@ func TestBookHandler(t *testing.T) {
 		})
 
 		t.Run("concurrent book operations", func(t *testing.T) {
-			_, cleanup := setupBookTest(t)
-			defer cleanup()
+			_ = NewHandlerTestSuite(t)
 
 			ctx := context.Background()
 
@@ -854,5 +818,70 @@ func TestBookHandler(t *testing.T) {
 				}
 			}
 		})
+	})
+}
+
+// TestBookHandlerWithSuite demonstrates using HandlerTestSuite for cleaner tests
+func TestBookHandlerWithSuite(t *testing.T) {
+	// Example: Using HandlerTestSuite for lifecycle testing
+	t.Run("Lifecycle", func(t *testing.T) {
+		suite := NewMediaHandlerTestSuite(t)
+
+		handler, err := NewBookHandler()
+		suite.AssertNoError(err, "NewBookHandler")
+		defer handler.Close()
+
+		// Test basic behaviors using reusable patterns
+		InputReaderTest(t, handler)
+	})
+
+	// Example: Using generic CreateHandler
+	t.Run("GenericHandlerCreation", func(t *testing.T) {
+		_ = NewHandlerTestSuite(t)
+
+		// Generic CreateHandler replaces CreateBookHandler
+		handler := CreateHandler(t, NewBookHandler)
+
+		// Handler automatically cleaned up via t.Cleanup
+		_ = handler
+	})
+
+	// Example: Using HandlerTestSuite for media operations
+	t.Run("MediaOperations", func(t *testing.T) {
+		suite := NewMediaHandlerTestSuite(t)
+
+		handler, err := NewBookHandler()
+		suite.AssertNoError(err, "NewBookHandler")
+		defer handler.Close()
+
+		// Create a test book first
+		book := &models.Book{
+			Title:  "Suite Test Book",
+			Author: "Suite Test Author",
+			Status: "queued",
+			Added:  time.Now(),
+		}
+		id, err := handler.repos.Books.Create(suite.Context(), book)
+		suite.AssertNoError(err, "Create test book")
+
+		// Test list operation
+		suite.TestList(handler, "")
+
+		// Test status update
+		suite.TestUpdateStatus(handler, strconv.FormatInt(id, 10), "reading", true)
+
+		// Test invalid status update
+		suite.TestUpdateStatus(handler, strconv.FormatInt(id, 10), "invalid", false)
+
+		// Test remove operation
+		suite.TestRemove(handler, strconv.FormatInt(id, 10), true)
+	})
+
+	// Example: Generic lifecycle test
+	t.Run("GenericLifecycle", func(t *testing.T) {
+		_ = NewHandlerTestSuite(t)
+
+		// Demonstrates using generic HandlerLifecycleTest
+		HandlerLifecycleTest(t, NewBookHandler)
 	})
 }

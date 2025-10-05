@@ -66,7 +66,7 @@ func TestTaskRepository(t *testing.T) {
 			t.Run("when called with context cancellation", func(t *testing.T) {
 				task := CreateSampleTask()
 				_, err := repo.Create(NewCanceledContext(), task)
-				AssertError(t, err, "Expected error with cancelled context")
+				AssertCancelledContext(t, err)
 			})
 		})
 	})
@@ -160,7 +160,7 @@ func TestTaskRepository(t *testing.T) {
 
 				task.Description = "Updated"
 				err = repo.Update(NewCanceledContext(), task)
-				AssertError(t, err, "Expected error with cancelled context")
+				AssertCancelledContext(t, err)
 			})
 		})
 	})
@@ -334,7 +334,7 @@ func TestTaskRepository(t *testing.T) {
 
 		t.Run("GetByUUID with context cancellation", func(t *testing.T) {
 			_, err := repo.GetByUUID(NewCanceledContext(), task1.UUID)
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 	})
 
@@ -387,7 +387,7 @@ func TestTaskRepository(t *testing.T) {
 
 		t.Run("Count with context cancellation", func(t *testing.T) {
 			_, err := repo.Count(NewCanceledContext(), TaskListOptions{})
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 	})
 

@@ -25,52 +25,29 @@ import (
 )
 
 // HandlerTestHelper wraps NoteHandler with test-specific functionality
+//
+// Uses HandlerTestSuite internally to avoid code duplication
 type HandlerTestHelper struct {
 	*NoteHandler
-	tempDir string
-	cleanup func()
+	suite *HandlerTestSuite
 }
 
 // NewHandlerTestHelper creates a NoteHandler with isolated test database
 func NewHandlerTestHelper(t *testing.T) *HandlerTestHelper {
-	tempDir, err := os.MkdirTemp("", "noteleaf-handler-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-
-	oldNoteleafConfig := os.Getenv("NOTELEAF_CONFIG")
-	oldNoteleafDataDir := os.Getenv("NOTELEAF_DATA_DIR")
-	os.Setenv("NOTELEAF_CONFIG", filepath.Join(tempDir, ".noteleaf.conf.toml"))
-	os.Setenv("NOTELEAF_DATA_DIR", tempDir)
-
-	cleanup := func() {
-		os.Setenv("NOTELEAF_CONFIG", oldNoteleafConfig)
-		os.Setenv("NOTELEAF_DATA_DIR", oldNoteleafDataDir)
-		os.RemoveAll(tempDir)
-	}
-
-	ctx := context.Background()
-	err = Setup(ctx, []string{})
-	if err != nil {
-		cleanup()
-		t.Fatalf("Failed to setup database: %v", err)
-	}
+	suite := NewHandlerTestSuite(t)
 
 	handler, err := NewNoteHandler()
 	if err != nil {
-		cleanup()
 		t.Fatalf("Failed to create note handler: %v", err)
 	}
 
 	testHandler := &HandlerTestHelper{
 		NoteHandler: handler,
-		tempDir:     tempDir,
-		cleanup:     cleanup,
+		suite:       suite,
 	}
 
 	t.Cleanup(func() {
 		testHandler.Close()
-		testHandler.cleanup()
 	})
 
 	return testHandler
@@ -96,7 +73,7 @@ func (th *HandlerTestHelper) CreateTestNote(t *testing.T, title, content string,
 
 // CreateTestFile creates a temporary markdown file with content
 func (th *HandlerTestHelper) CreateTestFile(t *testing.T, filename, content string) string {
-	filePath := filepath.Join(th.tempDir, filename)
+	filePath := filepath.Join(th.suite.TempDir(), filename)
 	err := os.WriteFile(filePath, []byte(content), 0644)
 	if err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
@@ -238,47 +215,10 @@ func (ah AssertionHelpers) AssertNoError(t *testing.T, err error, msg string) {
 	}
 }
 
-// AssertNoteExists checks that a note exists in the database
-func (ah AssertionHelpers) AssertNoteExists(t *testing.T, handler *HandlerTestHelper, id int64) {
-	t.Helper()
-	ctx := context.Background()
-	_, err := handler.repos.Notes.Get(ctx, id)
-	if err != nil {
-		t.Errorf("Note %d should exist but got error: %v", id, err)
-	}
-}
-
-// AssertNoteNotExists checks that a note does not exist in the database
-func (ah AssertionHelpers) AssertNoteNotExists(t *testing.T, handler *HandlerTestHelper, id int64) {
-	t.Helper()
-	ctx := context.Background()
-	_, err := handler.repos.Notes.Get(ctx, id)
-	if err == nil {
-		t.Errorf("Note %d should not exist but was found", id)
-	}
-}
-
-// AssertArticleExists checks that an article exists in the database
-func (ah AssertionHelpers) AssertArticleExists(t *testing.T, handler *ArticleTestHelper, id int64) {
-	t.Helper()
-	ctx := context.Background()
-	_, err := handler.repos.Articles.Get(ctx, id)
-	if err != nil {
-		t.Errorf("Article %d should exist but got error: %v", id, err)
-	}
-}
-
-// AssertArticleNotExists checks that an article does not exist in the database
-func (ah AssertionHelpers) AssertArticleNotExists(t *testing.T, handler *ArticleTestHelper, id int64) {
-	t.Helper()
-	ctx := context.Background()
-	_, err := handler.repos.Articles.Get(ctx, id)
-	if err == nil {
-		t.Errorf("Article %d should not exist but was found", id)
-	}
-}
-
 // EnvironmentTestHelper provides environment manipulation utilities for testing
+//
+// Use this for tests requiring fine-grained environment control beyond HandlerTestSuite.
+// Examples: testing missing EDITOR, invalid PATH, corrupt TMPDIR, etc.
 type EnvironmentTestHelper struct {
 	originalVars map[string]string
 }
@@ -363,50 +303,25 @@ func containsString(haystack, needle string) bool {
 // ArticleTestHelper wraps ArticleHandler with test-specific functionality
 type ArticleTestHelper struct {
 	*ArticleHandler
-	tempDir string
-	cleanup func()
+	suite *HandlerTestSuite
 }
 
 // NewArticleTestHelper creates an ArticleHandler with isolated test database
 func NewArticleTestHelper(t *testing.T) *ArticleTestHelper {
-	tempDir, err := os.MkdirTemp("", "noteleaf-article-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-
-	oldNoteleafConfig := os.Getenv("NOTELEAF_CONFIG")
-	oldNoteleafDataDir := os.Getenv("NOTELEAF_DATA_DIR")
-	os.Setenv("NOTELEAF_CONFIG", filepath.Join(tempDir, ".noteleaf.conf.toml"))
-	os.Setenv("NOTELEAF_DATA_DIR", tempDir)
-
-	cleanup := func() {
-		os.Setenv("NOTELEAF_CONFIG", oldNoteleafConfig)
-		os.Setenv("NOTELEAF_DATA_DIR", oldNoteleafDataDir)
-		os.RemoveAll(tempDir)
-	}
-
-	ctx := context.Background()
-	err = Setup(ctx, []string{})
-	if err != nil {
-		cleanup()
-		t.Fatalf("Failed to setup database: %v", err)
-	}
+	suite := NewHandlerTestSuite(t)
 
 	handler, err := NewArticleHandler()
 	if err != nil {
-		cleanup()
 		t.Fatalf("Failed to create article handler: %v", err)
 	}
 
 	testHelper := &ArticleTestHelper{
 		ArticleHandler: handler,
-		tempDir:        tempDir,
-		cleanup:        cleanup,
+		suite:          suite,
 	}
 
 	t.Cleanup(func() {
 		testHelper.Close()
-		testHelper.cleanup()
 	})
 
 	return testHelper
@@ -416,8 +331,8 @@ func NewArticleTestHelper(t *testing.T) *ArticleTestHelper {
 func (ath *ArticleTestHelper) CreateTestArticle(t *testing.T, url, title, author, date string) int64 {
 	ctx := context.Background()
 
-	mdPath := filepath.Join(ath.tempDir, fmt.Sprintf("%s.md", title))
-	htmlPath := filepath.Join(ath.tempDir, fmt.Sprintf("%s.html", title))
+	mdPath := filepath.Join(ath.suite.TempDir(), fmt.Sprintf("%s.md", title))
+	htmlPath := filepath.Join(ath.suite.TempDir(), fmt.Sprintf("%s.html", title))
 
 	mdContent := fmt.Sprintf("# %s\n\n**Author:** %s\n**Date:** %s\n\nTest content", title, author, date)
 	err := os.WriteFile(mdPath, []byte(mdContent), 0644)
@@ -828,99 +743,6 @@ func (ith *InteractiveTestHelper) GetSimulator() *InputSimulator {
 	return ith.sim
 }
 
-// SetupHandlerWithInput creates a handler and sets up input simulation in one call
-func SetupBookHandlerWithInput(t *testing.T, inputs ...string) (*BookHandler, func()) {
-	_, cleanup := SetupHandlerTest(t)
-
-	handler, err := NewBookHandler()
-	if err != nil {
-		cleanup()
-		t.Fatalf("Failed to create book handler: %v", err)
-	}
-
-	if len(inputs) > 0 {
-		handler.SetInputReader(NewInputSimulator(inputs...))
-	}
-
-	fullCleanup := func() {
-		handler.Close()
-		cleanup()
-	}
-
-	return handler, fullCleanup
-}
-
-// SetupMovieHandlerWithInput creates a movie handler and sets up input simulation
-func SetupMovieHandlerWithInput(t *testing.T, inputs ...string) (*MovieHandler, func()) {
-	_, cleanup := SetupHandlerTest(t)
-
-	handler, err := NewMovieHandler()
-	if err != nil {
-		cleanup()
-		t.Fatalf("Failed to create movie handler: %v", err)
-	}
-
-	if len(inputs) > 0 {
-		handler.SetInputReader(NewInputSimulator(inputs...))
-	}
-
-	fullCleanup := func() {
-		handler.Close()
-		cleanup()
-	}
-
-	return handler, fullCleanup
-}
-
-// SetupTVHandlerWithInput creates a TV handler and sets up input simulation
-func SetupTVHandlerWithInput(t *testing.T, inputs ...string) (*TVHandler, func()) {
-	_, cleanup := SetupHandlerTest(t)
-
-	handler, err := NewTVHandler()
-	if err != nil {
-		cleanup()
-		t.Fatalf("Failed to create TV handler: %v", err)
-	}
-
-	if len(inputs) > 0 {
-		handler.SetInputReader(NewInputSimulator(inputs...))
-	}
-
-	fullCleanup := func() {
-		handler.Close()
-		cleanup()
-	}
-
-	return handler, fullCleanup
-}
-
-func SetupHandlerTest(t *testing.T) (string, func()) {
-	tempDir, err := os.MkdirTemp("", "noteleaf-interactive-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-
-	oldNoteleafConfig := os.Getenv("NOTELEAF_CONFIG")
-	oldNoteleafDataDir := os.Getenv("NOTELEAF_DATA_DIR")
-	os.Setenv("NOTELEAF_CONFIG", filepath.Join(tempDir, ".noteleaf.conf.toml"))
-	os.Setenv("NOTELEAF_DATA_DIR", tempDir)
-
-	cleanup := func() {
-		os.Setenv("NOTELEAF_CONFIG", oldNoteleafConfig)
-		os.Setenv("NOTELEAF_DATA_DIR", oldNoteleafDataDir)
-		os.RemoveAll(tempDir)
-	}
-
-	ctx := context.Background()
-	err = Setup(ctx, []string{})
-	if err != nil {
-		cleanup()
-		t.Fatalf("Failed to setup database: %v", err)
-	}
-
-	return tempDir, cleanup
-}
-
 // TUICapableHandler interface for handlers that can expose TUI models for testing
 type TUICapableHandler interface {
 	GetTUIModel(ctx context.Context, opts TUITestOptions) (tea.Model, error)
@@ -1192,22 +1014,6 @@ func CommonTUIScenarios() []TUITestScenario {
 	}
 }
 
-// CreateTaskHandler creates a TaskHandler for testing with automatic cleanup
-func CreateTaskHandler(t *testing.T) *TaskHandler {
-	t.Helper()
-
-	handler, err := NewTaskHandler()
-	if err != nil {
-		t.Fatalf("Failed to create task handler: %v", err)
-	}
-
-	t.Cleanup(func() {
-		handler.Close()
-	})
-
-	return handler
-}
-
 // AssertTaskHasUUID verifies that a task has a non-empty UUID
 func AssertTaskHasUUID(t *testing.T, task *models.Task) {
 	t.Helper()
@@ -1225,37 +1031,4 @@ func AssertTaskDatesSet(t *testing.T, task *models.Task) {
 	if task.Modified.IsZero() {
 		t.Error("Task Modified timestamp should be set")
 	}
-}
-
-// CreateBookHandler creates a [BookHandler] for testing with automatic cleanup
-func CreateBookHandler(t *testing.T) *BookHandler {
-	t.Helper()
-	handler, err := NewBookHandler()
-	if err != nil {
-		t.Fatalf("Failed to create book handler: %v", err)
-	}
-	t.Cleanup(func() { handler.Close() })
-	return handler
-}
-
-// CreateMovieHandler creates a [MovieHandler] for testing with automatic cleanup
-func CreateMovieHandler(t *testing.T) *MovieHandler {
-	t.Helper()
-	handler, err := NewMovieHandler()
-	if err != nil {
-		t.Fatalf("Failed to create movie handler: %v", err)
-	}
-	t.Cleanup(func() { handler.Close() })
-	return handler
-}
-
-// CreateTVHandler creates a [TVHandler] for testing with automatic cleanup
-func CreateTVHandler(t *testing.T) *TVHandler {
-	t.Helper()
-	handler, err := NewTVHandler()
-	if err != nil {
-		t.Fatalf("Failed to create TV handler: %v", err)
-	}
-	t.Cleanup(func() { handler.Close() })
-	return handler
 }

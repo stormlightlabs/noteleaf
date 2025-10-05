@@ -12,6 +12,13 @@ import (
 	"github.com/stormlightlabs/noteleaf/internal/models"
 )
 
+func newServerWithHtml(h string) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(h))
+	}))
+}
+
 // ExampleParser_Convert demonstrates parsing a local HTML file using Wikipedia rules.
 func ExampleParser_Convert() {
 	parser, err := NewArticleParser(http.DefaultClient)
@@ -636,10 +643,7 @@ func TestCreateArticleFromURL(t *testing.T) {
 			</body>
 		</html>`
 
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(wikipediaHTML))
-		}))
+		server := newServerWithHtml(wikipediaHTML)
 		defer server.Close()
 
 		// Create a custom parser with localhost rule for testing
@@ -746,13 +750,9 @@ func TestCreateArticleFromURL(t *testing.T) {
 			</body>
 		</html>`
 
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(contentHTML))
-		}))
+		server := newServerWithHtml(contentHTML)
 		defer server.Close()
 
-		// Create a custom parser with arXiv-like rule for testing
 		parser, err := NewArticleParser(server.Client())
 		if err != nil {
 			t.Fatalf("Failed to create parser: %v", err)

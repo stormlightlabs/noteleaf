@@ -3,7 +3,6 @@ package handlers
 import (
 	"context"
 	"os"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -11,32 +10,7 @@ import (
 	"github.com/stormlightlabs/noteleaf/internal/store"
 )
 
-func setupSeedTest(t *testing.T) (string, func()) {
-	tempDir, err := os.MkdirTemp("", "noteleaf-seed-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-
-	oldNoteleafConfig := os.Getenv("NOTELEAF_CONFIG")
-	oldNoteleafDataDir := os.Getenv("NOTELEAF_DATA_DIR")
-	os.Setenv("NOTELEAF_CONFIG", filepath.Join(tempDir, ".noteleaf.conf.toml"))
-	os.Setenv("NOTELEAF_DATA_DIR", tempDir)
-
-	cleanup := func() {
-		os.Setenv("NOTELEAF_CONFIG", oldNoteleafConfig)
-		os.Setenv("NOTELEAF_DATA_DIR", oldNoteleafDataDir)
-		os.RemoveAll(tempDir)
-	}
-
-	ctx := context.Background()
-	err = Setup(ctx, []string{})
-	if err != nil {
-		cleanup()
-		t.Fatalf("Failed to setup database: %v", err)
-	}
-
-	return tempDir, cleanup
-}
+// setupSeedTest removed - use NewHandlerTestSuite(t) instead
 
 func countRecords(t *testing.T, db *store.Database, table string) int {
 	t.Helper()
@@ -73,8 +47,7 @@ func getBookRecord(t *testing.T, db *store.Database, id int) (title, author, sta
 }
 
 func TestSeedHandler(t *testing.T) {
-	_, cleanup := setupSeedTest(t)
-	defer cleanup()
+	_ = NewHandlerTestSuite(t)
 
 	handler, err := NewSeedHandler()
 	if err != nil {

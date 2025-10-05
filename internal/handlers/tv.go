@@ -15,9 +15,7 @@ import (
 	"github.com/stormlightlabs/noteleaf/internal/store"
 )
 
-// TVHandler handles all TV show-related commands
-//
-// Implements MediaHandler interface for polymorphic media handling
+// TVHandler handles all TV show-related commands. Implements [MediaHandler] for polymorphic media handling
 type TVHandler struct {
 	db      *store.Database
 	config  *store.Config
@@ -26,7 +24,6 @@ type TVHandler struct {
 	reader  io.Reader
 }
 
-// Ensure TVHandler implements MediaHandler interface
 var _ MediaHandler = (*TVHandler)(nil)
 
 // NewTVHandler creates a new TV handler

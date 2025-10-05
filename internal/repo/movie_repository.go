@@ -10,6 +10,18 @@ import (
 	"github.com/stormlightlabs/noteleaf/internal/models"
 )
 
+// MovieListOptions defines options for listing movies
+type MovieListOptions struct {
+	Status    string
+	Year      int
+	MinRating float64
+	Search    string
+	SortBy    string
+	SortOrder string
+	Limit     int
+	Offset    int
+}
+
 // MovieRepository provides database operations for movies
 type MovieRepository struct {
 	*BaseMediaRepository[*models.Movie]
@@ -37,10 +49,7 @@ func NewMovieRepository(db *sql.DB) *MovieRepository {
 		},
 	}
 
-	return &MovieRepository{
-		BaseMediaRepository: NewBaseMediaRepository(db, config),
-		db:                  db,
-	}
+	return &MovieRepository{BaseMediaRepository: NewBaseMediaRepository(db, config), db: db}
 }
 
 // Create stores a new movie and returns its assigned ID
@@ -210,16 +219,4 @@ func (r *MovieRepository) MarkWatched(ctx context.Context, id int64) error {
 	movie.Status = "watched"
 	movie.Watched = &now
 	return r.Update(ctx, movie)
-}
-
-// MovieListOptions defines options for listing movies
-type MovieListOptions struct {
-	Status    string
-	Year      int
-	MinRating float64
-	Search    string
-	SortBy    string
-	SortOrder string
-	Limit     int
-	Offset    int
 }

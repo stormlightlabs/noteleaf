@@ -61,13 +61,8 @@ func TestProjectAdapter(t *testing.T) {
 				t.Errorf("GetTableName() = %q, want 'projects'", record.GetTableName())
 			}
 
-			if !record.GetCreatedAt().IsZero() {
-				t.Error("GetCreatedAt() should return zero time")
-			}
-
-			if !record.GetUpdatedAt().IsZero() {
-				t.Error("GetUpdatedAt() should return zero time")
-			}
+			Expect.AssertZeroTime(t, record.GetCreatedAt, "GetCreatedAt")
+			Expect.AssertZeroTime(t, record.GetUpdatedAt, "GetUpdatedAt")
 		})
 	})
 

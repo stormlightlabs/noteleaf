@@ -9,8 +9,6 @@ import (
 )
 
 // MediaConfig defines configuration for a media repository
-//
-// T should be a pointer type (*models.Book, *models.Movie, *models.TVShow)
 type MediaConfig[T models.Model] struct {
 	TableName     string                             // TableName is the database table name (e.g., "books", "movies", "tv_shows")
 	New           func() T                           // New creates a new zero-value instance of T
@@ -23,11 +21,6 @@ type MediaConfig[T models.Model] struct {
 }
 
 // BaseMediaRepository provides shared CRUD operations for media types
-//
-// This generic implementation eliminates duplicate code across Book, Movie, and TV repositories.
-// Type-specific behavior is configured via MediaConfig.
-//
-// T should be a pointer type (*models.Book, *models.Movie, *models.TVShow)
 type BaseMediaRepository[T models.Model] struct {
 	db     *sql.DB
 	config MediaConfig[T]
@@ -64,8 +57,6 @@ func (r *BaseMediaRepository[T]) Create(ctx context.Context, item T) (int64, err
 }
 
 // Get retrieves a media item by ID
-//
-// Returns T directly (which is already a pointer type like *models.Book)
 func (r *BaseMediaRepository[T]) Get(ctx context.Context, id int64) (T, error) {
 	query := fmt.Sprintf("SELECT * FROM %s WHERE id = ?", r.config.TableName)
 	row := r.db.QueryRowContext(ctx, query, id)
@@ -109,8 +100,6 @@ func (r *BaseMediaRepository[T]) Delete(ctx context.Context, id int64) error {
 }
 
 // ListQuery executes a custom query and scans results
-//
-// Returns []T where T is a pointer type (e.g., []*models.Book)
 func (r *BaseMediaRepository[T]) ListQuery(ctx context.Context, query string, args ...any) ([]T, error) {
 	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -140,7 +129,6 @@ func (r *BaseMediaRepository[T]) CountQuery(ctx context.Context, query string, a
 	return count, nil
 }
 
-// buildPlaceholders generates "?,?,?" for SQL placeholders
 func buildPlaceholders(values []any) string {
 	if len(values) == 0 {
 		return ""

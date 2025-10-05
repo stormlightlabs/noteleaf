@@ -316,7 +316,7 @@ func TestBookRepository(t *testing.T) {
 
 		t.Run("Count with context cancellation", func(t *testing.T) {
 			_, err := repo.Count(NewCanceledContext(), BookListOptions{})
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 	})
 
@@ -332,63 +332,63 @@ func TestBookRepository(t *testing.T) {
 		t.Run("Create with cancelled context", func(t *testing.T) {
 			newBook := NewBookBuilder().WithTitle("Cancelled").Build()
 			_, err := repo.Create(NewCanceledContext(), newBook)
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("Get with cancelled context", func(t *testing.T) {
 			_, err := repo.Get(NewCanceledContext(), id)
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("Update with cancelled context", func(t *testing.T) {
 			book.Title = "Updated"
 			err := repo.Update(NewCanceledContext(), book)
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("Delete with cancelled context", func(t *testing.T) {
 			err := repo.Delete(NewCanceledContext(), id)
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("List with cancelled context", func(t *testing.T) {
 			_, err := repo.List(NewCanceledContext(), BookListOptions{})
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("GetQueued with cancelled context", func(t *testing.T) {
 			_, err := repo.GetQueued(NewCanceledContext())
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("GetReading with cancelled context", func(t *testing.T) {
 			_, err := repo.GetReading(NewCanceledContext())
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("GetFinished with cancelled context", func(t *testing.T) {
 			_, err := repo.GetFinished(NewCanceledContext())
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("GetByAuthor with cancelled context", func(t *testing.T) {
 			_, err := repo.GetByAuthor(NewCanceledContext(), "Test Author")
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("StartReading with cancelled context", func(t *testing.T) {
 			err := repo.StartReading(NewCanceledContext(), id)
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("FinishReading with cancelled context", func(t *testing.T) {
 			err := repo.FinishReading(NewCanceledContext(), id)
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("UpdateProgress with cancelled context", func(t *testing.T) {
 			err := repo.UpdateProgress(NewCanceledContext(), id, 50)
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 	})
 

@@ -43,21 +43,63 @@ type RRule string
 
 // Model defines the common interface that all domain models must implement
 type Model interface {
-	// GetID returns the primary key identifier
-	GetID() int64
-	// SetID sets the primary key identifier
-	SetID(id int64)
-	// GetTableName returns the database table name for this model
-	GetTableName() string
-	// GetCreatedAt returns when the model was created
-	GetCreatedAt() time.Time
-	// SetCreatedAt sets when the model was created
-	SetCreatedAt(t time.Time)
-	// GetUpdatedAt returns when the model was last updated
-	GetUpdatedAt() time.Time
-	// SetUpdatedAt sets when the model was last updated
-	SetUpdatedAt(t time.Time)
+	GetID() int64             // GetID returns the primary key identifier
+	SetID(id int64)           // SetID sets the primary key identifier
+	GetTableName() string     // GetTableName returns the database table name for this model
+	GetCreatedAt() time.Time  // GetCreatedAt returns when the model was created
+	SetCreatedAt(t time.Time) // SetCreatedAt sets when the model was created
+	GetUpdatedAt() time.Time  // GetUpdatedAt returns when the model was last updated
+	SetUpdatedAt(t time.Time) // SetUpdatedAt sets when the model was last updated
 }
+
+// Stateful represents entities with status management behavior
+//
+// Implemented by: [Book], [Movie], [TVShow], [Task]
+type Stateful interface {
+	GetStatus() string
+	ValidStatuses() []string
+}
+
+// Queueable represents media that can be queued for later consumption
+//
+// Implemented by: [Book], [Movie], [TVShow]
+type Queueable interface {
+	Stateful
+	IsQueued() bool
+}
+
+// Completable represents media that can be marked as completed/finished/watched. It tracks completion timestamps for media consumption.
+//
+// Implemented by: [Book] (finished), [Movie] (watched), [TVShow] (watched)
+type Completable interface {
+	Stateful
+	IsCompleted() bool
+	GetCompletionTime() *time.Time
+}
+
+// Progressable represents media with measurable progress tracking
+//
+// Implemented by: [Book] (percentage-based reading progress)
+type Progressable interface {
+	Completable
+	GetProgress() int
+	SetProgress(progress int) error
+}
+
+// Compile-time interface checks
+var (
+	_ Stateful     = (*Task)(nil)
+	_ Stateful     = (*Book)(nil)
+	_ Stateful     = (*Movie)(nil)
+	_ Stateful     = (*TVShow)(nil)
+	_ Queueable    = (*Book)(nil)
+	_ Queueable    = (*Movie)(nil)
+	_ Queueable    = (*TVShow)(nil)
+	_ Completable  = (*Book)(nil)
+	_ Completable  = (*Movie)(nil)
+	_ Completable  = (*TVShow)(nil)
+	_ Progressable = (*Book)(nil)
+)
 
 // Task represents a task item with TaskWarrior-inspired fields
 type Task struct {
@@ -210,45 +252,22 @@ func (t *Task) UnmarshalAnnotations(data string) error {
 }
 
 // IsCompleted returns true if the task is marked as completed
-func (t *Task) IsCompleted() bool {
-	return t.Status == "completed"
-}
+func (t *Task) IsCompleted() bool { return t.Status == "completed" }
 
 // IsPending returns true if the task is pending
-func (t *Task) IsPending() bool {
-	return t.Status == "pending"
-}
+func (t *Task) IsPending() bool { return t.Status == "pending" }
 
 // IsDeleted returns true if the task is deleted
-func (t *Task) IsDeleted() bool {
-	return t.Status == "deleted"
-}
+func (t *Task) IsDeleted() bool { return t.Status == "deleted" }
 
 // HasPriority returns true if the task has a priority set
-func (t *Task) HasPriority() bool {
-	return t.Priority != ""
-}
+func (t *Task) HasPriority() bool { return t.Priority != "" }
 
-// New status tracking methods
-func (t *Task) IsTodo() bool {
-	return t.Status == StatusTodo
-}
-
-func (t *Task) IsInProgress() bool {
-	return t.Status == StatusInProgress
-}
-
-func (t *Task) IsBlocked() bool {
-	return t.Status == StatusBlocked
-}
-
-func (t *Task) IsDone() bool {
-	return t.Status == StatusDone
-}
-
-func (t *Task) IsAbandoned() bool {
-	return t.Status == StatusAbandoned
-}
+func (t *Task) IsTodo() bool       { return t.Status == StatusTodo }
+func (t *Task) IsInProgress() bool { return t.Status == StatusInProgress }
+func (t *Task) IsBlocked() bool    { return t.Status == StatusBlocked }
+func (t *Task) IsDone() bool       { return t.Status == StatusDone }
+func (t *Task) IsAbandoned() bool  { return t.Status == StatusAbandoned }
 
 // IsValidStatus returns true if the status is one of the defined valid statuses
 func (t *Task) IsValidStatus() bool {
@@ -282,9 +301,7 @@ func (t *Task) IsValidPriority() bool {
 	return false
 }
 
-// GetPriorityWeight returns a numeric weight for sorting priorities
-//
-//	Higher numbers = higher priority
+// GetPriorityWeight returns a numeric weight for sorting priorities. A higher number = higher priority
 func (t *Task) GetPriorityWeight() int {
 	switch t.Priority {
 	case PriorityHigh, "5":
@@ -524,14 +541,10 @@ func (a *Album) UnmarshalTracks(data string) error {
 }
 
 // HasRating returns true if the album has a rating set
-func (a *Album) HasRating() bool {
-	return a.Rating > 0
-}
+func (a *Album) HasRating() bool { return a.Rating > 0 }
 
 // IsValidRating returns true if the rating is between 1 and 5
-func (a *Album) IsValidRating() bool {
-	return a.Rating >= 1 && a.Rating <= 5
-}
+func (a *Album) IsValidRating() bool { return a.Rating >= 1 && a.Rating <= 5 }
 
 func (a *Album) GetID() int64                { return a.ID }
 func (a *Album) SetID(id int64)              { a.ID = id }
@@ -585,11 +598,7 @@ func (a *Article) IsValidURL() bool {
 }
 
 // HasAuthor returns true if the article has an author
-func (a *Article) HasAuthor() bool {
-	return a.Author != ""
-}
+func (a *Article) HasAuthor() bool { return a.Author != "" }
 
 // HasDate returns true if the article has a date
-func (a *Article) HasDate() bool {
-	return a.Date != ""
-}
+func (a *Article) HasDate() bool { return a.Date != "" }

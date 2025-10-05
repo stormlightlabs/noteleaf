@@ -224,8 +224,8 @@ func TestArticleHandler(t *testing.T) {
 			err := helper.List(ctx, "", "", 0)
 			Expect.AssertNoError(t, err, "List should succeed")
 
-			Expect.AssertArticleExists(t, helper, id1)
-			Expect.AssertArticleExists(t, helper, id2)
+			AssertExists(t, helper.repos.Articles.Get, id1, "article")
+			AssertExists(t, helper.repos.Articles.Get, id2, "article")
 		})
 
 		t.Run("lists with title filter", func(t *testing.T) {
@@ -389,11 +389,11 @@ func TestArticleHandler(t *testing.T) {
 			helper := NewArticleTestHelper(t)
 			ctx := context.Background()
 			id := helper.CreateTestArticle(t, "https://example.com/remove", "Remove Test", "Author", "2024-01-01")
-			Expect.AssertArticleExists(t, helper, id)
+			AssertExists(t, helper.repos.Articles.Get, id, "article")
 
 			err := helper.Remove(ctx, id)
 			Expect.AssertNoError(t, err, "Remove should succeed")
-			Expect.AssertArticleNotExists(t, helper, id)
+			AssertNotExists(t, helper.repos.Articles.Get, id, "article")
 		})
 
 		t.Run("handles non-existent article", func(t *testing.T) {
@@ -581,6 +581,6 @@ func TestArticleHandlerIntegration(t *testing.T) {
 		err = helper.Remove(ctx, articleID)
 		Expect.AssertNoError(t, err, "Remove should succeed in integration test")
 
-		Expect.AssertArticleNotExists(t, helper, articleID)
+		AssertNotExists(t, helper.repos.Articles.Get, articleID, "article")
 	})
 }

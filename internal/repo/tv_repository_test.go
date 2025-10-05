@@ -464,7 +464,7 @@ func TestTVRepository(t *testing.T) {
 
 		t.Run("Count with context cancellation", func(t *testing.T) {
 			_, err := repo.Count(NewCanceledContext(), TVListOptions{})
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 	})
 
@@ -480,63 +480,63 @@ func TestTVRepository(t *testing.T) {
 		t.Run("Create with cancelled context", func(t *testing.T) {
 			newShow := NewTVShowBuilder().WithTitle("Cancelled").Build()
 			_, err := repo.Create(NewCanceledContext(), newShow)
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("Get with cancelled context", func(t *testing.T) {
 			_, err := repo.Get(NewCanceledContext(), id)
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("Update with cancelled context", func(t *testing.T) {
 			tvShow.Title = "Updated"
 			err := repo.Update(NewCanceledContext(), tvShow)
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("Delete with cancelled context", func(t *testing.T) {
 			err := repo.Delete(NewCanceledContext(), id)
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("List with cancelled context", func(t *testing.T) {
 			_, err := repo.List(NewCanceledContext(), TVListOptions{})
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("GetQueued with cancelled context", func(t *testing.T) {
 			_, err := repo.GetQueued(NewCanceledContext())
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("GetWatching with cancelled context", func(t *testing.T) {
 			_, err := repo.GetWatching(NewCanceledContext())
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("GetWatched with cancelled context", func(t *testing.T) {
 			_, err := repo.GetWatched(NewCanceledContext())
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("GetByTitle with cancelled context", func(t *testing.T) {
 			_, err := repo.GetByTitle(NewCanceledContext(), "Test Show")
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("GetBySeason with cancelled context", func(t *testing.T) {
 			_, err := repo.GetBySeason(NewCanceledContext(), "Test Show", 1)
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("MarkWatched with cancelled context", func(t *testing.T) {
 			err := repo.MarkWatched(NewCanceledContext(), id)
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 
 		t.Run("StartWatching with cancelled context", func(t *testing.T) {
 			err := repo.StartWatching(NewCanceledContext(), id)
-			AssertError(t, err, "Expected error with cancelled context")
+			AssertCancelledContext(t, err)
 		})
 	})
 

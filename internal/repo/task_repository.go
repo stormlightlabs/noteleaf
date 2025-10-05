@@ -1,3 +1,4 @@
+// TODO: extend queryMany composition for GetTasksBy... methods
 package repo
 
 import (
@@ -51,8 +52,6 @@ type ContextSummary struct {
 }
 
 // TaskRepository provides database operations for tasks
-//
-// TODO: Implement Repository interface (Validate method) similar to ArticleRepository
 type TaskRepository struct {
 	db *sql.DB
 }
@@ -60,6 +59,87 @@ type TaskRepository struct {
 // NewTaskRepository creates a new task repository
 func NewTaskRepository(db *sql.DB) *TaskRepository {
 	return &TaskRepository{db: db}
+}
+
+// scanTask scans a database row into a Task model
+func (r *TaskRepository) scanTask(s scanner) (*models.Task, error) {
+	task := &models.Task{}
+	var tags, annotations sql.NullString
+	var parentUUID sql.NullString
+	var priority, project, context sql.NullString
+
+	if err := s.Scan(
+		&task.ID, &task.UUID, &task.Description, &task.Status, &priority,
+		&project, &context, &tags,
+		&task.Due, &task.Entry, &task.Modified, &task.End, &task.Start, &annotations,
+		&task.Recur, &task.Until, &parentUUID,
+	); err != nil {
+		return nil, err
+	}
+
+	if priority.Valid {
+		task.Priority = priority.String
+	}
+	if project.Valid {
+		task.Project = project.String
+	}
+	if context.Valid {
+		task.Context = context.String
+	}
+	if parentUUID.Valid {
+		task.ParentUUID = &parentUUID.String
+	}
+
+	if tags.Valid {
+		if err := unmarshalTaskTags(task, tags.String); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal tags: %w", err)
+		}
+	}
+
+	if annotations.Valid {
+		if err := unmarshalTaskAnnotations(task, annotations.String); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal annotations: %w", err)
+		}
+	}
+
+	return task, nil
+}
+
+// queryOne executes a query that returns a single task
+func (r *TaskRepository) queryOne(ctx context.Context, query string, args ...any) (*models.Task, error) {
+	row := r.db.QueryRowContext(ctx, query, args...)
+	task, err := r.scanTask(row)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("task not found")
+		}
+		return nil, fmt.Errorf("failed to scan task: %w", err)
+	}
+	return task, nil
+}
+
+// queryMany executes a query that returns multiple tasks
+func (r *TaskRepository) queryMany(ctx context.Context, query string, args ...any) ([]*models.Task, error) {
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query tasks: %w", err)
+	}
+	defer rows.Close()
+
+	var tasks []*models.Task
+	for rows.Next() {
+		task, err := r.scanTask(rows)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan task: %w", err)
+		}
+		tasks = append(tasks, task)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over tasks: %w", err)
+	}
+
+	return tasks, nil
 }
 
 // Create stores a new task and returns its assigned ID
@@ -78,15 +158,7 @@ func (r *TaskRepository) Create(ctx context.Context, task *models.Task) (int64, 
 		return 0, fmt.Errorf("failed to marshal annotations: %w", err)
 	}
 
-	query := `
-		INSERT INTO tasks (
-			uuid, description, status, priority, project, context,
-			tags, due, entry, modified, end, start, annotations,
-			recur, until, parent_uuid
-		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-
-	result, err := r.db.ExecContext(ctx, query,
+	result, err := r.db.ExecContext(ctx, queryTaskInsert,
 		task.UUID, task.Description, task.Status, task.Priority, task.Project, task.Context,
 		tags, task.Due, task.Entry, task.Modified, task.End, task.Start, annotations,
 		task.Recur, task.Until, task.ParentUUID,
@@ -102,7 +174,6 @@ func (r *TaskRepository) Create(ctx context.Context, task *models.Task) (int64, 
 
 	task.ID = id
 
-	// Sync dependencies to task_dependencies table
 	for _, depUUID := range task.DependsOn {
 		if err := r.AddDependency(ctx, task.UUID, depUUID); err != nil {
 			return 0, fmt.Errorf("failed to add dependency: %w", err)
@@ -114,41 +185,11 @@ func (r *TaskRepository) Create(ctx context.Context, task *models.Task) (int64, 
 
 // Get retrieves a task by ID
 func (r *TaskRepository) Get(ctx context.Context, id int64) (*models.Task, error) {
-	query := `
-		SELECT id, uuid, description, status, priority, project, context, tags,
-		       due, entry, modified, end, start, annotations,
-		       recur, until, parent_uuid
-		FROM tasks WHERE id = ?`
-
-	task := &models.Task{}
-	var tags, annotations sql.NullString
-	var parentUUID sql.NullString
-
-	if err := r.db.QueryRowContext(ctx, query, id).Scan(
-		&task.ID, &task.UUID, &task.Description, &task.Status, &task.Priority,
-		&task.Project, &task.Context, &tags,
-		&task.Due, &task.Entry, &task.Modified, &task.End, &task.Start, &annotations,
-		&task.Recur, &task.Until, &parentUUID,
-	); err != nil {
+	task, err := r.queryOne(ctx, queryTaskByID, id)
+	if err != nil {
 		return nil, fmt.Errorf("failed to get task: %w", err)
 	}
 
-	if tags.Valid {
-		if err := unmarshalTaskTags(task, tags.String); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal tags: %w", err)
-		}
-	}
-
-	if annotations.Valid {
-		if err := unmarshalTaskAnnotations(task, annotations.String); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal annotations: %w", err)
-		}
-	}
-	if parentUUID.Valid {
-		task.ParentUUID = &parentUUID.String
-	}
-
-	// Populate dependencies from task_dependencies table
 	if err := r.PopulateDependencies(ctx, task); err != nil {
 		return nil, fmt.Errorf("failed to populate dependencies: %w", err)
 	}
@@ -170,14 +211,7 @@ func (r *TaskRepository) Update(ctx context.Context, task *models.Task) error {
 		return fmt.Errorf("failed to marshal annotations: %w", err)
 	}
 
-	query := `
-		UPDATE tasks SET
-			uuid = ?, description = ?, status = ?, priority = ?, project = ?, context = ?,
-			tags = ?, due = ?, modified = ?, end = ?, start = ?, annotations = ?,
-			recur = ?, until = ?, parent_uuid = ?
-		WHERE id = ?`
-
-	if _, err = r.db.ExecContext(ctx, query,
+	if _, err = r.db.ExecContext(ctx, queryTaskUpdate,
 		task.UUID, task.Description, task.Status, task.Priority, task.Project, task.Context,
 		tags, task.Due, task.Modified, task.End, task.Start, annotations,
 		task.Recur, task.Until, task.ParentUUID,
@@ -186,7 +220,6 @@ func (r *TaskRepository) Update(ctx context.Context, task *models.Task) error {
 		return fmt.Errorf("failed to update task: %w", err)
 	}
 
-	// Sync dependencies: clear existing and add new ones
 	if err := r.ClearDependencies(ctx, task.UUID); err != nil {
 		return fmt.Errorf("failed to clear dependencies: %w", err)
 	}
@@ -202,8 +235,7 @@ func (r *TaskRepository) Update(ctx context.Context, task *models.Task) error {
 
 // Delete removes a task by ID
 func (r *TaskRepository) Delete(ctx context.Context, id int64) error {
-	query := "DELETE FROM tasks WHERE id = ?"
-	_, err := r.db.ExecContext(ctx, query, id)
+	_, err := r.db.ExecContext(ctx, queryTaskDelete, id)
 	if err != nil {
 		return fmt.Errorf("failed to delete task: %w", err)
 	}
@@ -214,32 +246,11 @@ func (r *TaskRepository) Delete(ctx context.Context, id int64) error {
 func (r *TaskRepository) List(ctx context.Context, opts TaskListOptions) ([]*models.Task, error) {
 	query := r.buildListQuery(opts)
 	args := r.buildListArgs(opts)
-
-	rows, err := r.db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list tasks: %w", err)
-	}
-	defer rows.Close()
-
-	var tasks []*models.Task
-	for rows.Next() {
-		task := &models.Task{}
-		if err := r.scanTaskRow(rows, task); err != nil {
-			return nil, err
-		}
-		tasks = append(tasks, task)
-	}
-
-	return tasks, rows.Err()
+	return r.queryMany(ctx, query, args...)
 }
 
 func (r *TaskRepository) buildListQuery(opts TaskListOptions) string {
-	query := `
-    SELECT id, uuid, description, status, priority, project, context, tags,
-           due, entry, modified, end, start, annotations,
-           recur, until, parent_uuid
-    FROM tasks`
-
+	query := queryTasksList
 	var conditions []string
 
 	if opts.Status != "" {
@@ -325,49 +336,6 @@ func (r *TaskRepository) buildListArgs(opts TaskListOptions) []any {
 	return args
 }
 
-func (r *TaskRepository) scanTaskRow(rows *sql.Rows, task *models.Task) error {
-	var tags, annotations sql.NullString
-	var parentUUID sql.NullString
-	var priority, project, context sql.NullString
-
-	if err := rows.Scan(
-		&task.ID, &task.UUID, &task.Description, &task.Status, &priority,
-		&project, &context, &tags,
-		&task.Due, &task.Entry, &task.Modified, &task.End, &task.Start, &annotations,
-		&task.Recur, &task.Until, &parentUUID,
-	); err != nil {
-		return fmt.Errorf("failed to scan task row: %w", err)
-	}
-
-	if priority.Valid {
-		task.Priority = priority.String
-	}
-	if project.Valid {
-		task.Project = project.String
-	}
-	if context.Valid {
-		task.Context = context.String
-	}
-
-	if parentUUID.Valid {
-		task.ParentUUID = &parentUUID.String
-	}
-
-	if tags.Valid {
-		if err := unmarshalTaskTags(task, tags.String); err != nil {
-			return fmt.Errorf("failed to unmarshal tags: %w", err)
-		}
-	}
-
-	if annotations.Valid {
-		if err := unmarshalTaskAnnotations(task, annotations.String); err != nil {
-			return fmt.Errorf("failed to unmarshal annotations: %w", err)
-		}
-	}
-
-	return nil
-}
-
 // Find retrieves tasks matching specific conditions
 func (r *TaskRepository) Find(ctx context.Context, conditions TaskListOptions) ([]*models.Task, error) {
 	return r.List(ctx, conditions)
@@ -432,39 +400,9 @@ func (r *TaskRepository) Count(ctx context.Context, opts TaskListOptions) (int64
 
 // GetByUUID retrieves a task by UUID
 func (r *TaskRepository) GetByUUID(ctx context.Context, uuid string) (*models.Task, error) {
-	query := `
-		SELECT id, uuid, description, status, priority, project, context, tags,
-		       due, entry, modified, end, start, annotations,
-		       recur, until, parent_uuid
-		FROM tasks WHERE uuid = ?`
-
-	task := &models.Task{}
-	var tags, annotations sql.NullString
-	var parentUUID sql.NullString
-
-	if err := r.db.QueryRowContext(ctx, query, uuid).Scan(
-		&task.ID, &task.UUID, &task.Description, &task.Status, &task.Priority,
-		&task.Project, &task.Context, &tags,
-		&task.Due, &task.Entry, &task.Modified, &task.End, &task.Start, &annotations,
-		&task.Recur, &task.Until, &parentUUID,
-	); err != nil {
+	task, err := r.queryOne(ctx, queryTaskByUUID, uuid)
+	if err != nil {
 		return nil, fmt.Errorf("failed to get task by UUID: %w", err)
-	}
-
-	if tags.Valid {
-		if err := unmarshalTaskTags(task, tags.String); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal tags: %w", err)
-		}
-	}
-
-	if annotations.Valid {
-		if err := unmarshalTaskAnnotations(task, annotations.String); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal annotations: %w", err)
-		}
-	}
-
-	if parentUUID.Valid {
-		task.ParentUUID = &parentUUID.String
 	}
 
 	// Populate dependencies from task_dependencies table
@@ -586,22 +524,7 @@ func (r *TaskRepository) GetTasksByTag(ctx context.Context, tag string) ([]*mode
 		WHERE t.tags != '' AND t.tags IS NOT NULL AND json_each.value = ?
 		ORDER BY t.modified DESC`
 
-	rows, err := r.db.QueryContext(ctx, query, tag)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get tasks by tag: %w", err)
-	}
-	defer rows.Close()
-
-	var tasks []*models.Task
-	for rows.Next() {
-		task := &models.Task{}
-		if err := r.scanTaskRow(rows, task); err != nil {
-			return nil, err
-		}
-		tasks = append(tasks, task)
-	}
-
-	return tasks, rows.Err()
+	return r.queryMany(ctx, query, tag)
 }
 
 // GetTodo retrieves all tasks with todo status
@@ -632,25 +555,8 @@ func (r *TaskRepository) GetAbandoned(ctx context.Context) ([]*models.Task, erro
 // GetByPriority retrieves all tasks with a specific priority with special handling for empty priority by using raw SQL
 func (r *TaskRepository) GetByPriority(ctx context.Context, priority string) ([]*models.Task, error) {
 	if priority == "" {
-		query := `SELECT id, uuid, description, status, priority, project, context,
-			tags, due, entry, modified, end, start, annotations, recur, until, parent_uuid
-			FROM tasks WHERE priority = '' OR priority IS NULL ORDER BY modified DESC`
-
-		rows, err := r.db.QueryContext(ctx, query)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get tasks by empty priority: %w", err)
-		}
-		defer rows.Close()
-
-		var tasks []*models.Task
-		for rows.Next() {
-			task := &models.Task{}
-			if err := r.scanTaskRow(rows, task); err != nil {
-				return nil, err
-			}
-			tasks = append(tasks, task)
-		}
-		return tasks, rows.Err()
+		query := "SELECT " + taskColumns + " FROM tasks WHERE priority = '' OR priority IS NULL ORDER BY modified DESC"
+		return r.queryMany(ctx, query)
 	}
 
 	return r.List(ctx, TaskListOptions{Priority: priority})
@@ -781,22 +687,9 @@ func (r *TaskRepository) GetDependents(ctx context.Context, blockingUUID string)
 		       t.tags, t.due, t.entry, t.modified, t.end, t.start, t.annotations, t.recur, t.until, t.parent_uuid
 		FROM tasks t JOIN task_dependencies d ON t.uuid = d.task_uuid WHERE d.depends_on_uuid = ?`
 
-	rows, err := r.db.QueryContext(ctx, query, blockingUUID)
+	tasks, err := r.queryMany(ctx, query, blockingUUID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get dependents: %w", err)
-	}
-	defer rows.Close()
-
-	var tasks []*models.Task
-	for rows.Next() {
-		task := &models.Task{}
-		if err := r.scanTaskRow(rows, task); err != nil {
-			return nil, err
-		}
-		tasks = append(tasks, task)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
 	}
 
 	for _, task := range tasks {
@@ -810,26 +703,14 @@ func (r *TaskRepository) GetDependents(ctx context.Context, blockingUUID string)
 // GetBlockedTasks finds tasks that are blocked by a given UUID.
 func (r *TaskRepository) GetBlockedTasks(ctx context.Context, blockingUUID string) ([]*models.Task, error) {
 	query := `
-	SELECT t.id, t.uuid, t.description, t.status, t.priority, t.project, t.context,
-	       t.tags, t.due, t.entry, t.modified, t.end, t.start, t.annotations, t.recur, t.until, t.parent_uuid
-	FROM tasks t
-	JOIN task_dependencies d ON t.uuid = d.task_uuid
-	WHERE d.depends_on_uuid = ?`
-	rows, err := r.db.QueryContext(ctx, query, blockingUUID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
+		SELECT t.id, t.uuid, t.description, t.status, t.priority, t.project, t.context,
+		       t.tags, t.due, t.entry, t.modified, t.end, t.start, t.annotations, t.recur, t.until, t.parent_uuid
+		FROM tasks t
+		JOIN task_dependencies d ON t.uuid = d.task_uuid
+		WHERE d.depends_on_uuid = ?`
 
-	var tasks []*models.Task
-	for rows.Next() {
-		task := &models.Task{}
-		if err := r.scanTaskRow(rows, task); err != nil {
-			return nil, err
-		}
-		tasks = append(tasks, task)
-	}
-	if err := rows.Err(); err != nil {
+	tasks, err := r.queryMany(ctx, query, blockingUUID)
+	if err != nil {
 		return nil, err
 	}
 

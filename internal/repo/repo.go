@@ -2,6 +2,7 @@ package repo
 
 import (
 	"database/sql"
+	"fmt"
 
 	"github.com/stormlightlabs/noteleaf/internal/models"
 )
@@ -32,4 +33,8 @@ func NewRepositories(db *sql.DB) *Repositories {
 		TimeEntries: NewTimeEntryRepository(db),
 		Articles:    NewArticleRepository(db),
 	}
+}
+
+func UnmarshalTagsError(err error) error {
+	return fmt.Errorf("failed to unmarshal tags: %w", err)
 }
