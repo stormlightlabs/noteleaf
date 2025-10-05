@@ -8,12 +8,12 @@ import (
 	"time"
 
 	"github.com/stormlightlabs/noteleaf/internal/models"
+	"github.com/stormlightlabs/noteleaf/internal/services"
 )
 
 // BookRepository provides database operations for books
 //
 // Uses BaseMediaRepository for common CRUD operations.
-// TODO: Implement Repository interface (Validate method) similar to ArticleRepository
 type BookRepository struct {
 	*BaseMediaRepository[*models.Book]
 	db *sql.DB
@@ -26,28 +26,25 @@ func NewBookRepository(db *sql.DB) *BookRepository {
 		New:           func() *models.Book { return &models.Book{} },
 		InsertColumns: "title, author, status, progress, pages, rating, notes, added, started, finished",
 		UpdateColumns: "title = ?, author = ?, status = ?, progress = ?, pages = ?, rating = ?, notes = ?, started = ?, finished = ?",
+		Scan:          func(rows *sql.Rows, book *models.Book) error { return scanBookRow(rows, book) },
+		ScanSingle:    func(row *sql.Row, book *models.Book) error { return scanBookRowSingle(row, book) },
 		InsertValues: func(book *models.Book) []any {
 			return []any{book.Title, book.Author, book.Status, book.Progress, book.Pages, book.Rating, book.Notes, book.Added, book.Started, book.Finished}
 		},
 		UpdateValues: func(book *models.Book) []any {
 			return []any{book.Title, book.Author, book.Status, book.Progress, book.Pages, book.Rating, book.Notes, book.Started, book.Finished, book.ID}
 		},
-		Scan: func(rows *sql.Rows, book *models.Book) error {
-			return scanBookRow(rows, book)
-		},
-		ScanSingle: func(row *sql.Row, book *models.Book) error {
-			return scanBookRowSingle(row, book)
-		},
 	}
 
-	return &BookRepository{
-		BaseMediaRepository: NewBaseMediaRepository(db, config),
-		db:                  db,
-	}
+	return &BookRepository{BaseMediaRepository: NewBaseMediaRepository(db, config), db: db}
 }
 
 // Create stores a new book and returns its assigned ID
 func (r *BookRepository) Create(ctx context.Context, book *models.Book) (int64, error) {
+	if err := r.Validate(book); err != nil {
+		return 0, err
+	}
+
 	now := time.Now()
 	book.Added = now
 
@@ -60,11 +57,18 @@ func (r *BookRepository) Create(ctx context.Context, book *models.Book) (int64, 
 	return id, nil
 }
 
+// Update modifies an existing book
+func (r *BookRepository) Update(ctx context.Context, book *models.Book) error {
+	if err := r.Validate(book); err != nil {
+		return err
+	}
+	return r.BaseMediaRepository.Update(ctx, book)
+}
+
 // List retrieves books with optional filtering and sorting
 func (r *BookRepository) List(ctx context.Context, opts BookListOptions) ([]*models.Book, error) {
 	query := r.buildListQuery(opts)
 	args := r.buildListArgs(opts)
-
 	items, err := r.BaseMediaRepository.ListQuery(ctx, query, args...)
 	if err != nil {
 		return nil, err
@@ -119,7 +123,6 @@ func (r *BookRepository) buildListQuery(opts BookListOptions) string {
 			query += fmt.Sprintf(" OFFSET %d", opts.Offset)
 		}
 	}
-
 	return query
 }
 
@@ -143,39 +146,32 @@ func (r *BookRepository) buildListArgs(opts BookListOptions) []any {
 		searchPattern := "%" + opts.Search + "%"
 		args = append(args, searchPattern, searchPattern, searchPattern)
 	}
-
 	return args
 }
 
 // scanBookRow scans a database row into a book model
 func scanBookRow(rows *sql.Rows, book *models.Book) error {
 	var pages sql.NullInt64
-
 	if err := rows.Scan(&book.ID, &book.Title, &book.Author, &book.Status, &book.Progress, &pages,
 		&book.Rating, &book.Notes, &book.Added, &book.Started, &book.Finished); err != nil {
 		return err
 	}
-
 	if pages.Valid {
 		book.Pages = int(pages.Int64)
 	}
-
 	return nil
 }
 
 // scanBookRowSingle scans a single database row into a book model
 func scanBookRowSingle(row *sql.Row, book *models.Book) error {
 	var pages sql.NullInt64
-
 	if err := row.Scan(&book.ID, &book.Title, &book.Author, &book.Status, &book.Progress, &pages,
 		&book.Rating, &book.Notes, &book.Added, &book.Started, &book.Finished); err != nil {
 		return err
 	}
-
 	if pages.Valid {
 		book.Pages = int(pages.Int64)
 	}
-
 	return nil
 }
 
@@ -222,7 +218,6 @@ func (r *BookRepository) Count(ctx context.Context, opts BookListOptions) (int64
 	if len(conditions) > 0 {
 		query += " WHERE " + strings.Join(conditions, " AND ")
 	}
-
 	return r.BaseMediaRepository.CountQuery(ctx, query, args...)
 }
 
@@ -295,7 +290,6 @@ func (r *BookRepository) UpdateProgress(ctx context.Context, id int64, progress 
 			book.Started = &now
 		}
 	}
-
 	return r.Update(ctx, book)
 }
 
@@ -310,4 +304,41 @@ type BookListOptions struct {
 	SortOrder   string
 	Limit       int
 	Offset      int
+}
+
+// Validate validates a book model
+func (r *BookRepository) Validate(model models.Model) error {
+	book, ok := model.(*models.Book)
+	if !ok {
+		return services.NewValidationError("model", "expected Book model")
+	}
+
+	validator := services.NewValidator()
+
+	validator.Check(services.RequiredString("Title", book.Title))
+	validator.Check(services.ValidEnum("Status", book.Status, book.ValidStatuses()))
+	validator.Check(services.StringLength("Title", book.Title, 1, 500))
+	validator.Check(services.StringLength("Author", book.Author, 0, 200))
+	validator.Check(services.StringLength("Notes", book.Notes, 0, 2000))
+
+	if book.Progress < 0 || book.Progress > 100 {
+		validator.Check(services.NewValidationError("Progress", "must be between 0 and 100"))
+	}
+
+	if book.Rating < 0 || book.Rating > 5 {
+		validator.Check(services.NewValidationError("Rating", "must be between 0 and 5"))
+	}
+
+	if book.Pages < 0 {
+		validator.Check(services.NewValidationError("Pages", "must be non-negative"))
+	}
+
+	if book.ID > 0 {
+		validator.Check(services.PositiveID("ID", book.ID))
+	}
+
+	if !book.Added.IsZero() && book.Started != nil && book.Added.After(*book.Started) {
+		validator.Check(services.NewValidationError("Added", "cannot be after Started timestamp"))
+	}
+	return validator.Errors()
 }

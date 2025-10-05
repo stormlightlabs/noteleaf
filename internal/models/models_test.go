@@ -906,4 +906,227 @@ func TestModels(t *testing.T) {
 			}
 		})
 	})
+
+	t.Run("Behavior Interfaces", func(t *testing.T) {
+		t.Run("Stateful Interface", func(t *testing.T) {
+			t.Run("Task implements Stateful", func(t *testing.T) {
+				task := &Task{Status: StatusTodo}
+
+				if task.GetStatus() != StatusTodo {
+					t.Errorf("Expected status %s, got %s", StatusTodo, task.GetStatus())
+				}
+
+				validStatuses := task.ValidStatuses()
+				if len(validStatuses) == 0 {
+					t.Error("ValidStatuses should not be empty")
+				}
+
+				expectedStatuses := []string{StatusTodo, StatusInProgress, StatusBlocked, StatusDone, StatusAbandoned, StatusPending, StatusCompleted, StatusDeleted}
+				if len(validStatuses) != len(expectedStatuses) {
+					t.Errorf("Expected %d valid statuses, got %d", len(expectedStatuses), len(validStatuses))
+				}
+			})
+
+			t.Run("Book implements Stateful", func(t *testing.T) {
+				book := &Book{Status: "reading"}
+
+				if book.GetStatus() != "reading" {
+					t.Errorf("Expected status 'reading', got %s", book.GetStatus())
+				}
+
+				validStatuses := book.ValidStatuses()
+				expectedStatuses := []string{"queued", "reading", "finished", "removed"}
+
+				if len(validStatuses) != len(expectedStatuses) {
+					t.Errorf("Expected %d valid statuses, got %d", len(expectedStatuses), len(validStatuses))
+				}
+
+				for i, status := range expectedStatuses {
+					if validStatuses[i] != status {
+						t.Errorf("Expected status %s at index %d, got %s", status, i, validStatuses[i])
+					}
+				}
+			})
+
+			t.Run("Movie implements Stateful", func(t *testing.T) {
+				movie := &Movie{Status: "queued"}
+
+				if movie.GetStatus() != "queued" {
+					t.Errorf("Expected status 'queued', got %s", movie.GetStatus())
+				}
+
+				validStatuses := movie.ValidStatuses()
+				expectedStatuses := []string{"queued", "watched", "removed"}
+
+				if len(validStatuses) != len(expectedStatuses) {
+					t.Errorf("Expected %d valid statuses, got %d", len(expectedStatuses), len(validStatuses))
+				}
+			})
+
+			t.Run("TVShow implements Stateful", func(t *testing.T) {
+				tvShow := &TVShow{Status: "watching"}
+
+				if tvShow.GetStatus() != "watching" {
+					t.Errorf("Expected status 'watching', got %s", tvShow.GetStatus())
+				}
+
+				validStatuses := tvShow.ValidStatuses()
+				expectedStatuses := []string{"queued", "watching", "watched", "removed"}
+
+				if len(validStatuses) != len(expectedStatuses) {
+					t.Errorf("Expected %d valid statuses, got %d", len(expectedStatuses), len(validStatuses))
+				}
+			})
+		})
+
+		t.Run("Completable Interface", func(t *testing.T) {
+			t.Run("Book implements Completable", func(t *testing.T) {
+				now := time.Now()
+
+				unfinishedBook := &Book{Status: "reading"}
+				if unfinishedBook.IsCompleted() {
+					t.Error("Book with 'reading' status should not be completed")
+				}
+				if unfinishedBook.GetCompletionTime() != nil {
+					t.Error("Unfinished book should have nil completion time")
+				}
+
+				finishedBook := &Book{Status: "finished", Finished: &now}
+				if !finishedBook.IsCompleted() {
+					t.Error("Book with 'finished' status should be completed")
+				}
+				if finishedBook.GetCompletionTime() == nil {
+					t.Error("Finished book should have completion time")
+				}
+				if !finishedBook.GetCompletionTime().Equal(now) {
+					t.Errorf("Expected completion time %v, got %v", now, finishedBook.GetCompletionTime())
+				}
+			})
+
+			t.Run("Movie implements Completable", func(t *testing.T) {
+				now := time.Now()
+
+				unwatchedMovie := &Movie{Status: "queued"}
+				if unwatchedMovie.IsCompleted() {
+					t.Error("Movie with 'queued' status should not be completed")
+				}
+				if unwatchedMovie.GetCompletionTime() != nil {
+					t.Error("Unwatched movie should have nil completion time")
+				}
+
+				watchedMovie := &Movie{Status: "watched", Watched: &now}
+				if !watchedMovie.IsCompleted() {
+					t.Error("Movie with 'watched' status should be completed")
+				}
+				if watchedMovie.GetCompletionTime() == nil {
+					t.Error("Watched movie should have completion time")
+				}
+				if !watchedMovie.GetCompletionTime().Equal(now) {
+					t.Errorf("Expected completion time %v, got %v", now, watchedMovie.GetCompletionTime())
+				}
+			})
+
+			t.Run("TVShow implements Completable", func(t *testing.T) {
+				now := time.Now()
+
+				unwatchedShow := &TVShow{Status: "watching"}
+				if unwatchedShow.IsCompleted() {
+					t.Error("TVShow with 'watching' status should not be completed")
+				}
+				if unwatchedShow.GetCompletionTime() != nil {
+					t.Error("Unwatched show should have nil completion time")
+				}
+
+				watchedShow := &TVShow{Status: "watched", LastWatched: &now}
+				if !watchedShow.IsCompleted() {
+					t.Error("TVShow with 'watched' status should be completed")
+				}
+				if watchedShow.GetCompletionTime() == nil {
+					t.Error("Watched show should have completion time")
+				}
+				if !watchedShow.GetCompletionTime().Equal(now) {
+					t.Errorf("Expected completion time %v, got %v", now, watchedShow.GetCompletionTime())
+				}
+			})
+		})
+
+		t.Run("Progressable Interface", func(t *testing.T) {
+			t.Run("Book implements Progressable", func(t *testing.T) {
+				book := &Book{Progress: 50}
+
+				if book.GetProgress() != 50 {
+					t.Errorf("Expected progress 50, got %d", book.GetProgress())
+				}
+			})
+
+			t.Run("SetProgress with valid values", func(t *testing.T) {
+				book := &Book{}
+
+				if err := book.SetProgress(0); err != nil {
+					t.Errorf("SetProgress(0) should succeed, got error: %v", err)
+				}
+				if book.Progress != 0 {
+					t.Errorf("Expected progress 0, got %d", book.Progress)
+				}
+
+				if err := book.SetProgress(100); err != nil {
+					t.Errorf("SetProgress(100) should succeed, got error: %v", err)
+				}
+				if book.Progress != 100 {
+					t.Errorf("Expected progress 100, got %d", book.Progress)
+				}
+
+				if err := book.SetProgress(42); err != nil {
+					t.Errorf("SetProgress(42) should succeed, got error: %v", err)
+				}
+				if book.Progress != 42 {
+					t.Errorf("Expected progress 42, got %d", book.Progress)
+				}
+			})
+
+			t.Run("SetProgress rejects invalid values", func(t *testing.T) {
+				book := &Book{Progress: 50}
+
+				if err := book.SetProgress(-1); err == nil {
+					t.Error("SetProgress(-1) should fail")
+				} else if book.Progress != 50 {
+					t.Error("Progress should not change on validation error")
+				}
+
+				if err := book.SetProgress(101); err == nil {
+					t.Error("SetProgress(101) should fail")
+				} else if book.Progress != 50 {
+					t.Error("Progress should not change on validation error")
+				}
+
+				if err := book.SetProgress(-100); err == nil {
+					t.Error("SetProgress(-100) should fail")
+				}
+
+				if err := book.SetProgress(1000); err == nil {
+					t.Error("SetProgress(1000) should fail")
+				}
+			})
+
+			t.Run("SetProgress error messages", func(t *testing.T) {
+				book := &Book{}
+
+				err := book.SetProgress(-5)
+				if err == nil {
+					t.Fatal("Expected error for negative progress")
+				}
+				if err.Error() != "progress must be between 0 and 100, got -5" {
+					t.Errorf("Unexpected error message: %s", err.Error())
+				}
+
+				err = book.SetProgress(150)
+				if err == nil {
+					t.Fatal("Expected error for progress > 100")
+				}
+				if err.Error() != "progress must be between 0 and 100, got 150" {
+					t.Errorf("Unexpected error message: %s", err.Error())
+				}
+			})
+		})
+	})
 }

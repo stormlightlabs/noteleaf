@@ -261,11 +261,10 @@ func TestBookHandler(t *testing.T) {
 				defer handler.Close()
 
 				ctx := context.Background()
-				if _, err = handler.repos.Books.Create(ctx, &models.Book{
-					Title:  "Interactive Test Book",
-					Author: "Interactive Author",
-					Status: "completed",
-				}); err != nil {
+				if _, err = handler.repos.Books.Create(ctx,
+					&models.Book{
+						Title: "Interactive Test Book", Author: "Interactive Author", Status: "finished",
+					}); err != nil {
 					t.Fatalf("Failed to create test book: %v", err)
 				}
 

@@ -10,8 +10,7 @@ import (
 )
 
 var (
-	emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
-
+	emailRegex  = regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
 	dateFormats = []string{
 		"2006-01-02",
 		"2006-01-02T15:04:05Z",
@@ -28,6 +27,10 @@ type ValidationError struct {
 
 func (e ValidationError) Error() string {
 	return fmt.Sprintf("validation error for field '%s': %s", e.Field, e.Message)
+}
+
+func NewValidationError(f, m string) ValidationError {
+	return ValidationError{Field: f, Message: m}
 }
 
 // ValidationErrors represents multiple validation errors
@@ -52,7 +55,7 @@ func (e ValidationErrors) Error() string {
 // RequiredString validates that a string field is not empty
 func RequiredString(name, value string) error {
 	if strings.TrimSpace(value) == "" {
-		return ValidationError{Field: name, Message: "is required and cannot be empty"}
+		return NewValidationError(name, "is required and cannot be empty")
 	}
 	return nil
 }
@@ -69,7 +72,7 @@ func ValidURL(name, value string) error {
 	}
 
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return ValidationError{Field: name, Message: "must use http or https scheme"}
+		return NewValidationError(name, "must use http or https scheme")
 	}
 
 	return nil
@@ -82,7 +85,7 @@ func ValidEmail(name, value string) error {
 	}
 
 	if !emailRegex.MatchString(value) {
-		return ValidationError{Field: name, Message: "must be a valid email address"}
+		return NewValidationError(name, "must be a valid email address")
 	}
 
 	return nil
@@ -91,15 +94,12 @@ func ValidEmail(name, value string) error {
 // StringLength validates string length constraints
 func StringLength(name, value string, min, max int) error {
 	length := len(strings.TrimSpace(value))
-
 	if min > 0 && length < min {
-		return ValidationError{Field: name, Message: fmt.Sprintf("must be at least %d characters long", min)}
+		return NewValidationError(name, fmt.Sprintf("must be at least %d characters long", min))
 	}
-
 	if max > 0 && length > max {
-		return ValidationError{Field: name, Message: fmt.Sprintf("must not exceed %d characters", max)}
+		return NewValidationError(name, fmt.Sprintf("must not exceed %d characters", max))
 	}
-
 	return nil
 }
 
@@ -114,17 +114,13 @@ func ValidDate(name, value string) error {
 			return nil
 		}
 	}
-
-	return ValidationError{
-		Field:   name,
-		Message: "must be a valid date (YYYY-MM-DD, YYYY-MM-DDTHH:MM:SSZ, etc.)",
-	}
+	return NewValidationError(name, "must be a valid date (YYYY-MM-DD, YYYY-MM-DDTHH:MM:SSZ, etc.)")
 }
 
 // PositiveID validates that an ID is positive
 func PositiveID(name string, value int64) error {
 	if value <= 0 {
-		return ValidationError{Field: name, Message: "must be a positive integer"}
+		return NewValidationError(name, "must be a positive integer")
 	}
 	return nil
 }
@@ -134,13 +130,10 @@ func ValidEnum(name, value string, allowedValues []string) error {
 	if value == "" {
 		return nil
 	}
-
 	if slices.Contains(allowedValues, value) {
 		return nil
 	}
-
-	message := fmt.Sprintf("must be one of: %s", strings.Join(allowedValues, ", "))
-	return ValidationError{Field: name, Message: message}
+	return NewValidationError(name, fmt.Sprintf("must be one of: %s", strings.Join(allowedValues, ", ")))
 }
 
 // ValidFilePath validates that a string looks like a valid file path
@@ -148,15 +141,12 @@ func ValidFilePath(name, value string) error {
 	if value == "" {
 		return nil
 	}
-
 	if strings.Contains(value, "..") {
-		return ValidationError{Field: name, Message: "cannot contain '..' path traversal"}
+		return NewValidationError(name, "cannot contain '..' path traversal")
 	}
-
 	if strings.ContainsAny(value, "<>:\"|?*") {
-		return ValidationError{Field: name, Message: "contains invalid characters"}
+		return NewValidationError(name, "contains invalid characters")
 	}
-
 	return nil
 }
 
@@ -176,7 +166,7 @@ func (v *Validator) Check(err error) *Validator {
 		if valErr, ok := err.(ValidationError); ok {
 			v.errors = append(v.errors, valErr)
 		} else {
-			v.errors = append(v.errors, ValidationError{Field: "unknown", Message: err.Error()})
+			v.errors = append(v.errors, NewValidationError("unknown", err.Error()))
 		}
 	}
 	return v

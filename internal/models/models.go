@@ -2,6 +2,7 @@ package models
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/url"
 	"slices"
 	"time"
@@ -311,9 +312,7 @@ func (t *Task) GetPriorityWeight() int {
 }
 
 // IsStarted returns true if the task has a start time set.
-func (t *Task) IsStarted() bool {
-	return t.Start != nil
-}
+func (t *Task) IsStarted() bool { return t.Start != nil }
 
 // IsOverdue returns true if the task is overdue.
 func (t *Task) IsOverdue(now time.Time) bool {
@@ -321,14 +320,10 @@ func (t *Task) IsOverdue(now time.Time) bool {
 }
 
 // HasDueDate returns true if the task has a due date set.
-func (t *Task) HasDueDate() bool {
-	return t.Due != nil
-}
+func (t *Task) HasDueDate() bool { return t.Due != nil }
 
 // IsRecurring returns true if the task has recurrence defined.
-func (t *Task) IsRecurring() bool {
-	return t.Recur != ""
-}
+func (t *Task) IsRecurring() bool { return t.Recur != "" }
 
 // IsRecurExpired checks if the recurrence has an end (until) date and is past it.
 func (t *Task) IsRecurExpired(now time.Time) bool {
@@ -336,9 +331,7 @@ func (t *Task) IsRecurExpired(now time.Time) bool {
 }
 
 // HasDependencies returns true if the task depends on other tasks.
-func (t *Task) HasDependencies() bool {
-	return len(t.DependsOn) > 0
-}
+func (t *Task) HasDependencies() bool { return len(t.DependsOn) > 0 }
 
 // Blocks checks if this task blocks another given task.
 func (t *Task) Blocks(other *Task) bool {
@@ -361,49 +354,92 @@ func (t *Task) Urgency(now time.Time) float64 {
 	return score
 }
 
-// IsWatched returns true if the movie has been watched
-func (m *Movie) IsWatched() bool {
-	return m.Status == "watched"
+// GetStatus returns the current status of the task
+func (t *Task) GetStatus() string { return t.Status }
+
+// ValidStatuses returns all valid status values for a task
+func (t *Task) ValidStatuses() []string {
+	return []string{
+		StatusTodo, StatusInProgress, StatusBlocked, StatusDone, StatusAbandoned,
+		StatusPending, StatusCompleted, StatusDeleted,
+	}
 }
+
+// IsWatched returns true if the movie has been watched
+func (m *Movie) IsWatched() bool { return m.Status == "watched" }
 
 // IsQueued returns true if the movie is in the queue
-func (m *Movie) IsQueued() bool {
-	return m.Status == "queued"
-}
+func (m *Movie) IsQueued() bool { return m.Status == "queued" }
+
+// GetStatus returns the current status of the movie
+func (m *Movie) GetStatus() string { return m.Status }
+
+// ValidStatuses returns all valid status values for a movie
+func (m *Movie) ValidStatuses() []string { return []string{"queued", "watched", "removed"} }
+
+// IsCompleted returns true if the movie has been watched
+func (m *Movie) IsCompleted() bool { return m.Status == "watched" }
+
+// GetCompletionTime returns when the movie was watched
+func (m *Movie) GetCompletionTime() *time.Time { return m.Watched }
 
 // IsWatching returns true if the TV show is currently being watched
-func (tv *TVShow) IsWatching() bool {
-	return tv.Status == "watching"
-}
+func (tv *TVShow) IsWatching() bool { return tv.Status == "watching" }
 
 // IsWatched returns true if the TV show has been watched
-func (tv *TVShow) IsWatched() bool {
-	return tv.Status == "watched"
-}
+func (tv *TVShow) IsWatched() bool { return tv.Status == "watched" }
 
 // IsQueued returns true if the TV show is in the queue
-func (tv *TVShow) IsQueued() bool {
-	return tv.Status == "queued"
+func (tv *TVShow) IsQueued() bool { return tv.Status == "queued" }
+
+// GetStatus returns the current status of the TV show
+func (tv *TVShow) GetStatus() string { return tv.Status }
+
+// ValidStatuses returns all valid status values for a TV show
+func (tv *TVShow) ValidStatuses() []string {
+	return []string{"queued", "watching", "watched", "removed"}
 }
+
+// IsCompleted returns true if the TV show has been watched
+func (tv *TVShow) IsCompleted() bool { return tv.Status == "watched" }
+
+// GetCompletionTime returns when the TV show was last watched
+func (tv *TVShow) GetCompletionTime() *time.Time { return tv.LastWatched }
 
 // IsReading returns true if the book is currently being read
-func (b *Book) IsReading() bool {
-	return b.Status == "reading"
-}
+func (b *Book) IsReading() bool { return b.Status == "reading" }
 
 // IsFinished returns true if the book has been finished
-func (b *Book) IsFinished() bool {
-	return b.Status == "finished"
-}
+func (b *Book) IsFinished() bool { return b.Status == "finished" }
 
 // IsQueued returns true if the book is in the queue
-func (b *Book) IsQueued() bool {
-	return b.Status == "queued"
-}
+func (b *Book) IsQueued() bool { return b.Status == "queued" }
 
 // ProgressPercent returns the reading progress as a percentage
-func (b *Book) ProgressPercent() int {
-	return b.Progress
+func (b *Book) ProgressPercent() int { return b.Progress }
+
+// GetStatus returns the current status of the book
+func (b *Book) GetStatus() string { return b.Status }
+
+// ValidStatuses returns all valid status values for a book
+func (b *Book) ValidStatuses() []string { return []string{"queued", "reading", "finished", "removed"} }
+
+// IsCompleted returns true if the book has been finished
+func (b *Book) IsCompleted() bool { return b.Status == "finished" }
+
+// GetCompletionTime returns when the book was finished
+func (b *Book) GetCompletionTime() *time.Time { return b.Finished }
+
+// GetProgress returns the reading progress percentage (0-100)
+func (b *Book) GetProgress() int { return b.Progress }
+
+// SetProgress sets the reading progress percentage (0-100)
+func (b *Book) SetProgress(progress int) error {
+	if progress < 0 || progress > 100 {
+		return fmt.Errorf("progress must be between 0 and 100, got %d", progress)
+	}
+	b.Progress = progress
+	return nil
 }
 
 func (t *Task) GetID() int64                { return t.ID }
