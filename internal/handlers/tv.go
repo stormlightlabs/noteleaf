@@ -16,6 +16,8 @@ import (
 )
 
 // TVHandler handles all TV show-related commands
+//
+// Implements MediaHandler interface for polymorphic media handling
 type TVHandler struct {
 	db      *store.Database
 	config  *store.Config
@@ -23,6 +25,9 @@ type TVHandler struct {
 	service *services.TVService
 	reader  io.Reader
 }
+
+// Ensure TVHandler implements MediaHandler interface
+var _ MediaHandler = (*TVHandler)(nil)
 
 // NewTVHandler creates a new TV handler
 func NewTVHandler() (*TVHandler, error) {
@@ -232,7 +237,11 @@ func (h *TVHandler) View(ctx context.Context, id string) error {
 }
 
 // UpdateStatus changes the status of a TV show
-func (h *TVHandler) UpdateStatus(ctx context.Context, showID int64, status string) error {
+func (h *TVHandler) UpdateStatus(ctx context.Context, id, status string) error {
+	showID, err := strconv.ParseInt(id, 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid tv show ID %w", err)
+	}
 	validStatuses := []string{"queued", "watching", "watched", "removed"}
 	if !slices.Contains(validStatuses, status) {
 		return fmt.Errorf("invalid status: %s (valid: %s)", status, strings.Join(validStatuses, ", "))
@@ -258,18 +267,13 @@ func (h *TVHandler) UpdateStatus(ctx context.Context, showID int64, status strin
 }
 
 // MarkWatching marks a TV show as currently watching
-func (h *TVHandler) MarkWatching(ctx context.Context, showID int64) error {
-	return h.UpdateStatus(ctx, showID, "watching")
+func (h *TVHandler) MarkWatching(ctx context.Context, id string) error {
+	return h.UpdateStatus(ctx, id, "watching")
 }
 
 // MarkWatched marks a TV show as watched
 func (h *TVHandler) MarkWatched(ctx context.Context, id string) error {
-	showID, err := strconv.ParseInt(id, 10, 64)
-	if err != nil {
-		return fmt.Errorf("invalid TV show ID: %s", id)
-	}
-
-	return h.UpdateStatus(ctx, showID, "watched")
+	return h.UpdateStatus(ctx, id, "watched")
 }
 
 // Remove removes a TV show from the queue
@@ -317,18 +321,10 @@ func (h *TVHandler) print(show *models.TVShow) {
 
 // UpdateTVShowStatus changes the status of a TV show
 func (h *TVHandler) UpdateTVShowStatus(ctx context.Context, id, status string) error {
-	showID, err := strconv.ParseInt(id, 10, 64)
-	if err != nil {
-		return fmt.Errorf("invalid TV show ID: %s", id)
-	}
-	return h.UpdateStatus(ctx, showID, status)
+	return h.UpdateStatus(ctx, id, status)
 }
 
 // MarkTVShowWatching marks a TV show as currently watching
 func (h *TVHandler) MarkTVShowWatching(ctx context.Context, id string) error {
-	showID, err := strconv.ParseInt(id, 10, 64)
-	if err != nil {
-		return fmt.Errorf("invalid TV show ID: %s", id)
-	}
-	return h.MarkWatching(ctx, showID)
+	return h.MarkWatching(ctx, id)
 }

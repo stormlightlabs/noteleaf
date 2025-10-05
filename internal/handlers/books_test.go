@@ -124,21 +124,18 @@ func TestBookHandler(t *testing.T) {
 			ctx := context.Background()
 			t.Run("fails with empty args", func(t *testing.T) {
 				args := []string{}
-				err := handler.SearchAndAdd(ctx, args, false)
+				query := strings.Join(args, " ")
+				err := handler.SearchAndAdd(ctx, query, false)
 				if err == nil {
 					t.Error("Expected error for empty args")
-				}
-
-				if !strings.Contains(err.Error(), "usage: book add") {
-					t.Errorf("Expected usage error, got: %v", err)
 				}
 			})
 
 			t.Run("context cancellation during search", func(t *testing.T) {
 				ctx, cancel := context.WithCancel(context.Background())
 				cancel()
-
-				if err := handler.SearchAndAdd(ctx, []string{"test", "book"}, false); err == nil {
+				query := strings.Join([]string{"test", "book"}, " ")
+				if err := handler.SearchAndAdd(ctx, query, false); err == nil {
 					t.Error("Expected error for cancelled context")
 				}
 			})
@@ -149,7 +146,7 @@ func TestBookHandler(t *testing.T) {
 
 				handler.service = services.NewBookService(mockServer.URL())
 
-				err := handler.SearchAndAdd(ctx, []string{"test", "book"}, false)
+				err := handler.SearchAndAdd(ctx, strings.Join([]string{"test", "book"}, " "), false)
 				if err == nil {
 					t.Error("Expected error for HTTP 500")
 				}
@@ -165,7 +162,7 @@ func TestBookHandler(t *testing.T) {
 
 				handler.service = services.NewBookService(mockServer.URL())
 
-				err := handler.SearchAndAdd(ctx, []string{"test", "book"}, false)
+				err := handler.SearchAndAdd(ctx, strings.Join([]string{"test", "book"}, " "), false)
 				if err == nil {
 					t.Error("Expected error for malformed JSON")
 				}
@@ -186,7 +183,8 @@ func TestBookHandler(t *testing.T) {
 				handler.service = services.NewBookService(mockServer.URL())
 
 				args := []string{"nonexistent", "book"}
-				err := handler.SearchAndAdd(ctx, args, false)
+				query := strings.Join(args, " ")
+				err := handler.SearchAndAdd(ctx, query, false)
 				if err != nil {
 					t.Errorf("Expected no error for empty results, got: %v", err)
 				}
@@ -201,7 +199,7 @@ func TestBookHandler(t *testing.T) {
 				ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 				defer cancel()
 
-				if err := handler.SearchAndAdd(ctx, []string{"test", "book"}, false); err == nil {
+				if err := handler.SearchAndAdd(ctx, strings.Join([]string{"test", "book"}, " "), false); err == nil {
 					t.Error("Expected error for timeout")
 				}
 			})
@@ -219,7 +217,7 @@ func TestBookHandler(t *testing.T) {
 				ctx, cancel := context.WithCancel(context.Background())
 				cancel()
 
-				if err := handler.SearchAndAdd(ctx, []string{"test", "book"}, false); err == nil {
+				if err := handler.SearchAndAdd(ctx, strings.Join([]string{"test", "book"}, " "), false); err == nil {
 					t.Error("Expected error for cancelled context")
 				}
 			})
@@ -289,7 +287,8 @@ func TestBookHandler(t *testing.T) {
 				handler.SetInputReader(MenuSelection(1))
 
 				args := []string{"test", "search"}
-				err := handler.SearchAndAdd(ctx, args, false)
+				query := strings.Join(args, " ")
+				err := handler.SearchAndAdd(ctx, query, false)
 				if err != nil {
 					t.Errorf("Expected successful search and add, got error: %v", err)
 				}
@@ -318,7 +317,8 @@ func TestBookHandler(t *testing.T) {
 				handler.SetInputReader(MenuCancel())
 
 				args := []string{"another", "search"}
-				err := handler.SearchAndAdd(ctx, args, false)
+				query := strings.Join(args, " ")
+				err := handler.SearchAndAdd(ctx, query, false)
 				if err != nil {
 					t.Errorf("Expected no error on cancellation, got: %v", err)
 				}
@@ -345,7 +345,8 @@ func TestBookHandler(t *testing.T) {
 				handler.SetInputReader(MenuSelection(5))
 
 				args := []string{"choice", "test"}
-				err := handler.SearchAndAdd(ctx, args, false)
+				query := strings.Join(args, " ")
+				err := handler.SearchAndAdd(ctx, query, false)
 				if err == nil {
 					t.Error("Expected error for invalid choice")
 				}

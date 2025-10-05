@@ -17,6 +17,8 @@ import (
 )
 
 // BookHandler handles all book-related commands
+//
+// Implements MediaHandler interface for polymorphic media handling
 type BookHandler struct {
 	db      *store.Database
 	config  *store.Config
@@ -24,6 +26,9 @@ type BookHandler struct {
 	service *services.BookService
 	reader  io.Reader
 }
+
+// Ensure BookHandler implements MediaHandler interface
+var _ MediaHandler = (*BookHandler)(nil)
 
 // NewBookHandler creates a new book handler
 func NewBookHandler() (*BookHandler, error) {
@@ -94,16 +99,9 @@ func (h *BookHandler) printBook(book *models.Book) {
 }
 
 // SearchAndAdd searches for books and allows user to select and add to queue
-func (h *BookHandler) SearchAndAdd(ctx context.Context, args []string, interactive bool) error {
-	if len(args) == 0 {
-		return fmt.Errorf("usage: book add <search query>")
-	}
-
-	query := args[0]
-	if len(args) > 1 {
-		for _, arg := range args[1:] {
-			query += " " + arg
-		}
+func (h *BookHandler) SearchAndAdd(ctx context.Context, query string, interactive bool) error {
+	if query == "" {
+		return fmt.Errorf("search query cannot be empty")
 	}
 
 	if interactive {
@@ -307,5 +305,30 @@ func (h *BookHandler) UpdateProgress(ctx context.Context, id string, progress in
 		fmt.Printf(" (%s)", book.Status)
 	}
 	fmt.Println()
+	return nil
+}
+
+// Remove removes a book from the queue
+func (h *BookHandler) Remove(ctx context.Context, id string) error {
+	bookID, err := ParseID(id, "book")
+	if err != nil {
+		return err
+	}
+
+	book, err := h.repos.Books.Get(ctx, bookID)
+	if err != nil {
+		return fmt.Errorf("book %d not found: %w", bookID, err)
+	}
+
+	if err := h.repos.Books.Delete(ctx, bookID); err != nil {
+		return fmt.Errorf("failed to remove book: %w", err)
+	}
+
+	fmt.Printf("✓ Removed book: %s", book.Title)
+	if book.Author != "" {
+		fmt.Printf(" by %s", book.Author)
+	}
+	fmt.Println()
+
 	return nil
 }

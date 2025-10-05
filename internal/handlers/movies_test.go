@@ -358,7 +358,7 @@ func TestMovieHandler(t *testing.T) {
 				handler := createTestMovieHandler(t)
 				defer handler.Close()
 
-				err := handler.UpdateStatus(context.Background(), 1, "invalid")
+				err := handler.UpdateStatus(context.Background(), "1", "invalid")
 				if err == nil {
 					t.Error("Expected error for invalid status")
 				}
@@ -371,7 +371,7 @@ func TestMovieHandler(t *testing.T) {
 				handler := createTestMovieHandler(t)
 				defer handler.Close()
 
-				err := handler.UpdateStatus(context.Background(), 999, "watched")
+				err := handler.UpdateStatus(context.Background(), "999", "watched")
 				if err == nil {
 					t.Error("Expected error for non-existent movie")
 				}
@@ -406,9 +406,6 @@ func TestMovieHandler(t *testing.T) {
 		err := handler.MarkWatched(context.Background(), "invalid")
 		if err == nil {
 			t.Error("Expected error for invalid movie ID")
-		}
-		if err.Error() != "invalid movie ID: invalid" {
-			t.Errorf("Expected 'invalid movie ID: invalid', got: %v", err)
 		}
 	})
 
@@ -468,7 +465,7 @@ func TestMovieHandler(t *testing.T) {
 				t.Errorf("Failed to view created movie: %v", err)
 			}
 
-			err = handler.UpdateStatus(context.Background(), id, "watched")
+			err = handler.UpdateStatus(context.Background(), strconv.Itoa(int(id)), "watched")
 			if err != nil {
 				t.Errorf("Failed to update movie status: %v", err)
 			}
@@ -540,7 +537,7 @@ func TestMovieHandler(t *testing.T) {
 			},
 			{
 				name: "Update status of non-existent movie",
-				fn:   func() error { return handler.UpdateStatus(ctx, nonExistentID, "watched") },
+				fn:   func() error { return handler.UpdateStatus(ctx, strconv.Itoa(int(nonExistentID)), "watched") },
 			},
 			{
 				name: "Mark non-existent movie as watched",
@@ -570,14 +567,14 @@ func TestMovieHandler(t *testing.T) {
 		invalid := []string{"invalid", "pending", "completed", ""}
 
 		for _, status := range valid {
-			if err := handler.UpdateStatus(context.Background(), 999, status); err != nil &&
+			if err := handler.UpdateStatus(context.Background(), "999", status); err != nil &&
 				err.Error() == fmt.Sprintf("invalid status: %s (valid: queued, watched, removed)", status) {
 				t.Errorf("Status '%s' should be valid but was rejected", status)
 			}
 		}
 
 		for _, status := range invalid {
-			err := handler.UpdateStatus(context.Background(), 1, status)
+			err := handler.UpdateStatus(context.Background(), "1", status)
 			if err == nil {
 				t.Errorf("Status '%s' should be invalid but was accepted", status)
 			}

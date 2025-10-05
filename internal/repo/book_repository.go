@@ -11,13 +11,39 @@ import (
 )
 
 // BookRepository provides database operations for books
+//
+// Uses BaseMediaRepository for common CRUD operations.
+// TODO: Implement Repository interface (Validate method) similar to ArticleRepository
 type BookRepository struct {
+	*BaseMediaRepository[*models.Book]
 	db *sql.DB
 }
 
 // NewBookRepository creates a new book repository
 func NewBookRepository(db *sql.DB) *BookRepository {
-	return &BookRepository{db: db}
+	config := MediaConfig[*models.Book]{
+		TableName:     "books",
+		New:           func() *models.Book { return &models.Book{} },
+		InsertColumns: "title, author, status, progress, pages, rating, notes, added, started, finished",
+		UpdateColumns: "title = ?, author = ?, status = ?, progress = ?, pages = ?, rating = ?, notes = ?, started = ?, finished = ?",
+		InsertValues: func(book *models.Book) []any {
+			return []any{book.Title, book.Author, book.Status, book.Progress, book.Pages, book.Rating, book.Notes, book.Added, book.Started, book.Finished}
+		},
+		UpdateValues: func(book *models.Book) []any {
+			return []any{book.Title, book.Author, book.Status, book.Progress, book.Pages, book.Rating, book.Notes, book.Started, book.Finished, book.ID}
+		},
+		Scan: func(rows *sql.Rows, book *models.Book) error {
+			return scanBookRow(rows, book)
+		},
+		ScanSingle: func(row *sql.Row, book *models.Book) error {
+			return scanBookRowSingle(row, book)
+		},
+	}
+
+	return &BookRepository{
+		BaseMediaRepository: NewBaseMediaRepository(db, config),
+		db:                  db,
+	}
 }
 
 // Create stores a new book and returns its assigned ID
@@ -25,68 +51,13 @@ func (r *BookRepository) Create(ctx context.Context, book *models.Book) (int64, 
 	now := time.Now()
 	book.Added = now
 
-	query := `
-		INSERT INTO books (title, author, status, progress, pages, rating, notes, added, started, finished)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-
-	result, err := r.db.ExecContext(ctx, query,
-		book.Title, book.Author, book.Status, book.Progress, book.Pages, book.Rating,
-		book.Notes, book.Added, book.Started, book.Finished)
+	id, err := r.BaseMediaRepository.Create(ctx, book)
 	if err != nil {
-		return 0, fmt.Errorf("failed to insert book: %w", err)
-	}
-
-	id, err := result.LastInsertId()
-	if err != nil {
-		return 0, fmt.Errorf("failed to get last insert id: %w", err)
+		return 0, err
 	}
 
 	book.ID = id
 	return id, nil
-}
-
-// Get retrieves a book by ID
-func (r *BookRepository) Get(ctx context.Context, id int64) (*models.Book, error) {
-	query := `
-		SELECT id, title, author, status, progress, pages, rating, notes, added, started, finished
-		FROM books WHERE id = ?`
-
-	book := &models.Book{}
-	err := r.db.QueryRowContext(ctx, query, id).Scan(
-		&book.ID, &book.Title, &book.Author, &book.Status, &book.Progress, &book.Pages,
-		&book.Rating, &book.Notes, &book.Added, &book.Started, &book.Finished)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get book: %w", err)
-	}
-
-	return book, nil
-}
-
-// Update modifies an existing book
-func (r *BookRepository) Update(ctx context.Context, book *models.Book) error {
-	query := `
-		UPDATE books SET title = ?, author = ?, status = ?, progress = ?, pages = ?,
-		rating = ?, notes = ?, started = ?, finished = ?
-		WHERE id = ?`
-
-	_, err := r.db.ExecContext(ctx, query,
-		book.Title, book.Author, book.Status, book.Progress, book.Pages, book.Rating,
-		book.Notes, book.Started, book.Finished, book.ID)
-	if err != nil {
-		return fmt.Errorf("failed to update book: %w", err)
-	}
-
-	return nil
-}
-
-// Delete removes a book by ID
-func (r *BookRepository) Delete(ctx context.Context, id int64) error {
-	query := "DELETE FROM books WHERE id = ?"
-	_, err := r.db.ExecContext(ctx, query, id)
-	if err != nil {
-		return fmt.Errorf("failed to delete book: %w", err)
-	}
-	return nil
 }
 
 // List retrieves books with optional filtering and sorting
@@ -94,22 +65,11 @@ func (r *BookRepository) List(ctx context.Context, opts BookListOptions) ([]*mod
 	query := r.buildListQuery(opts)
 	args := r.buildListArgs(opts)
 
-	rows, err := r.db.QueryContext(ctx, query, args...)
+	items, err := r.BaseMediaRepository.ListQuery(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list books: %w", err)
+		return nil, err
 	}
-	defer rows.Close()
-
-	var books []*models.Book
-	for rows.Next() {
-		book := &models.Book{}
-		if err := r.scanBookRow(rows, book); err != nil {
-			return nil, err
-		}
-		books = append(books, book)
-	}
-
-	return books, rows.Err()
+	return items, nil
 }
 
 func (r *BookRepository) buildListQuery(opts BookListOptions) string {
@@ -187,10 +147,27 @@ func (r *BookRepository) buildListArgs(opts BookListOptions) []any {
 	return args
 }
 
-func (r *BookRepository) scanBookRow(rows *sql.Rows, book *models.Book) error {
+// scanBookRow scans a database row into a book model
+func scanBookRow(rows *sql.Rows, book *models.Book) error {
 	var pages sql.NullInt64
 
 	if err := rows.Scan(&book.ID, &book.Title, &book.Author, &book.Status, &book.Progress, &pages,
+		&book.Rating, &book.Notes, &book.Added, &book.Started, &book.Finished); err != nil {
+		return err
+	}
+
+	if pages.Valid {
+		book.Pages = int(pages.Int64)
+	}
+
+	return nil
+}
+
+// scanBookRowSingle scans a single database row into a book model
+func scanBookRowSingle(row *sql.Row, book *models.Book) error {
+	var pages sql.NullInt64
+
+	if err := row.Scan(&book.ID, &book.Title, &book.Author, &book.Status, &book.Progress, &pages,
 		&book.Rating, &book.Notes, &book.Added, &book.Started, &book.Finished); err != nil {
 		return err
 	}
@@ -246,13 +223,7 @@ func (r *BookRepository) Count(ctx context.Context, opts BookListOptions) (int64
 		query += " WHERE " + strings.Join(conditions, " AND ")
 	}
 
-	var count int64
-	err := r.db.QueryRowContext(ctx, query, args...).Scan(&count)
-	if err != nil {
-		return 0, fmt.Errorf("failed to count books: %w", err)
-	}
-
-	return count, nil
+	return r.BaseMediaRepository.CountQuery(ctx, query, args...)
 }
 
 // GetQueued retrieves all books in the queue

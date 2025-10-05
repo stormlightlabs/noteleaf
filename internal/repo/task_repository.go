@@ -51,6 +51,8 @@ type ContextSummary struct {
 }
 
 // TaskRepository provides database operations for tasks
+//
+// TODO: Implement Repository interface (Validate method) similar to ArticleRepository
 type TaskRepository struct {
 	db *sql.DB
 }

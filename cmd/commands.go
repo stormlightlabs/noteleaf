@@ -212,7 +212,8 @@ By default, shows search results in a simple list format where you can select by
 Use the -i flag for an interactive interface with navigation keys.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			interactive, _ := cmd.Flags().GetBool("interactive")
-			return c.handler.SearchAndAdd(cmd.Context(), args, interactive)
+			query := strings.Join(args, " ")
+			return c.handler.SearchAndAdd(cmd.Context(), query, interactive)
 		},
 	}
 	addCmd.Flags().BoolP("interactive", "i", false, "Use interactive interface for book selection")

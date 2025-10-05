@@ -12,12 +12,35 @@ import (
 
 // TVRepository provides database operations for TV shows
 type TVRepository struct {
+	*BaseMediaRepository[*models.TVShow]
 	db *sql.DB
 }
 
 // NewTVRepository creates a new TV show repository
 func NewTVRepository(db *sql.DB) *TVRepository {
-	return &TVRepository{db: db}
+	config := MediaConfig[*models.TVShow]{
+		TableName:     "tv_shows",
+		New:           func() *models.TVShow { return &models.TVShow{} },
+		InsertColumns: "title, season, episode, status, rating, notes, added, last_watched",
+		UpdateColumns: "title = ?, season = ?, episode = ?, status = ?, rating = ?, notes = ?, last_watched = ?",
+		InsertValues: func(show *models.TVShow) []any {
+			return []any{show.Title, show.Season, show.Episode, show.Status, show.Rating, show.Notes, show.Added, show.LastWatched}
+		},
+		UpdateValues: func(show *models.TVShow) []any {
+			return []any{show.Title, show.Season, show.Episode, show.Status, show.Rating, show.Notes, show.LastWatched, show.ID}
+		},
+		Scan: func(rows *sql.Rows, show *models.TVShow) error {
+			return scanTVShowRow(rows, show)
+		},
+		ScanSingle: func(row *sql.Row, show *models.TVShow) error {
+			return scanTVShowRowSingle(row, show)
+		},
+	}
+
+	return &TVRepository{
+		BaseMediaRepository: NewBaseMediaRepository(db, config),
+		db:                  db,
+	}
 }
 
 // Create stores a new TV show and returns its assigned ID
@@ -25,68 +48,13 @@ func (r *TVRepository) Create(ctx context.Context, tvShow *models.TVShow) (int64
 	now := time.Now()
 	tvShow.Added = now
 
-	query := `
-		INSERT INTO tv_shows (title, season, episode, status, rating, notes, added, last_watched)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-
-	result, err := r.db.ExecContext(ctx, query,
-		tvShow.Title, tvShow.Season, tvShow.Episode, tvShow.Status, tvShow.Rating,
-		tvShow.Notes, tvShow.Added, tvShow.LastWatched)
+	id, err := r.BaseMediaRepository.Create(ctx, tvShow)
 	if err != nil {
-		return 0, fmt.Errorf("failed to insert TV show: %w", err)
-	}
-
-	id, err := result.LastInsertId()
-	if err != nil {
-		return 0, fmt.Errorf("failed to get last insert id: %w", err)
+		return 0, err
 	}
 
 	tvShow.ID = id
 	return id, nil
-}
-
-// Get retrieves a TV show by ID
-func (r *TVRepository) Get(ctx context.Context, id int64) (*models.TVShow, error) {
-	query := `
-		SELECT id, title, season, episode, status, rating, notes, added, last_watched
-		FROM tv_shows WHERE id = ?`
-
-	tvShow := &models.TVShow{}
-	err := r.db.QueryRowContext(ctx, query, id).Scan(
-		&tvShow.ID, &tvShow.Title, &tvShow.Season, &tvShow.Episode, &tvShow.Status,
-		&tvShow.Rating, &tvShow.Notes, &tvShow.Added, &tvShow.LastWatched)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get TV show: %w", err)
-	}
-
-	return tvShow, nil
-}
-
-// Update modifies an existing TV show
-func (r *TVRepository) Update(ctx context.Context, tvShow *models.TVShow) error {
-	query := `
-		UPDATE tv_shows SET title = ?, season = ?, episode = ?, status = ?, rating = ?,
-		notes = ?, last_watched = ?
-		WHERE id = ?`
-
-	_, err := r.db.ExecContext(ctx, query,
-		tvShow.Title, tvShow.Season, tvShow.Episode, tvShow.Status, tvShow.Rating,
-		tvShow.Notes, tvShow.LastWatched, tvShow.ID)
-	if err != nil {
-		return fmt.Errorf("failed to update TV show: %w", err)
-	}
-
-	return nil
-}
-
-// Delete removes a TV show by ID
-func (r *TVRepository) Delete(ctx context.Context, id int64) error {
-	query := "DELETE FROM tv_shows WHERE id = ?"
-	_, err := r.db.ExecContext(ctx, query, id)
-	if err != nil {
-		return fmt.Errorf("failed to delete TV show: %w", err)
-	}
-	return nil
 }
 
 // List retrieves TV shows with optional filtering and sorting
@@ -94,22 +62,11 @@ func (r *TVRepository) List(ctx context.Context, opts TVListOptions) ([]*models.
 	query := r.buildListQuery(opts)
 	args := r.buildListArgs(opts)
 
-	rows, err := r.db.QueryContext(ctx, query, args...)
+	items, err := r.BaseMediaRepository.ListQuery(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list TV shows: %w", err)
+		return nil, err
 	}
-	defer rows.Close()
-
-	var tvShows []*models.TVShow
-	for rows.Next() {
-		tvShow := &models.TVShow{}
-		if err := r.scanTVShowRow(rows, tvShow); err != nil {
-			return nil, err
-		}
-		tvShows = append(tvShows, tvShow)
-	}
-
-	return tvShows, rows.Err()
+	return items, nil
 }
 
 func (r *TVRepository) buildListQuery(opts TVListOptions) string {
@@ -186,8 +143,13 @@ func (r *TVRepository) buildListArgs(opts TVListOptions) []any {
 	return args
 }
 
-func (r *TVRepository) scanTVShowRow(rows *sql.Rows, tvShow *models.TVShow) error {
+func scanTVShowRow(rows *sql.Rows, tvShow *models.TVShow) error {
 	return rows.Scan(&tvShow.ID, &tvShow.Title, &tvShow.Season, &tvShow.Episode, &tvShow.Status,
+		&tvShow.Rating, &tvShow.Notes, &tvShow.Added, &tvShow.LastWatched)
+}
+
+func scanTVShowRowSingle(row *sql.Row, tvShow *models.TVShow) error {
+	return row.Scan(&tvShow.ID, &tvShow.Title, &tvShow.Season, &tvShow.Episode, &tvShow.Status,
 		&tvShow.Rating, &tvShow.Notes, &tvShow.Added, &tvShow.LastWatched)
 }
 
@@ -234,13 +196,7 @@ func (r *TVRepository) Count(ctx context.Context, opts TVListOptions) (int64, er
 		query += " WHERE " + strings.Join(conditions, " AND ")
 	}
 
-	var count int64
-	err := r.db.QueryRowContext(ctx, query, args...).Scan(&count)
-	if err != nil {
-		return 0, fmt.Errorf("failed to count TV shows: %w", err)
-	}
-
-	return count, nil
+	return r.BaseMediaRepository.CountQuery(ctx, query, args...)
 }
 
 // GetQueued retrieves all TV shows in the queue
@@ -274,11 +230,9 @@ func (r *TVRepository) MarkWatched(ctx context.Context, id int64) error {
 	if err != nil {
 		return err
 	}
-
 	now := time.Now()
 	tvShow.Status = "watched"
 	tvShow.LastWatched = &now
-
 	return r.Update(ctx, tvShow)
 }
 

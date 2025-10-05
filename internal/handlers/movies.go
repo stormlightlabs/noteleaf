@@ -24,6 +24,9 @@ type MovieHandler struct {
 	reader  io.Reader
 }
 
+// Ensure MovieHandler implements interface [MediaHandler]
+var _ MediaHandler = (*MovieHandler)(nil)
+
 // NewMovieHandler creates a new movie handler
 func NewMovieHandler() (*MovieHandler, error) {
 	db, err := store.NewDatabase()
@@ -218,7 +221,11 @@ func (h *MovieHandler) View(ctx context.Context, movieID int64) error {
 }
 
 // UpdateStatus changes the status of a movie
-func (h *MovieHandler) UpdateStatus(ctx context.Context, movieID int64, status string) error {
+func (h *MovieHandler) UpdateStatus(ctx context.Context, id, status string) error {
+	movieID, err := strconv.ParseInt(id, 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid movie ID %w", err)
+	}
 	validStatuses := []string{"queued", "watched", "removed"}
 	if !slices.Contains(validStatuses, status) {
 		return fmt.Errorf("invalid status: %s (valid: %s)", status, strings.Join(validStatuses, ", "))
@@ -245,12 +252,7 @@ func (h *MovieHandler) UpdateStatus(ctx context.Context, movieID int64, status s
 
 // MarkWatched marks a movie as watched
 func (h *MovieHandler) MarkWatched(ctx context.Context, id string) error {
-	movieID, err := strconv.ParseInt(id, 10, 64)
-	if err != nil {
-		return fmt.Errorf("invalid movie ID: %s", id)
-	}
-
-	return h.UpdateStatus(ctx, movieID, "watched")
+	return h.UpdateStatus(ctx, id, "watched")
 }
 
 // Remove removes a movie from the queue
