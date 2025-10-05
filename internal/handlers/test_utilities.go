@@ -1226,3 +1226,36 @@ func AssertTaskDatesSet(t *testing.T, task *models.Task) {
 		t.Error("Task Modified timestamp should be set")
 	}
 }
+
+// CreateBookHandler creates a [BookHandler] for testing with automatic cleanup
+func CreateBookHandler(t *testing.T) *BookHandler {
+	t.Helper()
+	handler, err := NewBookHandler()
+	if err != nil {
+		t.Fatalf("Failed to create book handler: %v", err)
+	}
+	t.Cleanup(func() { handler.Close() })
+	return handler
+}
+
+// CreateMovieHandler creates a [MovieHandler] for testing with automatic cleanup
+func CreateMovieHandler(t *testing.T) *MovieHandler {
+	t.Helper()
+	handler, err := NewMovieHandler()
+	if err != nil {
+		t.Fatalf("Failed to create movie handler: %v", err)
+	}
+	t.Cleanup(func() { handler.Close() })
+	return handler
+}
+
+// CreateTVHandler creates a [TVHandler] for testing with automatic cleanup
+func CreateTVHandler(t *testing.T) *TVHandler {
+	t.Helper()
+	handler, err := NewTVHandler()
+	if err != nil {
+		t.Fatalf("Failed to create TV handler: %v", err)
+	}
+	t.Cleanup(func() { handler.Close() })
+	return handler
+}

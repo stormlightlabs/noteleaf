@@ -340,6 +340,221 @@ func (b *TaskBuilder) Build() *models.Task {
 	return b.task
 }
 
+// BookBuilder provides a fluent interface for building test books
+type BookBuilder struct {
+	book *models.Book
+}
+
+// NewBookBuilder creates a new BookBuilder with sensible defaults
+func NewBookBuilder() *BookBuilder {
+	return &BookBuilder{
+		book: &models.Book{
+			Status:   "queued",
+			Progress: 0,
+			Added:    time.Now(),
+		},
+	}
+}
+
+func (b *BookBuilder) WithTitle(title string) *BookBuilder {
+	b.book.Title = title
+	return b
+}
+
+func (b *BookBuilder) WithAuthor(author string) *BookBuilder {
+	b.book.Author = author
+	return b
+}
+
+func (b *BookBuilder) WithStatus(status string) *BookBuilder {
+	b.book.Status = status
+	return b
+}
+
+func (b *BookBuilder) WithProgress(progress int) *BookBuilder {
+	b.book.Progress = progress
+	return b
+}
+
+func (b *BookBuilder) WithPages(pages int) *BookBuilder {
+	b.book.Pages = pages
+	return b
+}
+
+func (b *BookBuilder) WithRating(rating float64) *BookBuilder {
+	b.book.Rating = rating
+	return b
+}
+
+func (b *BookBuilder) WithNotes(notes string) *BookBuilder {
+	b.book.Notes = notes
+	return b
+}
+
+func (b *BookBuilder) WithStarted(started time.Time) *BookBuilder {
+	b.book.Started = &started
+	return b
+}
+
+func (b *BookBuilder) WithFinished(finished time.Time) *BookBuilder {
+	b.book.Finished = &finished
+	return b
+}
+
+func (b *BookBuilder) Build() *models.Book {
+	return b.book
+}
+
+// MovieBuilder provides a fluent interface for building test movies
+type MovieBuilder struct {
+	movie *models.Movie
+}
+
+// NewMovieBuilder creates a new MovieBuilder with sensible defaults
+func NewMovieBuilder() *MovieBuilder {
+	return &MovieBuilder{
+		movie: &models.Movie{
+			Status: "queued",
+			Added:  time.Now(),
+		},
+	}
+}
+
+func (b *MovieBuilder) WithTitle(title string) *MovieBuilder {
+	b.movie.Title = title
+	return b
+}
+
+func (b *MovieBuilder) WithYear(year int) *MovieBuilder {
+	b.movie.Year = year
+	return b
+}
+
+func (b *MovieBuilder) WithStatus(status string) *MovieBuilder {
+	b.movie.Status = status
+	return b
+}
+
+func (b *MovieBuilder) WithRating(rating float64) *MovieBuilder {
+	b.movie.Rating = rating
+	return b
+}
+
+func (b *MovieBuilder) WithNotes(notes string) *MovieBuilder {
+	b.movie.Notes = notes
+	return b
+}
+
+func (b *MovieBuilder) WithWatched(watched time.Time) *MovieBuilder {
+	b.movie.Watched = &watched
+	return b
+}
+
+func (b *MovieBuilder) Build() *models.Movie {
+	return b.movie
+}
+
+// TVShowBuilder provides a fluent interface for building test TV shows
+type TVShowBuilder struct {
+	show *models.TVShow
+}
+
+// NewTVShowBuilder creates a new TVShowBuilder with sensible defaults
+func NewTVShowBuilder() *TVShowBuilder {
+	return &TVShowBuilder{
+		show: &models.TVShow{
+			Status:  "queued",
+			Season:  1,
+			Episode: 1,
+			Added:   time.Now(),
+		},
+	}
+}
+
+func (b *TVShowBuilder) WithTitle(title string) *TVShowBuilder {
+	b.show.Title = title
+	return b
+}
+
+func (b *TVShowBuilder) WithSeason(season int) *TVShowBuilder {
+	b.show.Season = season
+	return b
+}
+
+func (b *TVShowBuilder) WithEpisode(episode int) *TVShowBuilder {
+	b.show.Episode = episode
+	return b
+}
+
+func (b *TVShowBuilder) WithStatus(status string) *TVShowBuilder {
+	b.show.Status = status
+	return b
+}
+
+func (b *TVShowBuilder) WithRating(rating float64) *TVShowBuilder {
+	b.show.Rating = rating
+	return b
+}
+
+func (b *TVShowBuilder) WithNotes(notes string) *TVShowBuilder {
+	b.show.Notes = notes
+	return b
+}
+
+func (b *TVShowBuilder) WithLastWatched(lastWatched time.Time) *TVShowBuilder {
+	b.show.LastWatched = &lastWatched
+	return b
+}
+
+func (b *TVShowBuilder) Build() *models.TVShow {
+	return b.show
+}
+
+// NoteBuilder provides a fluent interface for building test notes
+type NoteBuilder struct {
+	note *models.Note
+}
+
+// NewNoteBuilder creates a new NoteBuilder with sensible defaults
+func NewNoteBuilder() *NoteBuilder {
+	return &NoteBuilder{
+		note: &models.Note{
+			Archived: false,
+			Created:  time.Now(),
+			Modified: time.Now(),
+		},
+	}
+}
+
+func (b *NoteBuilder) WithTitle(title string) *NoteBuilder {
+	b.note.Title = title
+	return b
+}
+
+func (b *NoteBuilder) WithContent(content string) *NoteBuilder {
+	b.note.Content = content
+	return b
+}
+
+func (b *NoteBuilder) WithTags(tags []string) *NoteBuilder {
+	b.note.Tags = tags
+	return b
+}
+
+func (b *NoteBuilder) WithArchived(archived bool) *NoteBuilder {
+	b.note.Archived = archived
+	return b
+}
+
+func (b *NoteBuilder) WithFilePath(filePath string) *NoteBuilder {
+	b.note.FilePath = filePath
+	return b
+}
+
+func (b *NoteBuilder) Build() *models.Note {
+	return b.note
+}
+
 // SetupTestData creates sample data in the database and returns the repositories
 func SetupTestData(t *testing.T, db *sql.DB) *Repositories {
 	ctx := context.Background()

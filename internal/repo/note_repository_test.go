@@ -9,7 +9,7 @@ import (
 )
 
 func TestNoteRepository(t *testing.T) {
-	t.Run("CRUD", func(t *testing.T) {
+	t.Run("CRUD Operations", func(t *testing.T) {
 		db := CreateTestDB(t)
 		repo := NewNoteRepository(db)
 		ctx := context.Background()
@@ -156,7 +156,7 @@ func TestNoteRepository(t *testing.T) {
 		})
 	})
 
-	t.Run("Specialized Methods", func(t *testing.T) {
+	t.Run("Special Methods", func(t *testing.T) {
 		db := CreateTestDB(t)
 		repo := NewNoteRepository(db)
 		ctx := context.Background()
@@ -250,24 +250,16 @@ func TestNoteRepository(t *testing.T) {
 			Tags:    []string{"initial"},
 		}
 		id, err := repo.Create(ctx, note)
-		if err != nil {
-			t.Fatalf("Failed to create note: %v", err)
-		}
+		AssertNoError(t, err, "Failed to create note")
 
 		t.Run("AddTag", func(t *testing.T) {
 			err := repo.AddTag(ctx, id, "new-tag")
-			if err != nil {
-				t.Fatalf("Failed to add tag: %v", err)
-			}
+			AssertNoError(t, err, "Failed to add tag")
 
 			retrieved, err := repo.Get(ctx, id)
-			if err != nil {
-				t.Fatalf("Failed to get note: %v", err)
-			}
+			AssertNoError(t, err, "Failed to get note")
 
-			if len(retrieved.Tags) != 2 {
-				t.Errorf("Expected 2 tags, got %d", len(retrieved.Tags))
-			}
+			AssertEqual(t, 2, len(retrieved.Tags), "Expected 2 tags")
 
 			found := false
 			for _, tag := range retrieved.Tags {
@@ -276,9 +268,7 @@ func TestNoteRepository(t *testing.T) {
 					break
 				}
 			}
-			if !found {
-				t.Error("New tag not found in note")
-			}
+			AssertTrue(t, found, "New tag not found in note")
 		})
 
 		t.Run("AddTag Duplicate", func(t *testing.T) {
@@ -323,91 +313,110 @@ func TestNoteRepository(t *testing.T) {
 			}
 
 			_, err := repo.Create(ctx, note1)
-			if err != nil {
-				t.Fatalf("Failed to create note1: %v", err)
-			}
+			AssertNoError(t, err, "Failed to create note1")
 			_, err = repo.Create(ctx, note2)
-			if err != nil {
-				t.Fatalf("Failed to create note2: %v", err)
-			}
+			AssertNoError(t, err, "Failed to create note2")
 			_, err = repo.Create(ctx, note3)
-			if err != nil {
-				t.Fatalf("Failed to create note3: %v", err)
-			}
+			AssertNoError(t, err, "Failed to create note3")
 
 			results, err := repo.GetByTags(ctx, []string{"work"})
-			if err != nil {
-				t.Fatalf("Failed to get notes by tag: %v", err)
-			}
-
-			if len(results) < 2 {
-				t.Errorf("Expected at least 2 notes with 'work' tag, got %d", len(results))
-			}
+			AssertNoError(t, err, "Failed to get notes by tag")
+			AssertTrue(t, len(results) >= 2, "Expected at least 2 notes with 'work' tag")
 
 			results, err = repo.GetByTags(ctx, []string{"nonexistent"})
-			if err != nil {
-				t.Fatalf("Failed to get notes by nonexistent tag: %v", err)
-			}
-
-			if len(results) != 0 {
-				t.Errorf("Expected 0 notes with nonexistent tag, got %d", len(results))
-			}
+			AssertNoError(t, err, "Failed to get notes by nonexistent tag")
+			AssertEqual(t, 0, len(results), "Expected 0 notes with nonexistent tag")
 
 			results, err = repo.GetByTags(ctx, []string{})
-			if err != nil {
-				t.Fatalf("Failed to get notes with empty tags: %v", err)
-			}
-
-			if len(results) != 0 {
-				t.Errorf("Expected 0 notes with empty tag list, got %d", len(results))
-			}
+			AssertNoError(t, err, "Failed to get notes with empty tags")
+			AssertEqual(t, 0, len(results), "Expected 0 notes with empty tag list")
 		})
 	})
 
-	t.Run("Error Cases", func(t *testing.T) {
+	t.Run("Context Cancellation Error Paths", func(t *testing.T) {
 		db := CreateTestDB(t)
 		repo := NewNoteRepository(db)
 		ctx := context.Background()
 
-		t.Run("Get Nonexistent Note", func(t *testing.T) {
-			_, err := repo.Get(ctx, 999)
-			if err == nil {
-				t.Error("Expected error when getting nonexistent note")
-			}
+		note := NewNoteBuilder().WithTitle("Test Note").WithContent("Test content").Build()
+		id, err := repo.Create(ctx, note)
+		AssertNoError(t, err, "Failed to create note")
+
+		t.Run("Create with cancelled context", func(t *testing.T) {
+			newNote := NewNoteBuilder().WithTitle("Cancelled").Build()
+			_, err := repo.Create(NewCanceledContext(), newNote)
+			AssertError(t, err, "Expected error with cancelled context")
 		})
 
-		t.Run("Update Nonexistent Note", func(t *testing.T) {
-			note := &models.Note{
-				ID:      999,
-				Title:   "Nonexistent",
-				Content: "Should fail",
-			}
-
-			err := repo.Update(ctx, note)
-			if err == nil {
-				t.Error("Expected error when updating nonexistent note")
-			}
+		t.Run("Get with cancelled context", func(t *testing.T) {
+			_, err := repo.Get(NewCanceledContext(), id)
+			AssertError(t, err, "Expected error with cancelled context")
 		})
 
-		t.Run("Delete Nonexistent Note", func(t *testing.T) {
-			err := repo.Delete(ctx, 999)
-			if err == nil {
-				t.Error("Expected error when deleting nonexistent note")
-			}
+		t.Run("Update with cancelled context", func(t *testing.T) {
+			note.Title = "Updated"
+			err := repo.Update(NewCanceledContext(), note)
+			AssertError(t, err, "Expected error with cancelled context")
 		})
 
-		t.Run("Archive Nonexistent Note", func(t *testing.T) {
-			err := repo.Archive(ctx, 999)
-			if err == nil {
-				t.Error("Expected error when archiving nonexistent note")
-			}
+		t.Run("Delete with cancelled context", func(t *testing.T) {
+			err := repo.Delete(NewCanceledContext(), id)
+			AssertError(t, err, "Expected error with cancelled context")
 		})
 
-		t.Run("AddTag to Nonexistent Note", func(t *testing.T) {
-			err := repo.AddTag(ctx, 999, "tag")
-			if err == nil {
-				t.Error("Expected error when adding tag to nonexistent note")
-			}
+		t.Run("List with cancelled context", func(t *testing.T) {
+			_, err := repo.List(NewCanceledContext(), NoteListOptions{})
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("GetByTitle with cancelled context", func(t *testing.T) {
+			_, err := repo.GetByTitle(NewCanceledContext(), "Test")
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("GetArchived with cancelled context", func(t *testing.T) {
+			_, err := repo.GetArchived(NewCanceledContext())
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("GetActive with cancelled context", func(t *testing.T) {
+			_, err := repo.GetActive(NewCanceledContext())
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("Archive with cancelled context", func(t *testing.T) {
+			err := repo.Archive(NewCanceledContext(), id)
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("Unarchive with cancelled context", func(t *testing.T) {
+			err := repo.Unarchive(NewCanceledContext(), id)
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("SearchContent with cancelled context", func(t *testing.T) {
+			_, err := repo.SearchContent(NewCanceledContext(), "test")
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("GetRecent with cancelled context", func(t *testing.T) {
+			_, err := repo.GetRecent(NewCanceledContext(), 10)
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("AddTag with cancelled context", func(t *testing.T) {
+			err := repo.AddTag(NewCanceledContext(), id, "tag")
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("RemoveTag with cancelled context", func(t *testing.T) {
+			err := repo.RemoveTag(NewCanceledContext(), id, "tag")
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("GetByTags with cancelled context", func(t *testing.T) {
+			_, err := repo.GetByTags(NewCanceledContext(), []string{"tag"})
+			AssertError(t, err, "Expected error with cancelled context")
 		})
 	})
 
@@ -416,7 +425,38 @@ func TestNoteRepository(t *testing.T) {
 		repo := NewNoteRepository(db)
 		ctx := context.Background()
 
-		t.Run("Note with Empty Tags", func(t *testing.T) {
+		t.Run("Get non-existent note", func(t *testing.T) {
+			_, err := repo.Get(ctx, 99999)
+			AssertError(t, err, "Expected error for non-existent note")
+		})
+
+		t.Run("Update non-existent note", func(t *testing.T) {
+			note := &models.Note{
+				ID:      99999,
+				Title:   "Nonexistent",
+				Content: "Should fail",
+			}
+
+			err := repo.Update(ctx, note)
+			AssertError(t, err, "Expected error when updating non-existent note")
+		})
+
+		t.Run("Delete non-existent note", func(t *testing.T) {
+			err := repo.Delete(ctx, 99999)
+			AssertError(t, err, "Expected error when deleting non-existent note")
+		})
+
+		t.Run("Archive non-existent note", func(t *testing.T) {
+			err := repo.Archive(ctx, 99999)
+			AssertError(t, err, "Expected error when archiving non-existent note")
+		})
+
+		t.Run("AddTag to non-existent note", func(t *testing.T) {
+			err := repo.AddTag(ctx, 99999, "tag")
+			AssertError(t, err, "Expected error when adding tag to non-existent note")
+		})
+
+		t.Run("Note with empty tags", func(t *testing.T) {
 			note := &models.Note{
 				Title:   "No Tags Note",
 				Content: "This note has no tags",
@@ -424,21 +464,15 @@ func TestNoteRepository(t *testing.T) {
 			}
 
 			id, err := repo.Create(ctx, note)
-			if err != nil {
-				t.Fatalf("Failed to create note with empty tags: %v", err)
-			}
+			AssertNoError(t, err, "Failed to create note with empty tags")
 
 			retrieved, err := repo.Get(ctx, id)
-			if err != nil {
-				t.Fatalf("Failed to get note: %v", err)
-			}
+			AssertNoError(t, err, "Failed to get note")
 
-			if len(retrieved.Tags) != 0 {
-				t.Errorf("Expected empty tags slice, got %d tags", len(retrieved.Tags))
-			}
+			AssertEqual(t, 0, len(retrieved.Tags), "Expected empty tags slice")
 		})
 
-		t.Run("Note with Nil Tags", func(t *testing.T) {
+		t.Run("Note with nil tags", func(t *testing.T) {
 			note := &models.Note{
 				Title:   "Nil Tags Note",
 				Content: "This note has nil tags",
@@ -446,21 +480,15 @@ func TestNoteRepository(t *testing.T) {
 			}
 
 			id, err := repo.Create(ctx, note)
-			if err != nil {
-				t.Fatalf("Failed to create note with nil tags: %v", err)
-			}
+			AssertNoError(t, err, "Failed to create note with nil tags")
 
 			retrieved, err := repo.Get(ctx, id)
-			if err != nil {
-				t.Fatalf("Failed to get note: %v", err)
-			}
+			AssertNoError(t, err, "Failed to get note")
 
-			if retrieved.Tags != nil {
-				t.Errorf("Expected nil tags, got %v", retrieved.Tags)
-			}
+			AssertEqual(t, 0, len(retrieved.Tags), "Expected empty tags")
 		})
 
-		t.Run("Note with Long Content", func(t *testing.T) {
+		t.Run("Note with long content", func(t *testing.T) {
 			longContent := ""
 			for i := 0; i < 1000; i++ {
 				longContent += "This is a very long content string. "
@@ -472,18 +500,18 @@ func TestNoteRepository(t *testing.T) {
 			}
 
 			id, err := repo.Create(ctx, note)
-			if err != nil {
-				t.Fatalf("Failed to create note with long content: %v", err)
-			}
+			AssertNoError(t, err, "Failed to create note with long content")
 
 			retrieved, err := repo.Get(ctx, id)
-			if err != nil {
-				t.Fatalf("Failed to get note: %v", err)
-			}
+			AssertNoError(t, err, "Failed to get note")
 
-			if retrieved.Content != longContent {
-				t.Error("Long content was not stored/retrieved correctly")
-			}
+			AssertEqual(t, longContent, retrieved.Content, "Long content was not stored/retrieved correctly")
+		})
+
+		t.Run("List with no results", func(t *testing.T) {
+			notes, err := repo.List(ctx, NoteListOptions{Title: "NonexistentTitle"})
+			AssertNoError(t, err, "Should not error when no notes found")
+			AssertEqual(t, 0, len(notes), "Expected empty result set")
 		})
 	})
 }

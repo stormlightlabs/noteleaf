@@ -11,250 +11,205 @@ import (
 )
 
 func TestArticleRepository(t *testing.T) {
-	db := CreateTestDB(t)
-	repo := NewArticleRepository(db)
-	ctx := context.Background()
-	articles := CreateFakeArticles(10)
-
 	t.Run("CRUD Operations", func(t *testing.T) {
-		t.Run("Create", func(t *testing.T) {
-			t.Run("successfully creates an article", func(t *testing.T) {
-				article := articles[0]
-				id, err := repo.Create(ctx, article)
-				AssertNoError(t, err, "Failed to create article")
-				AssertNotEqual(t, int64(0), id, "Expected non-zero ID")
-				AssertEqual(t, id, article.ID, "Expected article ID to be set correctly")
-				AssertFalse(t, article.Created.IsZero(), "Expected Created timestamp to be set")
-				AssertFalse(t, article.Modified.IsZero(), "Expected Modified timestamp to be set")
-			})
+		ctx := context.Background()
 
-			t.Run("Fails with missing title", func(t *testing.T) {
-				article := articles[1]
-				article.Title = ""
-				_, err := repo.Create(ctx, article)
-				AssertError(t, err, "Expected error when creating article with empty title")
-			})
+		t.Run("Create article", func(t *testing.T) {
+			db := CreateTestDB(t)
+			repo := NewArticleRepository(db)
 
-			t.Run("Fails with missing URL", func(t *testing.T) {
-				article := articles[2]
-				article.URL = ""
-				_, err := repo.Create(ctx, article)
-				AssertError(t, err, "Expected error when creating article with empty URL")
-			})
-
-			t.Run("Fails with duplicate URL", func(t *testing.T) {
-				article1 := articles[0]
-				article2 := articles[1]
-				article2.URL = article1.URL
-				_, err := repo.Create(ctx, article2)
-				AssertError(t, err, "Expected error when creating article with duplicate URL")
-			})
-
-			t.Run("Fails with missing markdown path", func(t *testing.T) {
-				article := articles[3]
-				article.MarkdownPath = ""
-				_, err := repo.Create(ctx, article)
-				AssertError(t, err, "Expected error when creating article with empty markdown path")
-				AssertContains(t, err.Error(), "MarkdownPath", "Expected MarkdownPath validation error")
-			})
-
-			t.Run("Fails with missing HTML path", func(t *testing.T) {
-				article := articles[4]
-				article.HTMLPath = ""
-				_, err := repo.Create(ctx, article)
-
-				AssertError(t, err, "Expected error when creating article with empty HTML path")
-				AssertContains(t, err.Error(), "HTMLPath", "Expected HTMLPath validation error")
-			})
-
-			t.Run("Fails with invalid URL format", func(t *testing.T) {
-				article := articles[5]
-				article.URL = "not-a-valid-url"
-				_, err := repo.Create(ctx, article)
-				AssertError(t, err, "Expected error when creating article with invalid URL format")
-				AssertContains(t, err.Error(), "URL", "Expected URL format validation error")
-			})
-
-			t.Run("Fails with invalid date format", func(t *testing.T) {
-				article := articles[6]
-				article.Date = "invalid-date"
-				_, err := repo.Create(ctx, article)
-				AssertError(t, err, "Expected error when creating article with invalid date format")
-				AssertContains(t, err.Error(), "Date", "Expected date validation error")
-			})
-
-			t.Run("Fails with title too long", func(t *testing.T) {
-				article := articles[7]
-				article.Title = strings.Repeat("a", 501)
-				_, err := repo.Create(ctx, article)
-				AssertError(t, err, "Expected error when creating article with title too long")
-				AssertContains(t, err.Error(), "Title", "Expected title length validation error")
-			})
-
-			t.Run("Fails with author too long", func(t *testing.T) {
-				article := articles[8]
-				article.Author = strings.Repeat("a", 201)
-				_, err := repo.Create(ctx, article)
-				AssertError(t, err, "Expected error when creating article with author too long")
-				AssertContains(t, err.Error(), "Author", "Expected author length validation error")
-			})
+			article := CreateSampleArticle()
+			id, err := repo.Create(ctx, article)
+			AssertNoError(t, err, "Failed to create article")
+			AssertNotEqual(t, int64(0), id, "Expected non-zero ID")
+			AssertEqual(t, id, article.ID, "Expected article ID to be set correctly")
+			AssertFalse(t, article.Created.IsZero(), "Expected Created timestamp to be set")
+			AssertFalse(t, article.Modified.IsZero(), "Expected Modified timestamp to be set")
 		})
 
-		t.Run("Get", func(t *testing.T) {
-			t.Run("successfully retrieves an article", func(t *testing.T) {
-				original := CreateFakeArticle()
-				id, err := repo.Create(ctx, original)
-				AssertNoError(t, err, "Failed to create article")
+		t.Run("Get article", func(t *testing.T) {
+			db := CreateTestDB(t)
+			repo := NewArticleRepository(db)
 
-				retrieved, err := repo.Get(ctx, id)
-				AssertNoError(t, err, "Failed to get article")
-				AssertEqual(t, original.ID, retrieved.ID, "ID mismatch")
-				AssertEqual(t, original.URL, retrieved.URL, "URL mismatch")
-				AssertEqual(t, original.Title, retrieved.Title, "Title mismatch")
-				AssertEqual(t, original.Author, retrieved.Author, "Author mismatch")
-				AssertEqual(t, original.Date, retrieved.Date, "Date mismatch")
-				AssertEqual(t, original.MarkdownPath, retrieved.MarkdownPath, "MarkdownPath mismatch")
-				AssertEqual(t, original.HTMLPath, retrieved.HTMLPath, "HTMLPath mismatch")
-			})
+			original := CreateSampleArticle()
+			id, err := repo.Create(ctx, original)
+			AssertNoError(t, err, "Failed to create article")
 
-			t.Run("Fails when ID isn't found", func(t *testing.T) {
-				nonExistentID := int64(99999)
-				_, err := repo.Get(ctx, nonExistentID)
-				AssertError(t, err, "Expected error when getting non-existent article")
-				AssertContains(t, err.Error(), "not found", "Expected 'not found' in error message")
-			})
+			retrieved, err := repo.Get(ctx, id)
+			AssertNoError(t, err, "Failed to get article")
+			AssertEqual(t, original.ID, retrieved.ID, "ID mismatch")
+			AssertEqual(t, original.URL, retrieved.URL, "URL mismatch")
+			AssertEqual(t, original.Title, retrieved.Title, "Title mismatch")
+			AssertEqual(t, original.Author, retrieved.Author, "Author mismatch")
+			AssertEqual(t, original.Date, retrieved.Date, "Date mismatch")
+			AssertEqual(t, original.MarkdownPath, retrieved.MarkdownPath, "MarkdownPath mismatch")
+			AssertEqual(t, original.HTMLPath, retrieved.HTMLPath, "HTMLPath mismatch")
 		})
 
-		t.Run("Update", func(t *testing.T) {
-			t.Run("successfully updates an article", func(t *testing.T) {
-				article := CreateFakeArticle()
-				id, err := repo.Create(ctx, article)
-				AssertNoError(t, err, "Failed to create article")
+		t.Run("Update article", func(t *testing.T) {
+			db := CreateTestDB(t)
+			repo := NewArticleRepository(db)
 
-				originalModified := article.Modified
-				article.Title = "Updated Title"
-				article.Author = "Updated Author"
-				article.Date = "2024-01-02"
-				article.MarkdownPath = "/updated/path/article.md"
-				article.HTMLPath = "/updated/path/article.html"
+			article := CreateSampleArticle()
+			id, err := repo.Create(ctx, article)
+			AssertNoError(t, err, "Failed to create article")
 
-				err = repo.Update(ctx, article)
-				AssertNoError(t, err, "Failed to update article")
+			originalModified := article.Modified
+			article.Title = "Updated Title"
+			article.Author = "Updated Author"
+			article.Date = "2024-01-02"
+			article.MarkdownPath = "/updated/path/article.md"
+			article.HTMLPath = "/updated/path/article.html"
 
-				retrieved, err := repo.Get(ctx, id)
-				AssertNoError(t, err, "Failed to get updated article")
-				AssertEqual(t, "Updated Title", retrieved.Title, "Expected updated title")
-				AssertEqual(t, "Updated Author", retrieved.Author, "Expected updated author")
-				AssertEqual(t, "2024-01-02", retrieved.Date, "Expected updated date")
-				AssertEqual(t, "/updated/path/article.md", retrieved.MarkdownPath, "Expected updated markdown path")
-				AssertEqual(t, "/updated/path/article.html", retrieved.HTMLPath, "Expected updated HTML path")
-				AssertTrue(t, retrieved.Modified.After(originalModified), "Expected Modified timestamp to be updated")
-			})
+			err = repo.Update(ctx, article)
+			AssertNoError(t, err, "Failed to update article")
 
-			t.Run("Fails when ID isn't found", func(t *testing.T) {
-				article := CreateFakeArticle()
-				article.ID = 99999
-				err := repo.Update(ctx, article)
-				AssertError(t, err, "Expected error when updating non-existent article")
-				AssertContains(t, err.Error(), "not found", "Expected 'not found' in error message")
-			})
-
-			t.Run("Fails when trying to remove required value", func(t *testing.T) {
-				article := CreateFakeArticle()
-				_, err := repo.Create(ctx, article)
-				AssertNoError(t, err, "Failed to create article")
-
-				article.Title = ""
-				err = repo.Update(ctx, article)
-				AssertError(t, err, "Expected error when updating article with empty title")
-			})
-
-			t.Run("Fails when setting invalid URL format", func(t *testing.T) {
-				article := CreateFakeArticle()
-				_, err := repo.Create(ctx, article)
-				AssertNoError(t, err, "Failed to create article")
-
-				article.URL = "not-a-valid-url"
-				err = repo.Update(ctx, article)
-				AssertError(t, err, "Expected error when updating article with invalid URL format")
-				AssertContains(t, err.Error(), "URL", "Expected URL format validation error")
-			})
-
-			t.Run("Fails when setting invalid date format", func(t *testing.T) {
-				article := CreateFakeArticle()
-				_, err := repo.Create(ctx, article)
-				AssertNoError(t, err, "Failed to create article")
-
-				article.Date = "invalid-date"
-				err = repo.Update(ctx, article)
-				AssertError(t, err, "Expected error when updating article with invalid date format")
-				AssertContains(t, err.Error(), "Date", "Expected date validation error")
-			})
-
-			t.Run("Fails when setting title too long", func(t *testing.T) {
-				article := CreateFakeArticle()
-				_, err := repo.Create(ctx, article)
-				AssertNoError(t, err, "Failed to create article")
-
-				article.Title = strings.Repeat("a", 501)
-				err = repo.Update(ctx, article)
-				AssertError(t, err, "Expected error when updating article with title too long")
-				AssertContains(t, err.Error(), "Title", "Expected title length validation error")
-			})
-
-			t.Run("Fails when setting author too long", func(t *testing.T) {
-				article := CreateFakeArticle()
-				_, err := repo.Create(ctx, article)
-				AssertNoError(t, err, "Failed to create article")
-
-				article.Author = strings.Repeat("a", 201)
-				err = repo.Update(ctx, article)
-				AssertError(t, err, "Expected error when updating article with author too long")
-				AssertContains(t, err.Error(), "Author", "Expected author length validation error")
-			})
-
-			t.Run("Fails when removing markdown path", func(t *testing.T) {
-				article := CreateFakeArticle()
-				_, err := repo.Create(ctx, article)
-				AssertNoError(t, err, "Failed to create article")
-
-				article.MarkdownPath = ""
-				err = repo.Update(ctx, article)
-				AssertError(t, err, "Expected error when updating article with empty markdown path")
-				AssertContains(t, err.Error(), "MarkdownPath", "Expected MarkdownPath validation error")
-			})
-
-			t.Run("Fails when removing HTML path", func(t *testing.T) {
-				article := CreateFakeArticle()
-				_, err := repo.Create(ctx, article)
-				AssertNoError(t, err, "Failed to create article")
-
-				article.HTMLPath = ""
-				err = repo.Update(ctx, article)
-				AssertError(t, err, "Expected error when updating article with empty HTML path")
-				AssertContains(t, err.Error(), "HTMLPath", "Expected HTMLPath validation error")
-			})
+			retrieved, err := repo.Get(ctx, id)
+			AssertNoError(t, err, "Failed to get updated article")
+			AssertEqual(t, "Updated Title", retrieved.Title, "Expected updated title")
+			AssertEqual(t, "Updated Author", retrieved.Author, "Expected updated author")
+			AssertEqual(t, "2024-01-02", retrieved.Date, "Expected updated date")
+			AssertEqual(t, "/updated/path/article.md", retrieved.MarkdownPath, "Expected updated markdown path")
+			AssertEqual(t, "/updated/path/article.html", retrieved.HTMLPath, "Expected updated HTML path")
+			AssertTrue(t, retrieved.Modified.After(originalModified), "Expected Modified timestamp to be updated")
 		})
 
-		t.Run("Delete", func(t *testing.T) {
-			t.Run("successfully removes an article", func(t *testing.T) {
-				article := CreateFakeArticle()
-				id, err := repo.Create(ctx, article)
-				AssertNoError(t, err, "Failed to create article")
+		t.Run("Delete article", func(t *testing.T) {
+			db := CreateTestDB(t)
+			repo := NewArticleRepository(db)
 
-				err = repo.Delete(ctx, id)
-				AssertNoError(t, err, "Failed to delete article")
+			article := CreateSampleArticle()
+			id, err := repo.Create(ctx, article)
+			AssertNoError(t, err, "Failed to create article")
 
-				_, err = repo.Get(ctx, id)
-				AssertError(t, err, "Expected error when getting deleted article")
-			})
+			err = repo.Delete(ctx, id)
+			AssertNoError(t, err, "Failed to delete article")
 
-			t.Run("Fails when ID isn't found", func(t *testing.T) {
-				nonexistent := int64(99999)
-				err := repo.Delete(ctx, nonexistent)
-				AssertError(t, err, "Expected error when deleting non-existent article")
-				AssertContains(t, err.Error(), "not found", "Expected 'not found' in error message")
-			})
+			_, err = repo.Get(ctx, id)
+			AssertError(t, err, "Expected error when getting deleted article")
+		})
+	})
+
+	t.Run("Validation", func(t *testing.T) {
+		db := CreateTestDB(t)
+		repo := NewArticleRepository(db)
+		ctx := context.Background()
+
+		t.Run("Fails with missing title", func(t *testing.T) {
+			article := CreateSampleArticle()
+			article.Title = ""
+			_, err := repo.Create(ctx, article)
+			AssertError(t, err, "Expected error when creating article with empty title")
+		})
+
+		t.Run("Fails with missing URL", func(t *testing.T) {
+			article := CreateSampleArticle()
+			article.URL = ""
+			_, err := repo.Create(ctx, article)
+			AssertError(t, err, "Expected error when creating article with empty URL")
+		})
+
+		t.Run("Fails with duplicate URL", func(t *testing.T) {
+			article1 := CreateSampleArticle()
+			_, err := repo.Create(ctx, article1)
+			AssertNoError(t, err, "Failed to create first article")
+
+			article2 := CreateSampleArticle()
+			article2.URL = article1.URL
+			_, err = repo.Create(ctx, article2)
+			AssertError(t, err, "Expected error when creating article with duplicate URL")
+		})
+
+		t.Run("Fails with missing markdown path", func(t *testing.T) {
+			article := CreateSampleArticle()
+			article.MarkdownPath = ""
+			_, err := repo.Create(ctx, article)
+			AssertError(t, err, "Expected error when creating article with empty markdown path")
+			AssertContains(t, err.Error(), "MarkdownPath", "Expected MarkdownPath validation error")
+		})
+
+		t.Run("Fails with missing HTML path", func(t *testing.T) {
+			article := CreateSampleArticle()
+			article.HTMLPath = ""
+			_, err := repo.Create(ctx, article)
+			AssertError(t, err, "Expected error when creating article with empty HTML path")
+			AssertContains(t, err.Error(), "HTMLPath", "Expected HTMLPath validation error")
+		})
+
+		t.Run("Fails with invalid URL format", func(t *testing.T) {
+			article := CreateSampleArticle()
+			article.URL = "not-a-valid-url"
+			_, err := repo.Create(ctx, article)
+			AssertError(t, err, "Expected error when creating article with invalid URL format")
+			AssertContains(t, err.Error(), "URL", "Expected URL format validation error")
+		})
+
+		t.Run("Fails with invalid date format", func(t *testing.T) {
+			article := CreateSampleArticle()
+			article.Date = "invalid-date"
+			_, err := repo.Create(ctx, article)
+			AssertError(t, err, "Expected error when creating article with invalid date format")
+			AssertContains(t, err.Error(), "Date", "Expected date validation error")
+		})
+
+		t.Run("Fails with title too long", func(t *testing.T) {
+			article := CreateSampleArticle()
+			article.Title = strings.Repeat("a", 501)
+			_, err := repo.Create(ctx, article)
+			AssertError(t, err, "Expected error when creating article with title too long")
+			AssertContains(t, err.Error(), "Title", "Expected title length validation error")
+		})
+
+		t.Run("Fails with author too long", func(t *testing.T) {
+			article := CreateSampleArticle()
+			article.Author = strings.Repeat("a", 201)
+			_, err := repo.Create(ctx, article)
+			AssertError(t, err, "Expected error when creating article with author too long")
+			AssertContains(t, err.Error(), "Author", "Expected author length validation error")
+		})
+
+		t.Run("Validates timestamps", func(t *testing.T) {
+			article := CreateSampleArticle()
+			now := time.Now()
+			article.Modified = now
+			article.Created = now.Add(time.Hour)
+			err := repo.Validate(article)
+			AssertError(t, err, "Expected error when created is after modified")
+			AssertContains(t, err.Error(), "Created", "Expected timestamp validation error")
+		})
+
+		t.Run("Succeeds when created equals modified", func(t *testing.T) {
+			article := CreateSampleArticle()
+			now := time.Now()
+			article.Created = now
+			article.Modified = now
+			err := repo.Validate(article)
+			AssertNoError(t, err, "Expected no error when created equals modified")
+		})
+
+		t.Run("Succeeds when created is before modified", func(t *testing.T) {
+			article := CreateSampleArticle()
+			now := time.Now()
+			article.Created = now
+			article.Modified = now.Add(time.Hour)
+			err := repo.Validate(article)
+			AssertNoError(t, err, "Expected no error when created is before modified")
+		})
+
+		t.Run("Succeeds with valid optional fields", func(t *testing.T) {
+			article := CreateSampleArticle()
+			article.Date = "2024-01-01"
+			article.Author = "Test Author"
+			err := repo.Validate(article)
+			AssertNoError(t, err, "Expected no error with valid optional fields")
+		})
+
+		t.Run("Succeeds with empty optional fields", func(t *testing.T) {
+			article := CreateSampleArticle()
+			article.Date = ""
+			article.Author = ""
+			err := repo.Validate(article)
+			AssertNoError(t, err, "Expected no error with empty optional fields")
 		})
 	})
 
@@ -263,8 +218,8 @@ func TestArticleRepository(t *testing.T) {
 		repo := NewArticleRepository(db)
 		ctx := context.Background()
 
-		t.Run("successfully retrieves an article by URL", func(t *testing.T) {
-			original := CreateFakeArticle()
+		t.Run("Successfully retrieves article by URL", func(t *testing.T) {
+			original := CreateSampleArticle()
 			_, err := repo.Create(ctx, original)
 			AssertNoError(t, err, "Failed to create article")
 
@@ -275,7 +230,7 @@ func TestArticleRepository(t *testing.T) {
 			AssertEqual(t, original.Title, retrieved.Title, "Title mismatch")
 		})
 
-		t.Run("Fails when URL isn't found", func(t *testing.T) {
+		t.Run("Fails when URL not found", func(t *testing.T) {
 			nonexistent := "https://example.com/nonexistent"
 			_, err := repo.GetByURL(ctx, nonexistent)
 			AssertError(t, err, "Expected error when getting article by non-existent URL")
@@ -320,7 +275,7 @@ func TestArticleRepository(t *testing.T) {
 			AssertNoError(t, err, "Failed to create test article")
 		}
 
-		t.Run("All articles", func(t *testing.T) {
+		t.Run("List all articles", func(t *testing.T) {
 			results, err := repo.List(ctx, nil)
 			AssertNoError(t, err, "Failed to list all articles")
 			AssertEqual(t, 3, len(results), "Expected 3 articles")
@@ -390,13 +345,16 @@ func TestArticleRepository(t *testing.T) {
 		repo := NewArticleRepository(db)
 		ctx := context.Background()
 
-		articles := []*models.Article{CreateSampleArticle(), {
-			URL:          "https://example.com/article2",
-			Title:        "Second Article",
-			Author:       "Jane Smith",
-			Date:         "2024-01-02",
-			MarkdownPath: "/path/article2.md",
-			HTMLPath:     "/path/article2.html"},
+		articles := []*models.Article{
+			CreateSampleArticle(),
+			{
+				URL:          "https://example.com/article2",
+				Title:        "Second Article",
+				Author:       "Jane Smith",
+				Date:         "2024-01-02",
+				MarkdownPath: "/path/article2.md",
+				HTMLPath:     "/path/article2.html",
+			},
 		}
 
 		for _, article := range articles {
@@ -404,7 +362,7 @@ func TestArticleRepository(t *testing.T) {
 			AssertNoError(t, err, "Failed to create test article")
 		}
 
-		t.Run("Count all", func(t *testing.T) {
+		t.Run("Count all articles", func(t *testing.T) {
 			count, err := repo.Count(ctx, nil)
 			AssertNoError(t, err, "Failed to count articles")
 			AssertEqual(t, int64(2), count, "Expected 2 articles")
@@ -423,133 +381,182 @@ func TestArticleRepository(t *testing.T) {
 			AssertNoError(t, err, "Failed to count articles")
 			AssertEqual(t, int64(0), count, "Expected 0 articles")
 		})
+	})
 
-		t.Run("Count with context cancellation", func(t *testing.T) {
-			cancelCtx, cancel := context.WithCancel(ctx)
-			cancel()
+	t.Run("Context Cancellation Error Paths", func(t *testing.T) {
+		db := CreateTestDB(t)
+		repo := NewArticleRepository(db)
+		ctx := context.Background()
 
-			_, err := repo.Count(cancelCtx, nil)
-			if err == nil {
-				t.Error("Expected error with cancelled context")
-			}
+		article := CreateSampleArticle()
+		id, err := repo.Create(ctx, article)
+		AssertNoError(t, err, "Failed to create article")
+
+		t.Run("Create with cancelled context", func(t *testing.T) {
+			newArticle := CreateSampleArticle()
+			_, err := repo.Create(NewCanceledContext(), newArticle)
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("Get with cancelled context", func(t *testing.T) {
+			_, err := repo.Get(NewCanceledContext(), id)
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("GetByURL with cancelled context", func(t *testing.T) {
+			_, err := repo.GetByURL(NewCanceledContext(), article.URL)
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("Update with cancelled context", func(t *testing.T) {
+			article.Title = "Updated"
+			err := repo.Update(NewCanceledContext(), article)
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("Delete with cancelled context", func(t *testing.T) {
+			err := repo.Delete(NewCanceledContext(), id)
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("List with cancelled context", func(t *testing.T) {
+			_, err := repo.List(NewCanceledContext(), nil)
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("Count with cancelled context", func(t *testing.T) {
+			_, err := repo.Count(NewCanceledContext(), nil)
+			AssertError(t, err, "Expected error with cancelled context")
 		})
 	})
 
-	t.Run("Validate", func(t *testing.T) {
-		repo := NewArticleRepository(CreateTestDB(t))
+	t.Run("Edge Cases", func(t *testing.T) {
+		db := CreateTestDB(t)
+		repo := NewArticleRepository(db)
+		ctx := context.Background()
 
-		t.Run("successfully validates a valid article", func(t *testing.T) {
-			article := CreateSampleArticle()
-			err := repo.Validate(article)
-			AssertNoError(t, err, "Expected no validation errors for valid article")
+		t.Run("Get non-existent article", func(t *testing.T) {
+			_, err := repo.Get(ctx, 99999)
+			AssertError(t, err, "Expected error for non-existent article")
+			AssertContains(t, err.Error(), "not found", "Expected 'not found' in error message")
 		})
 
-		t.Run("fails with missing required URL", func(t *testing.T) {
+		t.Run("Update non-existent article", func(t *testing.T) {
 			article := CreateSampleArticle()
-			article.URL = ""
-			err := repo.Validate(article)
-			AssertError(t, err, "Expected error for missing URL")
-			AssertContains(t, err.Error(), "URL", "Expected URL validation error")
+			article.ID = 99999
+			err := repo.Update(ctx, article)
+			AssertError(t, err, "Expected error when updating non-existent article")
+			AssertContains(t, err.Error(), "not found", "Expected 'not found' in error message")
 		})
 
-		t.Run("fails with missing required title", func(t *testing.T) {
+		t.Run("Delete non-existent article", func(t *testing.T) {
+			err := repo.Delete(ctx, 99999)
+			AssertError(t, err, "Expected error when deleting non-existent article")
+			AssertContains(t, err.Error(), "not found", "Expected 'not found' in error message")
+		})
+
+		t.Run("Update validation - remove required title", func(t *testing.T) {
+			db := CreateTestDB(t)
+			repo := NewArticleRepository(db)
+
 			article := CreateSampleArticle()
+			_, err := repo.Create(ctx, article)
+			AssertNoError(t, err, "Failed to create article")
+
 			article.Title = ""
-			err := repo.Validate(article)
-			AssertError(t, err, "Expected error for missing title")
-			AssertContains(t, err.Error(), "Title", "Expected title validation error")
+			err = repo.Update(ctx, article)
+			AssertError(t, err, "Expected error when updating article with empty title")
 		})
 
-		t.Run("fails with missing markdown path", func(t *testing.T) {
-			article := CreateSampleArticle()
-			article.MarkdownPath = ""
-			err := repo.Validate(article)
-			AssertError(t, err, "Expected error for missing markdown path")
-			AssertContains(t, err.Error(), "MarkdownPath", "Expected markdown path validation error")
-		})
+		t.Run("Update validation - invalid URL format", func(t *testing.T) {
+			db := CreateTestDB(t)
+			repo := NewArticleRepository(db)
 
-		t.Run("fails with missing HTML path", func(t *testing.T) {
 			article := CreateSampleArticle()
-			article.HTMLPath = ""
-			err := repo.Validate(article)
-			AssertError(t, err, "Expected error for missing HTML path")
-			AssertContains(t, err.Error(), "HTMLPath", "Expected HTML path validation error")
-		})
+			_, err := repo.Create(ctx, article)
+			AssertNoError(t, err, "Failed to create article")
 
-		t.Run("fails with invalid URL format", func(t *testing.T) {
-			article := CreateSampleArticle()
 			article.URL = "not-a-valid-url"
-			err := repo.Validate(article)
-			AssertError(t, err, "Expected error for invalid URL format")
+			err = repo.Update(ctx, article)
+			AssertError(t, err, "Expected error when updating article with invalid URL format")
 			AssertContains(t, err.Error(), "URL", "Expected URL format validation error")
 		})
 
-		t.Run("fails with invalid date format", func(t *testing.T) {
+		t.Run("Update validation - invalid date format", func(t *testing.T) {
+			db := CreateTestDB(t)
+			repo := NewArticleRepository(db)
+
 			article := CreateSampleArticle()
+			_, err := repo.Create(ctx, article)
+			AssertNoError(t, err, "Failed to create article")
+
 			article.Date = "invalid-date"
-			err := repo.Validate(article)
-			AssertError(t, err, "Expected error for invalid date format")
+			err = repo.Update(ctx, article)
+			AssertError(t, err, "Expected error when updating article with invalid date format")
 			AssertContains(t, err.Error(), "Date", "Expected date validation error")
 		})
 
-		t.Run("fails with title too long", func(t *testing.T) {
+		t.Run("Update validation - title too long", func(t *testing.T) {
+			db := CreateTestDB(t)
+			repo := NewArticleRepository(db)
+
 			article := CreateSampleArticle()
+			_, err := repo.Create(ctx, article)
+			AssertNoError(t, err, "Failed to create article")
+
 			article.Title = strings.Repeat("a", 501)
-			err := repo.Validate(article)
-			AssertError(t, err, "Expected error for title too long")
+			err = repo.Update(ctx, article)
+			AssertError(t, err, "Expected error when updating article with title too long")
 			AssertContains(t, err.Error(), "Title", "Expected title length validation error")
 		})
 
-		t.Run("fails with author too long", func(t *testing.T) {
+		t.Run("Update validation - author too long", func(t *testing.T) {
+			db := CreateTestDB(t)
+			repo := NewArticleRepository(db)
+
 			article := CreateSampleArticle()
+			_, err := repo.Create(ctx, article)
+			AssertNoError(t, err, "Failed to create article")
+
 			article.Author = strings.Repeat("a", 201)
-			err := repo.Validate(article)
-			AssertError(t, err, "Expected error for author too long")
+			err = repo.Update(ctx, article)
+			AssertError(t, err, "Expected error when updating article with author too long")
 			AssertContains(t, err.Error(), "Author", "Expected author length validation error")
 		})
 
-		t.Run("fails when created is after modified", func(t *testing.T) {
+		t.Run("Update validation - remove markdown path", func(t *testing.T) {
+			db := CreateTestDB(t)
+			repo := NewArticleRepository(db)
+
 			article := CreateSampleArticle()
-			now := time.Now()
-			article.Modified = now
-			article.Created = now.Add(time.Hour)
-			err := repo.Validate(article)
-			AssertError(t, err, "Expected error when created is after modified")
-			AssertContains(t, err.Error(), "Created", "Expected timestamp validation error")
+			_, err := repo.Create(ctx, article)
+			AssertNoError(t, err, "Failed to create article")
+
+			article.MarkdownPath = ""
+			err = repo.Update(ctx, article)
+			AssertError(t, err, "Expected error when updating article with empty markdown path")
+			AssertContains(t, err.Error(), "MarkdownPath", "Expected MarkdownPath validation error")
 		})
 
-		t.Run("succeeds when created equals modified", func(t *testing.T) {
+		t.Run("Update validation - remove HTML path", func(t *testing.T) {
+			db := CreateTestDB(t)
+			repo := NewArticleRepository(db)
+
 			article := CreateSampleArticle()
-			now := time.Now()
-			article.Created = now
-			article.Modified = now
-			err := repo.Validate(article)
-			AssertNoError(t, err, "Expected no error when created equals modified")
+			_, err := repo.Create(ctx, article)
+			AssertNoError(t, err, "Failed to create article")
+
+			article.HTMLPath = ""
+			err = repo.Update(ctx, article)
+			AssertError(t, err, "Expected error when updating article with empty HTML path")
+			AssertContains(t, err.Error(), "HTMLPath", "Expected HTMLPath validation error")
 		})
 
-		t.Run("succeeds when created is before modified", func(t *testing.T) {
-			article := CreateSampleArticle()
-			now := time.Now()
-			article.Created = now
-			article.Modified = now.Add(time.Hour)
-			err := repo.Validate(article)
-			AssertNoError(t, err, "Expected no error when created is before modified")
-		})
-
-		t.Run("succeeds with valid optional fields", func(t *testing.T) {
-			article := CreateSampleArticle()
-			article.Date = "2024-01-01"
-			article.Author = "Test Author"
-			err := repo.Validate(article)
-			AssertNoError(t, err, "Expected no error with valid optional fields")
-		})
-
-		t.Run("succeeds with empty optional fields", func(t *testing.T) {
-			article := CreateSampleArticle()
-			article.Date = ""
-			article.Author = ""
-			err := repo.Validate(article)
-			AssertNoError(t, err, "Expected no error with empty optional fields")
+		t.Run("List with no results", func(t *testing.T) {
+			opts := &ArticleListOptions{Author: "NonExistentAuthor"}
+			articles, err := repo.List(ctx, opts)
+			AssertNoError(t, err, "Should not error when no articles found")
+			AssertEqual(t, 0, len(articles), "Expected empty result set")
 		})
 	})
 }

@@ -315,13 +315,124 @@ func TestBookRepository(t *testing.T) {
 		})
 
 		t.Run("Count with context cancellation", func(t *testing.T) {
-			cancelCtx, cancel := context.WithCancel(ctx)
-			cancel()
+			_, err := repo.Count(NewCanceledContext(), BookListOptions{})
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+	})
 
-			_, err := repo.Count(cancelCtx, BookListOptions{})
-			if err == nil {
-				t.Error("Expected error with cancelled context")
-			}
+	t.Run("Context Cancellation Error Paths", func(t *testing.T) {
+		db := CreateTestDB(t)
+		repo := NewBookRepository(db)
+		ctx := context.Background()
+
+		book := NewBookBuilder().WithTitle("Test Book").WithAuthor("Test Author").Build()
+		id, err := repo.Create(ctx, book)
+		AssertNoError(t, err, "Failed to create book")
+
+		t.Run("Create with cancelled context", func(t *testing.T) {
+			newBook := NewBookBuilder().WithTitle("Cancelled").Build()
+			_, err := repo.Create(NewCanceledContext(), newBook)
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("Get with cancelled context", func(t *testing.T) {
+			_, err := repo.Get(NewCanceledContext(), id)
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("Update with cancelled context", func(t *testing.T) {
+			book.Title = "Updated"
+			err := repo.Update(NewCanceledContext(), book)
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("Delete with cancelled context", func(t *testing.T) {
+			err := repo.Delete(NewCanceledContext(), id)
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("List with cancelled context", func(t *testing.T) {
+			_, err := repo.List(NewCanceledContext(), BookListOptions{})
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("GetQueued with cancelled context", func(t *testing.T) {
+			_, err := repo.GetQueued(NewCanceledContext())
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("GetReading with cancelled context", func(t *testing.T) {
+			_, err := repo.GetReading(NewCanceledContext())
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("GetFinished with cancelled context", func(t *testing.T) {
+			_, err := repo.GetFinished(NewCanceledContext())
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("GetByAuthor with cancelled context", func(t *testing.T) {
+			_, err := repo.GetByAuthor(NewCanceledContext(), "Test Author")
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("StartReading with cancelled context", func(t *testing.T) {
+			err := repo.StartReading(NewCanceledContext(), id)
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("FinishReading with cancelled context", func(t *testing.T) {
+			err := repo.FinishReading(NewCanceledContext(), id)
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("UpdateProgress with cancelled context", func(t *testing.T) {
+			err := repo.UpdateProgress(NewCanceledContext(), id, 50)
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+	})
+
+	t.Run("Edge Cases", func(t *testing.T) {
+		db := CreateTestDB(t)
+		repo := NewBookRepository(db)
+		ctx := context.Background()
+
+		t.Run("Get non-existent book", func(t *testing.T) {
+			_, err := repo.Get(ctx, 99999)
+			AssertError(t, err, "Expected error for non-existent book")
+		})
+
+		t.Run("Update non-existent book succeeds with no rows affected", func(t *testing.T) {
+			book := NewBookBuilder().WithTitle("Non-existent").Build()
+			book.ID = 99999
+			err := repo.Update(ctx, book)
+			AssertNoError(t, err, "Update should not error when no rows affected")
+		})
+
+		t.Run("Delete non-existent book succeeds with no rows affected", func(t *testing.T) {
+			err := repo.Delete(ctx, 99999)
+			AssertNoError(t, err, "Delete should not error when no rows affected")
+		})
+
+		t.Run("StartReading non-existent book", func(t *testing.T) {
+			err := repo.StartReading(ctx, 99999)
+			AssertError(t, err, "Expected error for non-existent book")
+		})
+
+		t.Run("FinishReading non-existent book", func(t *testing.T) {
+			err := repo.FinishReading(ctx, 99999)
+			AssertError(t, err, "Expected error for non-existent book")
+		})
+
+		t.Run("UpdateProgress non-existent book", func(t *testing.T) {
+			err := repo.UpdateProgress(ctx, 99999, 50)
+			AssertError(t, err, "Expected error for non-existent book")
+		})
+
+		t.Run("GetByAuthor with no results", func(t *testing.T) {
+			books, err := repo.GetByAuthor(ctx, "NonExistentAuthor")
+			AssertNoError(t, err, "Should not error when no books found")
+			AssertEqual(t, 0, len(books), "Expected empty result set")
 		})
 	})
 }

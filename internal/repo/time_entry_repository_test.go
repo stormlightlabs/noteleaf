@@ -4,35 +4,17 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/stormlightlabs/noteleaf/internal/models"
-	"github.com/stormlightlabs/noteleaf/internal/store"
 )
 
-func setupTimeEntryTestDB(t *testing.T) (*sql.DB, *TimeEntryRepository, *TaskRepository, func()) {
-	os.Setenv("NOTELEAF_CONFIG_DIR", t.TempDir())
-
-	db, err := store.NewDatabase()
-	if err != nil {
-		t.Fatalf("Failed to create test database: %v", err)
-	}
-
-	timeRepo := NewTimeEntryRepository(db.DB)
-	taskRepo := NewTaskRepository(db.DB)
-
-	cleanup := func() {
-		db.Close()
-		os.Unsetenv("NOTELEAF_CONFIG_DIR")
-	}
-
-	return db.DB, timeRepo, taskRepo, cleanup
-}
-
-func createTestTask(t *testing.T, taskRepo *TaskRepository) *models.Task {
+func createTestTask(t *testing.T, db *sql.DB) *models.Task {
+	t.Helper()
 	ctx := context.Background()
+	taskRepo := NewTaskRepository(db)
 	task := &models.Task{
 		UUID:        fmt.Sprintf("test-uuid-%d", time.Now().UnixNano()),
 		Description: "Test Task",
@@ -40,365 +22,243 @@ func createTestTask(t *testing.T, taskRepo *TaskRepository) *models.Task {
 	}
 
 	id, err := taskRepo.Create(ctx, task)
-	if err != nil {
-		t.Fatalf("Failed to create test task: %v", err)
-	}
+	AssertNoError(t, err, "Failed to create test task")
 	task.ID = id
 	return task
 }
 
 func TestTimeEntryRepository(t *testing.T) {
-	t.Run("Start", func(t *testing.T) {
-		_, repo, taskRepo, cleanup := setupTimeEntryTestDB(t)
-		defer cleanup()
-
+	t.Run("CRUD Operations", func(t *testing.T) {
+		db := CreateTestDB(t)
+		repo := NewTimeEntryRepository(db)
 		ctx := context.Background()
-		task := createTestTask(t, taskRepo)
+		task := createTestTask(t, db)
 
-		t.Run("starts time tracking successfully", func(t *testing.T) {
+		t.Run("Start time tracking", func(t *testing.T) {
 			description := "Working on feature"
 			entry, err := repo.Start(ctx, task.ID, description)
 
-			if err != nil {
-				t.Fatalf("Failed to start time tracking: %v", err)
-			}
-
-			if entry.ID == 0 {
-				t.Error("Expected entry to have an ID")
-			}
-			if entry.TaskID != task.ID {
-				t.Errorf("Expected TaskID %d, got %d", task.ID, entry.TaskID)
-			}
-			if entry.Description != description {
-				t.Errorf("Expected description %q, got %q", description, entry.Description)
-			}
-			if entry.EndTime != nil {
-				t.Error("Expected EndTime to be nil for active entry")
-			}
-			if !entry.IsActive() {
-				t.Error("Expected entry to be active")
-			}
+			AssertNoError(t, err, "Failed to start time tracking")
+			AssertNotEqual(t, int64(0), entry.ID, "Expected non-zero entry ID")
+			AssertEqual(t, task.ID, entry.TaskID, "Expected TaskID to match")
+			AssertEqual(t, description, entry.Description, "Expected description to match")
+			AssertTrue(t, entry.EndTime == nil, "Expected EndTime to be nil for active entry")
+			AssertTrue(t, entry.IsActive(), "Expected entry to be active")
 		})
 
-		t.Run("prevents starting already active task", func(t *testing.T) {
+		t.Run("Prevent starting already active task", func(t *testing.T) {
 			_, err := repo.Start(ctx, task.ID, "Another attempt")
 
-			if err == nil {
-				t.Error("Expected error when starting already active task")
-			}
-			if err.Error() != "task already has an active time entry" {
-				t.Errorf("Expected specific error message, got: %v", err)
-			}
+			AssertError(t, err, "Expected error when starting already active task")
+			AssertContains(t, err.Error(), "task already has an active time entry", "Expected specific error message")
 		})
-	})
 
-	t.Run("Stop", func(t *testing.T) {
-		_, repo, taskRepo, cleanup := setupTimeEntryTestDB(t)
-		defer cleanup()
+		t.Run("Stop active time entry", func(t *testing.T) {
+			db := CreateTestDB(t)
+			repo := NewTimeEntryRepository(db)
+			task := createTestTask(t, db)
 
-		ctx := context.Background()
-		task := createTestTask(t, taskRepo)
+			entry, err := repo.Start(ctx, task.ID, "Test work")
+			AssertNoError(t, err, "Failed to start time tracking")
 
-		entry, err := repo.Start(ctx, task.ID, "Test work")
-		if err != nil {
-			t.Fatalf("Failed to start time tracking: %v", err)
-		}
+			time.Sleep(1010 * time.Millisecond)
 
-		time.Sleep(1010 * time.Millisecond)
-
-		t.Run("stops active time entry", func(t *testing.T) {
 			stoppedEntry, err := repo.Stop(ctx, entry.ID)
-
-			if err != nil {
-				t.Fatalf("Failed to stop time tracking: %v", err)
-			}
-
-			if stoppedEntry.EndTime == nil {
-				t.Error("Expected EndTime to be set")
-			}
-			if stoppedEntry.DurationSeconds <= 0 {
-				t.Error("Expected duration to be greater than 0")
-			}
-			if stoppedEntry.IsActive() {
-				t.Error("Expected entry to not be active after stopping")
-			}
+			AssertNoError(t, err, "Failed to stop time tracking")
+			AssertTrue(t, stoppedEntry.EndTime != nil, "Expected EndTime to be set")
+			AssertGreaterThan(t, stoppedEntry.DurationSeconds, int64(0), "Expected duration > 0")
+			AssertFalse(t, stoppedEntry.IsActive(), "Expected entry to not be active after stopping")
 		})
 
-		t.Run("fails to stop already stopped entry", func(t *testing.T) {
-			_, err := repo.Stop(ctx, entry.ID)
+		t.Run("Fail to stop already stopped entry", func(t *testing.T) {
+			db := CreateTestDB(t)
+			repo := NewTimeEntryRepository(db)
+			task := createTestTask(t, db)
 
-			if err == nil {
-				t.Error("Expected error when stopping already stopped entry")
-			}
-			if err.Error() != "time entry is not active" {
-				t.Errorf("Expected specific error message, got: %v", err)
-			}
-		})
-	})
+			entry, err := repo.Start(ctx, task.ID, "Test work")
+			AssertNoError(t, err, "Failed to start time tracking")
 
-	t.Run("StopActiveByTaskID", func(t *testing.T) {
-		_, repo, taskRepo, cleanup := setupTimeEntryTestDB(t)
-		defer cleanup()
+			time.Sleep(1010 * time.Millisecond)
+			_, err = repo.Stop(ctx, entry.ID)
+			AssertNoError(t, err, "Failed to stop time tracking")
 
-		ctx := context.Background()
-		task := createTestTask(t, taskRepo)
-
-		t.Run("stops active entry by task ID", func(t *testing.T) {
-			_, err := repo.Start(ctx, task.ID, "Test work")
-			if err != nil {
-				t.Fatalf("Failed to start time tracking: %v", err)
-			}
-
-			stoppedEntry, err := repo.StopActiveByTaskID(ctx, task.ID)
-
-			if err != nil {
-				t.Fatalf("Failed to stop time tracking by task ID: %v", err)
-			}
-
-			if stoppedEntry.EndTime == nil {
-				t.Error("Expected EndTime to be set")
-			}
-			if stoppedEntry.IsActive() {
-				t.Error("Expected entry to not be active")
-			}
+			_, err = repo.Stop(ctx, entry.ID)
+			AssertError(t, err, "Expected error when stopping already stopped entry")
+			AssertContains(t, err.Error(), "time entry is not active", "Expected specific error message")
 		})
 
-		t.Run("fails when no active entry exists", func(t *testing.T) {
-			_, err := repo.StopActiveByTaskID(ctx, task.ID)
+		t.Run("Get time entry", func(t *testing.T) {
+			db := CreateTestDB(t)
+			repo := NewTimeEntryRepository(db)
+			task := createTestTask(t, db)
 
-			if err == nil {
-				t.Error("Expected error when no active entry exists")
-			}
-			if err.Error() != "no active time entry found for task" {
-				t.Errorf("Expected specific error message, got: %v", err)
-			}
+			original, err := repo.Start(ctx, task.ID, "Test entry")
+			AssertNoError(t, err, "Failed to start time tracking")
+
+			retrieved, err := repo.Get(ctx, original.ID)
+			AssertNoError(t, err, "Failed to get time entry")
+			AssertEqual(t, original.ID, retrieved.ID, "ID mismatch")
+			AssertEqual(t, original.TaskID, retrieved.TaskID, "TaskID mismatch")
+			AssertEqual(t, original.Description, retrieved.Description, "Description mismatch")
+		})
+
+		t.Run("Delete time entry", func(t *testing.T) {
+			db := CreateTestDB(t)
+			repo := NewTimeEntryRepository(db)
+			task := createTestTask(t, db)
+
+			entry, err := repo.Start(ctx, task.ID, "To be deleted")
+			AssertNoError(t, err, "Failed to create entry")
+
+			err = repo.Delete(ctx, entry.ID)
+			AssertNoError(t, err, "Failed to delete entry")
+
+			_, err = repo.Get(ctx, entry.ID)
+			AssertError(t, err, "Expected error when getting deleted entry")
+			AssertEqual(t, sql.ErrNoRows, err, "Expected sql.ErrNoRows")
 		})
 	})
 
-	t.Run("GetActiveByTaskID", func(t *testing.T) {
-		_, repo, taskRepo, cleanup := setupTimeEntryTestDB(t)
-		defer cleanup()
-
+	t.Run("Query Methods", func(t *testing.T) {
+		db := CreateTestDB(t)
+		repo := NewTimeEntryRepository(db)
 		ctx := context.Background()
-		task := createTestTask(t, taskRepo)
+		task := createTestTask(t, db)
 
-		t.Run("returns nil when no active entry exists", func(t *testing.T) {
+		t.Run("GetActiveByTaskID returns error when no active entry", func(t *testing.T) {
 			_, err := repo.GetActiveByTaskID(ctx, task.ID)
-
-			if err != sql.ErrNoRows {
-				t.Errorf("Expected sql.ErrNoRows, got: %v", err)
-			}
+			AssertError(t, err, "Expected error when no active entry exists")
+			AssertEqual(t, sql.ErrNoRows, err, "Expected sql.ErrNoRows")
 		})
 
-		t.Run("returns active entry when one exists", func(t *testing.T) {
+		t.Run("GetActiveByTaskID returns active entry", func(t *testing.T) {
 			startedEntry, err := repo.Start(ctx, task.ID, "Test work")
-			if err != nil {
-				t.Fatalf("Failed to start time tracking: %v", err)
-			}
+			AssertNoError(t, err, "Failed to start time tracking")
 
 			activeEntry, err := repo.GetActiveByTaskID(ctx, task.ID)
-
-			if err != nil {
-				t.Fatalf("Failed to get active entry: %v", err)
-			}
-
-			if activeEntry.ID != startedEntry.ID {
-				t.Errorf("Expected entry ID %d, got %d", startedEntry.ID, activeEntry.ID)
-			}
-			if !activeEntry.IsActive() {
-				t.Error("Expected entry to be active")
-			}
+			AssertNoError(t, err, "Failed to get active entry")
+			AssertEqual(t, startedEntry.ID, activeEntry.ID, "Expected entry IDs to match")
+			AssertTrue(t, activeEntry.IsActive(), "Expected entry to be active")
 		})
-	})
 
-	t.Run("GetByTaskID", func(t *testing.T) {
-		_, repo, taskRepo, cleanup := setupTimeEntryTestDB(t)
-		defer cleanup()
+		t.Run("StopActiveByTaskID stops active entry", func(t *testing.T) {
+			db := CreateTestDB(t)
+			repo := NewTimeEntryRepository(db)
+			task := createTestTask(t, db)
 
-		ctx := context.Background()
-		task := createTestTask(t, taskRepo)
+			_, err := repo.Start(ctx, task.ID, "Test work")
+			AssertNoError(t, err, "Failed to start time tracking")
 
-		t.Run("returns empty slice when no entries exist", func(t *testing.T) {
+			stoppedEntry, err := repo.StopActiveByTaskID(ctx, task.ID)
+			AssertNoError(t, err, "Failed to stop time tracking by task ID")
+			AssertTrue(t, stoppedEntry.EndTime != nil, "Expected EndTime to be set")
+			AssertFalse(t, stoppedEntry.IsActive(), "Expected entry to not be active")
+		})
+
+		t.Run("StopActiveByTaskID fails when no active entry", func(t *testing.T) {
+			db := CreateTestDB(t)
+			repo := NewTimeEntryRepository(db)
+			task := createTestTask(t, db)
+
+			_, err := repo.StopActiveByTaskID(ctx, task.ID)
+			AssertError(t, err, "Expected error when no active entry exists")
+			AssertContains(t, err.Error(), "no active time entry found for task", "Expected specific error message")
+		})
+
+		t.Run("GetByTaskID returns empty when no entries", func(t *testing.T) {
+			db := CreateTestDB(t)
+			repo := NewTimeEntryRepository(db)
+			task := createTestTask(t, db)
+
 			entries, err := repo.GetByTaskID(ctx, task.ID)
-
-			if err != nil {
-				t.Fatalf("Failed to get entries: %v", err)
-			}
-
-			if len(entries) != 0 {
-				t.Errorf("Expected 0 entries, got %d", len(entries))
-			}
+			AssertNoError(t, err, "Failed to get entries")
+			AssertEqual(t, 0, len(entries), "Expected 0 entries")
 		})
 
-		t.Run("returns all entries for task", func(t *testing.T) {
+		t.Run("GetByTaskID returns all entries for task", func(t *testing.T) {
+			db := CreateTestDB(t)
+			repo := NewTimeEntryRepository(db)
+			task := createTestTask(t, db)
+
 			_, err := repo.Start(ctx, task.ID, "First session")
-			if err != nil {
-				t.Fatalf("Failed to start first session: %v", err)
-			}
+			AssertNoError(t, err, "Failed to start first session")
 
 			_, err = repo.StopActiveByTaskID(ctx, task.ID)
-			if err != nil {
-				t.Fatalf("Failed to stop first session: %v", err)
-			}
+			AssertNoError(t, err, "Failed to stop first session")
 
 			_, err = repo.Start(ctx, task.ID, "Second session")
-			if err != nil {
-				t.Fatalf("Failed to start second session: %v", err)
-			}
+			AssertNoError(t, err, "Failed to start second session")
 
 			entries, err := repo.GetByTaskID(ctx, task.ID)
-
-			if err != nil {
-				t.Fatalf("Failed to get entries: %v", err)
-			}
-
-			if len(entries) != 2 {
-				t.Errorf("Expected 2 entries, got %d", len(entries))
-			}
-
-			if entries[0].Description != "Second session" {
-				t.Errorf("Expected first entry to be 'Second session', got %q", entries[0].Description)
-			}
-			if entries[1].Description != "First session" {
-				t.Errorf("Expected second entry to be 'First session', got %q", entries[1].Description)
-			}
+			AssertNoError(t, err, "Failed to get entries")
+			AssertEqual(t, 2, len(entries), "Expected 2 entries")
+			AssertEqual(t, "Second session", entries[0].Description, "Expected newest entry first")
+			AssertEqual(t, "First session", entries[1].Description, "Expected oldest entry second")
 		})
-	})
 
-	t.Run("GetTotalTimeByTaskID", func(t *testing.T) {
-		_, repo, taskRepo, cleanup := setupTimeEntryTestDB(t)
-		defer cleanup()
+		t.Run("GetTotalTimeByTaskID returns zero when no entries", func(t *testing.T) {
+			db := CreateTestDB(t)
+			repo := NewTimeEntryRepository(db)
+			task := createTestTask(t, db)
 
-		ctx := context.Background()
-		task := createTestTask(t, taskRepo)
-
-		t.Run("returns zero duration when no entries exist", func(t *testing.T) {
 			duration, err := repo.GetTotalTimeByTaskID(ctx, task.ID)
-
-			if err != nil {
-				t.Fatalf("Failed to get total time: %v", err)
-			}
-
-			if duration != 0 {
-				t.Errorf("Expected 0 duration, got %v", duration)
-			}
+			AssertNoError(t, err, "Failed to get total time")
+			AssertEqual(t, time.Duration(0), duration, "Expected 0 duration")
 		})
 
-		t.Run("calculates total time including active entries", func(t *testing.T) {
+		t.Run("GetTotalTimeByTaskID calculates total including active entries", func(t *testing.T) {
+			db := CreateTestDB(t)
+			repo := NewTimeEntryRepository(db)
+			task := createTestTask(t, db)
+
 			entry1, err := repo.Start(ctx, task.ID, "Completed work")
-			if err != nil {
-				t.Fatalf("Failed to start first entry: %v", err)
-			}
+			AssertNoError(t, err, "Failed to start first entry")
 
 			time.Sleep(1010 * time.Millisecond)
 			_, err = repo.Stop(ctx, entry1.ID)
-			if err != nil {
-				t.Fatalf("Failed to stop first entry: %v", err)
-			}
+			AssertNoError(t, err, "Failed to stop first entry")
 
 			_, err = repo.Start(ctx, task.ID, "Active work")
-			if err != nil {
-				t.Fatalf("Failed to start second entry: %v", err)
-			}
+			AssertNoError(t, err, "Failed to start second entry")
 
 			time.Sleep(1010 * time.Millisecond)
 
 			totalTime, err := repo.GetTotalTimeByTaskID(ctx, task.ID)
-
-			if err != nil {
-				t.Fatalf("Failed to get total time: %v", err)
-			}
-
-			if totalTime <= 0 {
-				t.Error("Expected total time to be greater than 0")
-			}
-
-			if totalTime < 2*time.Second {
-				t.Errorf("Expected total time to be at least 2s, got %v", totalTime)
-			}
-		})
-	})
-
-	t.Run("Delete", func(t *testing.T) {
-		_, repo, taskRepo, cleanup := setupTimeEntryTestDB(t)
-		defer cleanup()
-
-		ctx := context.Background()
-		task := createTestTask(t, taskRepo)
-
-		t.Run("deletes existing entry", func(t *testing.T) {
-			entry, err := repo.Start(ctx, task.ID, "To be deleted")
-			if err != nil {
-				t.Fatalf("Failed to create entry: %v", err)
-			}
-
-			err = repo.Delete(ctx, entry.ID)
-
-			if err != nil {
-				t.Fatalf("Failed to delete entry: %v", err)
-			}
-
-			_, err = repo.Get(ctx, entry.ID)
-			if err != sql.ErrNoRows {
-				t.Errorf("Expected entry to be deleted, but got: %v", err)
-			}
-		})
-
-		t.Run("fails to delete non-existent entry", func(t *testing.T) {
-			err := repo.Delete(ctx, 99999)
-
-			if err == nil {
-				t.Error("Expected error when deleting non-existent entry")
-			}
-			if err.Error() != "time entry not found" {
-				t.Errorf("Expected specific error message, got: %v", err)
-			}
+			AssertNoError(t, err, "Failed to get total time")
+			AssertTrue(t, totalTime > 0, "Expected total time > 0")
+			AssertTrue(t, totalTime >= 2*time.Second, "Expected total time >= 2s")
 		})
 	})
 
 	t.Run("GetByDateRange", func(t *testing.T) {
-		_, repo, taskRepo, cleanup := setupTimeEntryTestDB(t)
-		defer cleanup()
-
+		db := CreateTestDB(t)
+		repo := NewTimeEntryRepository(db)
 		ctx := context.Background()
 
-		t.Run("returns empty slice when no entries in range", func(t *testing.T) {
+		t.Run("Returns empty when no entries in range", func(t *testing.T) {
 			start := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
 			end := time.Date(2020, 1, 2, 0, 0, 0, 0, time.UTC)
 
 			entries, err := repo.GetByDateRange(ctx, start, end)
-
-			if err != nil {
-				t.Fatalf("Failed to get entries by date range: %v", err)
-			}
-
-			if len(entries) != 0 {
-				t.Errorf("Expected 0 entries, got %d", len(entries))
-			}
+			AssertNoError(t, err, "Failed to get entries by date range")
+			AssertEqual(t, 0, len(entries), "Expected 0 entries")
 		})
 
-		t.Run("returns entries within date range", func(t *testing.T) {
-			task := createTestTask(t, taskRepo)
+		t.Run("Returns entries within date range", func(t *testing.T) {
+			task := createTestTask(t, db)
 
 			entry, err := repo.Start(ctx, task.ID, "Test entry")
-			if err != nil {
-				t.Fatalf("Failed to start entry: %v", err)
-			}
+			AssertNoError(t, err, "Failed to start entry")
 
 			_, err = repo.Stop(ctx, entry.ID)
-			if err != nil {
-				t.Fatalf("Failed to stop entry: %v", err)
-			}
+			AssertNoError(t, err, "Failed to stop entry")
 
 			now := time.Now()
 			start := now.Add(-time.Hour)
 			end := now.Add(time.Hour)
 
 			entries, err := repo.GetByDateRange(ctx, start, end)
-
-			if err != nil {
-				t.Fatalf("Failed to get entries by date range: %v", err)
-			}
+			AssertNoError(t, err, "Failed to get entries by date range")
 
 			found := false
 			for _, e := range entries {
@@ -407,33 +267,23 @@ func TestTimeEntryRepository(t *testing.T) {
 					break
 				}
 			}
-
-			if !found {
-				t.Error("Expected to find 'Test entry' in results")
-			}
+			AssertTrue(t, found, "Expected to find 'Test entry' in results")
 		})
 
-		t.Run("respects date range boundaries", func(t *testing.T) {
-			task := createTestTask(t, taskRepo)
+		t.Run("Respects date range boundaries", func(t *testing.T) {
+			task := createTestTask(t, db)
 
 			entry, err := repo.Start(ctx, task.ID, "Boundary test")
-			if err != nil {
-				t.Fatalf("Failed to start entry: %v", err)
-			}
+			AssertNoError(t, err, "Failed to start entry")
 
 			_, err = repo.Stop(ctx, entry.ID)
-			if err != nil {
-				t.Fatalf("Failed to stop entry: %v", err)
-			}
+			AssertNoError(t, err, "Failed to stop entry")
 
 			start := time.Now().Add(time.Hour)
 			end := time.Now().Add(2 * time.Hour)
 
 			entries, err := repo.GetByDateRange(ctx, start, end)
-
-			if err != nil {
-				t.Fatalf("Failed to get entries by date range: %v", err)
-			}
+			AssertNoError(t, err, "Failed to get entries by date range")
 
 			for _, e := range entries {
 				if e.Description == "Boundary test" {
@@ -442,32 +292,117 @@ func TestTimeEntryRepository(t *testing.T) {
 			}
 		})
 
-		t.Run("handles context cancellation", func(t *testing.T) {
-			cancelCtx, cancel := context.WithCancel(ctx)
-			cancel()
-
-			start := time.Now().AddDate(0, 0, -1)
-			end := time.Now()
-
-			_, err := repo.GetByDateRange(cancelCtx, start, end)
-			if err == nil {
-				t.Error("Expected error with cancelled context")
-			}
-		})
-
-		t.Run("handles invalid date range", func(t *testing.T) {
+		t.Run("Handles invalid date range", func(t *testing.T) {
 			start := time.Now()
 			end := time.Now().AddDate(0, 0, -1)
 
 			entries, err := repo.GetByDateRange(ctx, start, end)
+			AssertNoError(t, err, "Should not error with invalid date range")
+			AssertEqual(t, 0, len(entries), "Expected 0 entries with invalid range")
+		})
+	})
 
-			if err != nil {
-				t.Fatalf("Unexpected error with invalid date range: %v", err)
-			}
+	t.Run("Context Cancellation Error Paths", func(t *testing.T) {
+		db := CreateTestDB(t)
+		repo := NewTimeEntryRepository(db)
+		ctx := context.Background()
+		task := createTestTask(t, db)
 
-			if len(entries) != 0 {
-				t.Errorf("Expected 0 entries with invalid range, got %d", len(entries))
-			}
+		entry, err := repo.Start(ctx, task.ID, "Test entry")
+		AssertNoError(t, err, "Failed to create entry")
+
+		t.Run("Start with cancelled context", func(t *testing.T) {
+			db := CreateTestDB(t)
+			repo := NewTimeEntryRepository(db)
+			task := createTestTask(t, db)
+
+			_, err := repo.Start(NewCanceledContext(), task.ID, "Cancelled")
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("Get with cancelled context", func(t *testing.T) {
+			_, err := repo.Get(NewCanceledContext(), entry.ID)
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("Stop with cancelled context", func(t *testing.T) {
+			_, err := repo.Stop(NewCanceledContext(), entry.ID)
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("GetActiveByTaskID with cancelled context", func(t *testing.T) {
+			_, err := repo.GetActiveByTaskID(NewCanceledContext(), task.ID)
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("StopActiveByTaskID with cancelled context", func(t *testing.T) {
+			_, err := repo.StopActiveByTaskID(NewCanceledContext(), task.ID)
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("GetByTaskID with cancelled context", func(t *testing.T) {
+			_, err := repo.GetByTaskID(NewCanceledContext(), task.ID)
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("GetTotalTimeByTaskID with cancelled context", func(t *testing.T) {
+			_, err := repo.GetTotalTimeByTaskID(NewCanceledContext(), task.ID)
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("Delete with cancelled context", func(t *testing.T) {
+			err := repo.Delete(NewCanceledContext(), entry.ID)
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("GetByDateRange with cancelled context", func(t *testing.T) {
+			start := time.Now().AddDate(0, 0, -1)
+			end := time.Now()
+
+			_, err := repo.GetByDateRange(NewCanceledContext(), start, end)
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+	})
+
+	t.Run("Edge Cases", func(t *testing.T) {
+		db := CreateTestDB(t)
+		repo := NewTimeEntryRepository(db)
+		ctx := context.Background()
+
+		t.Run("Get non-existent entry", func(t *testing.T) {
+			_, err := repo.Get(ctx, 99999)
+			AssertError(t, err, "Expected error for non-existent entry")
+			AssertEqual(t, sql.ErrNoRows, err, "Expected sql.ErrNoRows")
+		})
+
+		t.Run("Stop non-existent entry", func(t *testing.T) {
+			_, err := repo.Stop(ctx, 99999)
+			AssertError(t, err, "Expected error for non-existent entry")
+		})
+
+		t.Run("Delete non-existent entry", func(t *testing.T) {
+			err := repo.Delete(ctx, 99999)
+			AssertError(t, err, "Expected error for non-existent entry")
+			AssertContains(t, err.Error(), "time entry not found", "Expected specific error message")
+		})
+
+		t.Run("Start with non-existent task", func(t *testing.T) {
+			_, err := repo.Start(ctx, 99999, "Test")
+			AssertError(t, err, "Expected error for non-existent task")
+		})
+
+		t.Run("GetActiveByTaskID with no results", func(t *testing.T) {
+			task := createTestTask(t, db)
+			_, err := repo.GetActiveByTaskID(ctx, task.ID)
+			AssertError(t, err, "Expected error when no active entry")
+			AssertEqual(t, sql.ErrNoRows, err, "Expected sql.ErrNoRows")
+		})
+
+		t.Run("GetByTaskID with no results", func(t *testing.T) {
+			task := createTestTask(t, db)
+			entries, err := repo.GetByTaskID(ctx, task.ID)
+			AssertNoError(t, err, "Should not error when no entries found")
+			AssertEqual(t, 0, len(entries), "Expected empty result set")
 		})
 	})
 }

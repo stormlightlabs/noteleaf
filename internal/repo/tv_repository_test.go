@@ -463,13 +463,125 @@ func TestTVRepository(t *testing.T) {
 		})
 
 		t.Run("Count with context cancellation", func(t *testing.T) {
-			cancelCtx, cancel := context.WithCancel(ctx)
-			cancel()
+			_, err := repo.Count(NewCanceledContext(), TVListOptions{})
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+	})
 
-			_, err := repo.Count(cancelCtx, TVListOptions{})
-			if err == nil {
-				t.Error("Expected error with cancelled context")
-			}
+	t.Run("Context Cancellation Error Paths", func(t *testing.T) {
+		db := CreateTestDB(t)
+		repo := NewTVRepository(db)
+		ctx := context.Background()
+
+		tvShow := NewTVShowBuilder().WithTitle("Test Show").WithSeason(1).WithEpisode(1).Build()
+		id, err := repo.Create(ctx, tvShow)
+		AssertNoError(t, err, "Failed to create TV show")
+
+		t.Run("Create with cancelled context", func(t *testing.T) {
+			newShow := NewTVShowBuilder().WithTitle("Cancelled").Build()
+			_, err := repo.Create(NewCanceledContext(), newShow)
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("Get with cancelled context", func(t *testing.T) {
+			_, err := repo.Get(NewCanceledContext(), id)
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("Update with cancelled context", func(t *testing.T) {
+			tvShow.Title = "Updated"
+			err := repo.Update(NewCanceledContext(), tvShow)
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("Delete with cancelled context", func(t *testing.T) {
+			err := repo.Delete(NewCanceledContext(), id)
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("List with cancelled context", func(t *testing.T) {
+			_, err := repo.List(NewCanceledContext(), TVListOptions{})
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("GetQueued with cancelled context", func(t *testing.T) {
+			_, err := repo.GetQueued(NewCanceledContext())
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("GetWatching with cancelled context", func(t *testing.T) {
+			_, err := repo.GetWatching(NewCanceledContext())
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("GetWatched with cancelled context", func(t *testing.T) {
+			_, err := repo.GetWatched(NewCanceledContext())
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("GetByTitle with cancelled context", func(t *testing.T) {
+			_, err := repo.GetByTitle(NewCanceledContext(), "Test Show")
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("GetBySeason with cancelled context", func(t *testing.T) {
+			_, err := repo.GetBySeason(NewCanceledContext(), "Test Show", 1)
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("MarkWatched with cancelled context", func(t *testing.T) {
+			err := repo.MarkWatched(NewCanceledContext(), id)
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("StartWatching with cancelled context", func(t *testing.T) {
+			err := repo.StartWatching(NewCanceledContext(), id)
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+	})
+
+	t.Run("Edge Cases", func(t *testing.T) {
+		db := CreateTestDB(t)
+		repo := NewTVRepository(db)
+		ctx := context.Background()
+
+		t.Run("Get non-existent TV show", func(t *testing.T) {
+			_, err := repo.Get(ctx, 99999)
+			AssertError(t, err, "Expected error for non-existent TV show")
+		})
+
+		t.Run("Update non-existent TV show succeeds with no rows affected", func(t *testing.T) {
+			show := NewTVShowBuilder().WithTitle("Non-existent").Build()
+			show.ID = 99999
+			err := repo.Update(ctx, show)
+			AssertNoError(t, err, "Update should not error when no rows affected")
+		})
+
+		t.Run("Delete non-existent TV show succeeds with no rows affected", func(t *testing.T) {
+			err := repo.Delete(ctx, 99999)
+			AssertNoError(t, err, "Delete should not error when no rows affected")
+		})
+
+		t.Run("MarkWatched non-existent TV show", func(t *testing.T) {
+			err := repo.MarkWatched(ctx, 99999)
+			AssertError(t, err, "Expected error for non-existent TV show")
+		})
+
+		t.Run("StartWatching non-existent TV show", func(t *testing.T) {
+			err := repo.StartWatching(ctx, 99999)
+			AssertError(t, err, "Expected error for non-existent TV show")
+		})
+
+		t.Run("GetByTitle with no results", func(t *testing.T) {
+			shows, err := repo.GetByTitle(ctx, "NonExistentShow")
+			AssertNoError(t, err, "Should not error when no shows found")
+			AssertEqual(t, 0, len(shows), "Expected empty result set")
+		})
+
+		t.Run("GetBySeason with no results", func(t *testing.T) {
+			shows, err := repo.GetBySeason(ctx, "NonExistentShow", 1)
+			AssertNoError(t, err, "Should not error when no shows found")
+			AssertEqual(t, 0, len(shows), "Expected empty result set")
 		})
 	})
 }

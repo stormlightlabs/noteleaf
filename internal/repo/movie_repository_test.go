@@ -230,13 +230,94 @@ func TestMovieRepository(t *testing.T) {
 		})
 
 		t.Run("Count with context cancellation", func(t *testing.T) {
-			cancelCtx, cancel := context.WithCancel(ctx)
-			cancel()
+			_, err := repo.Count(NewCanceledContext(), MovieListOptions{})
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+	})
 
-			_, err := repo.Count(cancelCtx, MovieListOptions{})
-			if err == nil {
-				t.Error("Expected error with cancelled context")
-			}
+	t.Run("Context Cancellation Error Paths", func(t *testing.T) {
+		db := CreateTestDB(t)
+		repo := NewMovieRepository(db)
+		ctx := context.Background()
+
+		movie := NewMovieBuilder().WithTitle("Test Movie").WithYear(2023).Build()
+		id, err := repo.Create(ctx, movie)
+		AssertNoError(t, err, "Failed to create movie")
+
+		t.Run("Create with cancelled context", func(t *testing.T) {
+			newMovie := NewMovieBuilder().WithTitle("Cancelled").Build()
+			_, err := repo.Create(NewCanceledContext(), newMovie)
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("Get with cancelled context", func(t *testing.T) {
+			_, err := repo.Get(NewCanceledContext(), id)
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("Update with cancelled context", func(t *testing.T) {
+			movie.Title = "Updated"
+			err := repo.Update(NewCanceledContext(), movie)
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("Delete with cancelled context", func(t *testing.T) {
+			err := repo.Delete(NewCanceledContext(), id)
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("List with cancelled context", func(t *testing.T) {
+			_, err := repo.List(NewCanceledContext(), MovieListOptions{})
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("GetQueued with cancelled context", func(t *testing.T) {
+			_, err := repo.GetQueued(NewCanceledContext())
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("GetWatched with cancelled context", func(t *testing.T) {
+			_, err := repo.GetWatched(NewCanceledContext())
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+
+		t.Run("MarkWatched with cancelled context", func(t *testing.T) {
+			err := repo.MarkWatched(NewCanceledContext(), id)
+			AssertError(t, err, "Expected error with cancelled context")
+		})
+	})
+
+	t.Run("Edge Cases", func(t *testing.T) {
+		db := CreateTestDB(t)
+		repo := NewMovieRepository(db)
+		ctx := context.Background()
+
+		t.Run("Get non-existent movie", func(t *testing.T) {
+			_, err := repo.Get(ctx, 99999)
+			AssertError(t, err, "Expected error for non-existent movie")
+		})
+
+		t.Run("Update non-existent movie succeeds with no rows affected", func(t *testing.T) {
+			movie := NewMovieBuilder().WithTitle("Non-existent").Build()
+			movie.ID = 99999
+			err := repo.Update(ctx, movie)
+			AssertNoError(t, err, "Update should not error when no rows affected")
+		})
+
+		t.Run("Delete non-existent movie succeeds with no rows affected", func(t *testing.T) {
+			err := repo.Delete(ctx, 99999)
+			AssertNoError(t, err, "Delete should not error when no rows affected")
+		})
+
+		t.Run("MarkWatched non-existent movie", func(t *testing.T) {
+			err := repo.MarkWatched(ctx, 99999)
+			AssertError(t, err, "Expected error for non-existent movie")
+		})
+
+		t.Run("List with no results", func(t *testing.T) {
+			movies, err := repo.List(ctx, MovieListOptions{Year: 1900})
+			AssertNoError(t, err, "Should not error when no movies found")
+			AssertEqual(t, 0, len(movies), "Expected empty result set")
 		})
 	})
 }
