@@ -7,6 +7,7 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stormlightlabs/noteleaf/internal/models"
+	"github.com/stormlightlabs/noteleaf/internal/shared"
 )
 
 func TestMovieRepository(t *testing.T) {
@@ -19,31 +20,31 @@ func TestMovieRepository(t *testing.T) {
 			movie := CreateSampleMovie()
 
 			id, err := repo.Create(ctx, movie)
-			AssertNoError(t, err, "Failed to create movie")
-			AssertNotEqual(t, int64(0), id, "Expected non-zero ID")
-			AssertEqual(t, id, movie.ID, "Expected movie ID to be set correctly")
-			AssertFalse(t, movie.Added.IsZero(), "Expected Added timestamp to be set")
+			shared.AssertNoError(t, err, "Failed to create movie")
+			shared.AssertNotEqual(t, int64(0), id, "Expected non-zero ID")
+			shared.AssertEqual(t, id, movie.ID, "Expected movie ID to be set correctly")
+			shared.AssertFalse(t, movie.Added.IsZero(), "Expected Added timestamp to be set")
 		})
 
 		t.Run("Get Movie", func(t *testing.T) {
 			original := CreateSampleMovie()
 			id, err := repo.Create(ctx, original)
-			AssertNoError(t, err, "Failed to create movie")
+			shared.AssertNoError(t, err, "Failed to create movie")
 
 			retrieved, err := repo.Get(ctx, id)
-			AssertNoError(t, err, "Failed to get movie")
+			shared.AssertNoError(t, err, "Failed to get movie")
 
-			AssertEqual(t, original.Title, retrieved.Title, "Title mismatch")
-			AssertEqual(t, original.Year, retrieved.Year, "Year mismatch")
-			AssertEqual(t, original.Status, retrieved.Status, "Status mismatch")
-			AssertEqual(t, original.Rating, retrieved.Rating, "Rating mismatch")
-			AssertEqual(t, original.Notes, retrieved.Notes, "Notes mismatch")
+			shared.AssertEqual(t, original.Title, retrieved.Title, "Title mismatch")
+			shared.AssertEqual(t, original.Year, retrieved.Year, "Year mismatch")
+			shared.AssertEqual(t, original.Status, retrieved.Status, "Status mismatch")
+			shared.AssertEqual(t, original.Rating, retrieved.Rating, "Rating mismatch")
+			shared.AssertEqual(t, original.Notes, retrieved.Notes, "Notes mismatch")
 		})
 
 		t.Run("Update Movie", func(t *testing.T) {
 			movie := CreateSampleMovie()
 			id, err := repo.Create(ctx, movie)
-			AssertNoError(t, err, "Failed to create movie")
+			shared.AssertNoError(t, err, "Failed to create movie")
 
 			movie.Title = "Updated Movie"
 			movie.Status = "watched"
@@ -52,27 +53,27 @@ func TestMovieRepository(t *testing.T) {
 			movie.Watched = &now
 
 			err = repo.Update(ctx, movie)
-			AssertNoError(t, err, "Failed to update movie")
+			shared.AssertNoError(t, err, "Failed to update movie")
 
 			updated, err := repo.Get(ctx, id)
-			AssertNoError(t, err, "Failed to get updated movie")
+			shared.AssertNoError(t, err, "Failed to get updated movie")
 
-			AssertEqual(t, "Updated Movie", updated.Title, "Expected updated title")
-			AssertEqual(t, "watched", updated.Status, "Expected watched status")
-			AssertEqual(t, 9.0, updated.Rating, "Expected rating 9.0")
-			AssertTrue(t, updated.Watched != nil, "Expected watched time to be set")
+			shared.AssertEqual(t, "Updated Movie", updated.Title, "Expected updated title")
+			shared.AssertEqual(t, "watched", updated.Status, "Expected watched status")
+			shared.AssertEqual(t, 9.0, updated.Rating, "Expected rating 9.0")
+			shared.AssertTrue(t, updated.Watched != nil, "Expected watched time to be set")
 		})
 
 		t.Run("Delete Movie", func(t *testing.T) {
 			movie := CreateSampleMovie()
 			id, err := repo.Create(ctx, movie)
-			AssertNoError(t, err, "Failed to create movie")
+			shared.AssertNoError(t, err, "Failed to create movie")
 
 			err = repo.Delete(ctx, id)
-			AssertNoError(t, err, "Failed to delete movie")
+			shared.AssertNoError(t, err, "Failed to delete movie")
 
 			_, err = repo.Get(ctx, id)
-			AssertError(t, err, "Expected error when getting deleted movie")
+			shared.AssertError(t, err, "Expected error when getting deleted movie")
 		})
 	})
 
@@ -89,59 +90,59 @@ func TestMovieRepository(t *testing.T) {
 
 		for _, movie := range movies {
 			_, err := repo.Create(ctx, movie)
-			AssertNoError(t, err, "Failed to create movie")
+			shared.AssertNoError(t, err, "Failed to create movie")
 		}
 
 		t.Run("List All Movies", func(t *testing.T) {
 			results, err := repo.List(ctx, MovieListOptions{})
-			AssertNoError(t, err, "Failed to list movies")
-			AssertEqual(t, 3, len(results), "Expected 3 movies")
+			shared.AssertNoError(t, err, "Failed to list movies")
+			shared.AssertEqual(t, 3, len(results), "Expected 3 movies")
 		})
 
 		t.Run("List Movies with Status Filter", func(t *testing.T) {
 			results, err := repo.List(ctx, MovieListOptions{Status: "queued"})
-			AssertNoError(t, err, "Failed to list movies")
-			AssertEqual(t, 2, len(results), "Expected 2 queued movies")
+			shared.AssertNoError(t, err, "Failed to list movies")
+			shared.AssertEqual(t, 2, len(results), "Expected 2 queued movies")
 
 			for _, movie := range results {
-				AssertEqual(t, "queued", movie.Status, "Expected queued status")
+				shared.AssertEqual(t, "queued", movie.Status, "Expected queued status")
 			}
 		})
 
 		t.Run("List Movies with Year Filter", func(t *testing.T) {
 			results, err := repo.List(ctx, MovieListOptions{Year: 2021})
-			AssertNoError(t, err, "Failed to list movies")
-			AssertEqual(t, 1, len(results), "Expected 1 movie from 2021")
+			shared.AssertNoError(t, err, "Failed to list movies")
+			shared.AssertEqual(t, 1, len(results), "Expected 1 movie from 2021")
 
 			if len(results) > 0 {
-				AssertEqual(t, 2021, results[0].Year, "Expected year 2021")
+				shared.AssertEqual(t, 2021, results[0].Year, "Expected year 2021")
 			}
 		})
 
 		t.Run("List Movies with Rating Filter", func(t *testing.T) {
 			results, err := repo.List(ctx, MovieListOptions{MinRating: 8.0})
-			AssertNoError(t, err, "Failed to list movies")
-			AssertEqual(t, 2, len(results), "Expected 2 movies with rating >= 8.0")
+			shared.AssertNoError(t, err, "Failed to list movies")
+			shared.AssertEqual(t, 2, len(results), "Expected 2 movies with rating >= 8.0")
 
 			for _, movie := range results {
-				AssertTrue(t, movie.Rating >= 8.0, "Expected rating >= 8.0")
+				shared.AssertTrue(t, movie.Rating >= 8.0, "Expected rating >= 8.0")
 			}
 		})
 
 		t.Run("List Movies with Search", func(t *testing.T) {
 			results, err := repo.List(ctx, MovieListOptions{Search: "Movie 1"})
-			AssertNoError(t, err, "Failed to list movies")
-			AssertEqual(t, 1, len(results), "Expected 1 movie matching search")
+			shared.AssertNoError(t, err, "Failed to list movies")
+			shared.AssertEqual(t, 1, len(results), "Expected 1 movie matching search")
 
 			if len(results) > 0 {
-				AssertEqual(t, "Movie 1", results[0].Title, "Expected 'Movie 1'")
+				shared.AssertEqual(t, "Movie 1", results[0].Title, "Expected 'Movie 1'")
 			}
 		})
 
 		t.Run("List Movies with Limit", func(t *testing.T) {
 			results, err := repo.List(ctx, MovieListOptions{Limit: 2})
-			AssertNoError(t, err, "Failed to list movies")
-			AssertEqual(t, 2, len(results), "Expected 2 movies due to limit")
+			shared.AssertNoError(t, err, "Failed to list movies")
+			shared.AssertEqual(t, 2, len(results), "Expected 2 movies due to limit")
 		})
 	})
 
@@ -157,7 +158,7 @@ func TestMovieRepository(t *testing.T) {
 		var movie1ID int64
 		for _, movie := range []*models.Movie{movie1, movie2, movie3} {
 			id, err := repo.Create(ctx, movie)
-			AssertNoError(t, err, "Failed to create movie")
+			shared.AssertNoError(t, err, "Failed to create movie")
 			if movie == movie1 {
 				movie1ID = id
 			}
@@ -165,33 +166,33 @@ func TestMovieRepository(t *testing.T) {
 
 		t.Run("GetQueued", func(t *testing.T) {
 			results, err := repo.GetQueued(ctx)
-			AssertNoError(t, err, "Failed to get queued movies")
-			AssertEqual(t, 2, len(results), "Expected 2 queued movies")
+			shared.AssertNoError(t, err, "Failed to get queued movies")
+			shared.AssertEqual(t, 2, len(results), "Expected 2 queued movies")
 
 			for _, movie := range results {
-				AssertEqual(t, "queued", movie.Status, "Expected queued status")
+				shared.AssertEqual(t, "queued", movie.Status, "Expected queued status")
 			}
 		})
 
 		t.Run("GetWatched", func(t *testing.T) {
 			results, err := repo.GetWatched(ctx)
-			AssertNoError(t, err, "Failed to get watched movies")
-			AssertEqual(t, 1, len(results), "Expected 1 watched movie")
+			shared.AssertNoError(t, err, "Failed to get watched movies")
+			shared.AssertEqual(t, 1, len(results), "Expected 1 watched movie")
 
 			if len(results) > 0 {
-				AssertEqual(t, "watched", results[0].Status, "Expected watched status")
+				shared.AssertEqual(t, "watched", results[0].Status, "Expected watched status")
 			}
 		})
 
 		t.Run("MarkWatched", func(t *testing.T) {
 			err := repo.MarkWatched(ctx, movie1ID)
-			AssertNoError(t, err, "Failed to mark movie as watched")
+			shared.AssertNoError(t, err, "Failed to mark movie as watched")
 
 			updated, err := repo.Get(ctx, movie1ID)
-			AssertNoError(t, err, "Failed to get updated movie")
+			shared.AssertNoError(t, err, "Failed to get updated movie")
 
-			AssertEqual(t, "watched", updated.Status, "Expected status to be watched")
-			AssertTrue(t, updated.Watched != nil, "Expected watched timestamp to be set")
+			shared.AssertEqual(t, "watched", updated.Status, "Expected status to be watched")
+			shared.AssertTrue(t, updated.Watched != nil, "Expected watched timestamp to be set")
 		})
 	})
 
@@ -208,25 +209,25 @@ func TestMovieRepository(t *testing.T) {
 
 		for _, movie := range movies {
 			_, err := repo.Create(ctx, movie)
-			AssertNoError(t, err, "Failed to create movie")
+			shared.AssertNoError(t, err, "Failed to create movie")
 		}
 
 		t.Run("Count all movies", func(t *testing.T) {
 			count, err := repo.Count(ctx, MovieListOptions{})
-			AssertNoError(t, err, "Failed to count movies")
-			AssertEqual(t, int64(3), count, "Expected 3 movies")
+			shared.AssertNoError(t, err, "Failed to count movies")
+			shared.AssertEqual(t, int64(3), count, "Expected 3 movies")
 		})
 
 		t.Run("Count queued movies", func(t *testing.T) {
 			count, err := repo.Count(ctx, MovieListOptions{Status: "queued"})
-			AssertNoError(t, err, "Failed to count queued movies")
-			AssertEqual(t, int64(2), count, "Expected 2 queued movies")
+			shared.AssertNoError(t, err, "Failed to count queued movies")
+			shared.AssertEqual(t, int64(2), count, "Expected 2 queued movies")
 		})
 
 		t.Run("Count movies by rating", func(t *testing.T) {
 			count, err := repo.Count(ctx, MovieListOptions{MinRating: 8.0})
-			AssertNoError(t, err, "Failed to count high-rated movies")
-			AssertEqual(t, int64(2), count, "Expected 2 movies with rating >= 8.0")
+			shared.AssertNoError(t, err, "Failed to count high-rated movies")
+			shared.AssertEqual(t, int64(2), count, "Expected 2 movies with rating >= 8.0")
 		})
 
 		t.Run("Count with context cancellation", func(t *testing.T) {
@@ -242,7 +243,7 @@ func TestMovieRepository(t *testing.T) {
 
 		movie := NewMovieBuilder().WithTitle("Test Movie").WithYear(2023).Build()
 		id, err := repo.Create(ctx, movie)
-		AssertNoError(t, err, "Failed to create movie")
+		shared.AssertNoError(t, err, "Failed to create movie")
 
 		t.Run("Create with cancelled context", func(t *testing.T) {
 			newMovie := NewMovieBuilder().WithTitle("Cancelled").Build()
@@ -294,30 +295,30 @@ func TestMovieRepository(t *testing.T) {
 
 		t.Run("Get non-existent movie", func(t *testing.T) {
 			_, err := repo.Get(ctx, 99999)
-			AssertError(t, err, "Expected error for non-existent movie")
+			shared.AssertError(t, err, "Expected error for non-existent movie")
 		})
 
 		t.Run("Update non-existent movie succeeds with no rows affected", func(t *testing.T) {
 			movie := NewMovieBuilder().WithTitle("Non-existent").Build()
 			movie.ID = 99999
 			err := repo.Update(ctx, movie)
-			AssertNoError(t, err, "Update should not error when no rows affected")
+			shared.AssertNoError(t, err, "Update should not error when no rows affected")
 		})
 
 		t.Run("Delete non-existent movie succeeds with no rows affected", func(t *testing.T) {
 			err := repo.Delete(ctx, 99999)
-			AssertNoError(t, err, "Delete should not error when no rows affected")
+			shared.AssertNoError(t, err, "Delete should not error when no rows affected")
 		})
 
 		t.Run("MarkWatched non-existent movie", func(t *testing.T) {
 			err := repo.MarkWatched(ctx, 99999)
-			AssertError(t, err, "Expected error for non-existent movie")
+			shared.AssertError(t, err, "Expected error for non-existent movie")
 		})
 
 		t.Run("List with no results", func(t *testing.T) {
 			movies, err := repo.List(ctx, MovieListOptions{Year: 1900})
-			AssertNoError(t, err, "Should not error when no movies found")
-			AssertEqual(t, 0, len(movies), "Expected empty result set")
+			shared.AssertNoError(t, err, "Should not error when no movies found")
+			shared.AssertEqual(t, 0, len(movies), "Expected empty result set")
 		})
 	})
 }

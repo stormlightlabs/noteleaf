@@ -8,15 +8,14 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/stormlightlabs/noteleaf/internal/shared"
 )
 
 func withTempDirs(t *testing.T) string {
 	t.Helper()
-	tempDir, err := os.MkdirTemp("", "noteleaf-db-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp directory: %v", err)
-	}
-	t.Cleanup(func() { os.RemoveAll(tempDir) })
+	tempDir, cleanup := shared.CreateTempDir("noteleaf-db-test-*", t)
+	t.Cleanup(func() { cleanup() })
 
 	origConfig, origData := GetConfigDir, GetDataDir
 	GetConfigDir = func() (string, error) { return tempDir, nil }

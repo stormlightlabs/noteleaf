@@ -1,11 +1,11 @@
 package store
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/BurntSushi/toml"
+	"github.com/stormlightlabs/noteleaf/internal/shared"
 )
 
 // Config holds application configuration
@@ -49,7 +49,7 @@ var LoadConfig = func() (*Config, error) {
 	} else {
 		configDir, err := GetConfigDir()
 		if err != nil {
-			return nil, fmt.Errorf("failed to get config directory: %w", err)
+			return nil, shared.ConfigError("failed to get config directory", err)
 		}
 		configPath = filepath.Join(configDir, ".noteleaf.conf.toml")
 	}
@@ -57,19 +57,19 @@ var LoadConfig = func() (*Config, error) {
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		config := DefaultConfig()
 		if err := SaveConfig(config); err != nil {
-			return nil, fmt.Errorf("failed to create default config: %w", err)
+			return nil, shared.ConfigError("failed to create default config", err)
 		}
 		return config, nil
 	}
 
 	data, err := os.ReadFile(configPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read config file: %w", err)
+		return nil, shared.ConfigError("failed to read config file", err)
 	}
 
 	config := DefaultConfig()
 	if err := toml.Unmarshal(data, config); err != nil {
-		return nil, fmt.Errorf("failed to parse config file: %w", err)
+		return nil, shared.ConfigError("failed to parse config file", err)
 	}
 
 	return config, nil
@@ -79,29 +79,27 @@ var LoadConfig = func() (*Config, error) {
 func SaveConfig(config *Config) error {
 	var configPath string
 
-	// Check for NOTELEAF_CONFIG environment variable
 	if envConfigPath := os.Getenv("NOTELEAF_CONFIG"); envConfigPath != "" {
 		configPath = envConfigPath
-		// Ensure the directory exists for custom config path
 		configDir := filepath.Dir(configPath)
 		if err := os.MkdirAll(configDir, 0755); err != nil {
-			return fmt.Errorf("failed to create config directory: %w", err)
+			return shared.ConfigError("failed to create config directory", err)
 		}
 	} else {
 		configDir, err := GetConfigDir()
 		if err != nil {
-			return fmt.Errorf("failed to get config directory: %w", err)
+			return shared.ConfigError("failed to get config directory", err)
 		}
 		configPath = filepath.Join(configDir, ".noteleaf.conf.toml")
 	}
 
 	data, err := toml.Marshal(config)
 	if err != nil {
-		return fmt.Errorf("failed to marshal config: %w", err)
+		return shared.ConfigError("failed to marshal config", err)
 	}
 
 	if err := os.WriteFile(configPath, data, 0644); err != nil {
-		return fmt.Errorf("failed to write config file: %w", err)
+		return shared.ConfigError("failed to write config file", err)
 	}
 
 	return nil
@@ -109,7 +107,6 @@ func SaveConfig(config *Config) error {
 
 // GetConfigPath returns the path to the configuration file
 func GetConfigPath() (string, error) {
-	// Check for NOTELEAF_CONFIG environment variable
 	if envConfigPath := os.Getenv("NOTELEAF_CONFIG"); envConfigPath != "" {
 		return envConfigPath, nil
 	}

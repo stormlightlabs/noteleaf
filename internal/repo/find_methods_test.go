@@ -3,6 +3,8 @@ package repo
 import (
 	"context"
 	"testing"
+
+	"github.com/stormlightlabs/noteleaf/internal/shared"
 )
 
 func TestFindMethods(t *testing.T) {
@@ -16,10 +18,10 @@ func TestFindMethods(t *testing.T) {
 				Status: "pending",
 			}
 			tasks, err := repos.Tasks.Find(ctx, options)
-			AssertNoError(t, err, "Find should succeed")
-			AssertTrue(t, len(tasks) >= 1, "Should find at least one pending task")
+			shared.AssertNoError(t, err, "Find should succeed")
+			shared.AssertTrue(t, len(tasks) >= 1, "Should find at least one pending task")
 			for _, task := range tasks {
-				AssertEqual(t, "pending", task.Status, "All returned tasks should be pending")
+				shared.AssertEqual(t, "pending", task.Status, "All returned tasks should be pending")
 			}
 		})
 
@@ -28,10 +30,10 @@ func TestFindMethods(t *testing.T) {
 				Priority: "high",
 			}
 			tasks, err := repos.Tasks.Find(ctx, options)
-			AssertNoError(t, err, "Find should succeed")
-			AssertTrue(t, len(tasks) >= 1, "Should find at least one high priority task")
+			shared.AssertNoError(t, err, "Find should succeed")
+			shared.AssertTrue(t, len(tasks) >= 1, "Should find at least one high priority task")
 			for _, task := range tasks {
-				AssertEqual(t, "high", task.Priority, "All returned tasks should be high priority")
+				shared.AssertEqual(t, "high", task.Priority, "All returned tasks should be high priority")
 			}
 		})
 
@@ -40,10 +42,10 @@ func TestFindMethods(t *testing.T) {
 				Project: "test-project",
 			}
 			tasks, err := repos.Tasks.Find(ctx, options)
-			AssertNoError(t, err, "Find should succeed")
-			AssertTrue(t, len(tasks) >= 1, "Should find tasks in test-project")
+			shared.AssertNoError(t, err, "Find should succeed")
+			shared.AssertTrue(t, len(tasks) >= 1, "Should find tasks in test-project")
 			for _, task := range tasks {
-				AssertEqual(t, "test-project", task.Project, "All returned tasks should be in test-project")
+				shared.AssertEqual(t, "test-project", task.Project, "All returned tasks should be in test-project")
 			}
 		})
 
@@ -52,10 +54,10 @@ func TestFindMethods(t *testing.T) {
 				Context: "test-context",
 			}
 			tasks, err := repos.Tasks.Find(ctx, options)
-			AssertNoError(t, err, "Find should succeed")
-			AssertTrue(t, len(tasks) >= 1, "Should find tasks in test-context")
+			shared.AssertNoError(t, err, "Find should succeed")
+			shared.AssertTrue(t, len(tasks) >= 1, "Should find tasks in test-context")
 			for _, task := range tasks {
-				AssertEqual(t, "test-context", task.Context, "All returned tasks should be in test-context")
+				shared.AssertEqual(t, "test-context", task.Context, "All returned tasks should be in test-context")
 			}
 		})
 
@@ -66,11 +68,11 @@ func TestFindMethods(t *testing.T) {
 				Project:  "test-project",
 			}
 			tasks, err := repos.Tasks.Find(ctx, options)
-			AssertNoError(t, err, "Find should succeed")
+			shared.AssertNoError(t, err, "Find should succeed")
 			for _, task := range tasks {
-				AssertEqual(t, "pending", task.Status, "Task should be pending")
-				AssertEqual(t, "high", task.Priority, "Task should be high priority")
-				AssertEqual(t, "test-project", task.Project, "Task should be in test-project")
+				shared.AssertEqual(t, "pending", task.Status, "Task should be pending")
+				shared.AssertEqual(t, "high", task.Priority, "Task should be high priority")
+				shared.AssertEqual(t, "test-project", task.Project, "Task should be in test-project")
 			}
 		})
 
@@ -79,15 +81,15 @@ func TestFindMethods(t *testing.T) {
 				Status: "non-existent-status",
 			}
 			tasks, err := repos.Tasks.Find(ctx, options)
-			AssertNoError(t, err, "Find should succeed even with no results")
-			AssertEqual(t, 0, len(tasks), "Should find no tasks")
+			shared.AssertNoError(t, err, "Find should succeed even with no results")
+			shared.AssertEqual(t, 0, len(tasks), "Should find no tasks")
 		})
 
 		t.Run("returns all tasks with empty options", func(t *testing.T) {
 			options := TaskListOptions{}
 			tasks, err := repos.Tasks.Find(ctx, options)
-			AssertNoError(t, err, "Find should succeed with empty options")
-			AssertTrue(t, len(tasks) >= 2, "Should return all tasks for empty options")
+			shared.AssertNoError(t, err, "Find should succeed with empty options")
+			shared.AssertTrue(t, len(tasks) >= 2, "Should return all tasks for empty options")
 		})
 	})
 
@@ -97,10 +99,10 @@ func TestFindMethods(t *testing.T) {
 				Status: "reading",
 			}
 			books, err := repos.Books.Find(ctx, options)
-			AssertNoError(t, err, "Find should succeed")
-			AssertTrue(t, len(books) >= 1, "Should find at least one book being read")
+			shared.AssertNoError(t, err, "Find should succeed")
+			shared.AssertTrue(t, len(books) >= 1, "Should find at least one book being read")
 			for _, book := range books {
-				AssertEqual(t, "reading", book.Status, "All returned books should be reading")
+				shared.AssertEqual(t, "reading", book.Status, "All returned books should be reading")
 			}
 		})
 
@@ -109,10 +111,10 @@ func TestFindMethods(t *testing.T) {
 				Author: "Test Author",
 			}
 			books, err := repos.Books.Find(ctx, options)
-			AssertNoError(t, err, "Find should succeed")
-			AssertTrue(t, len(books) >= 1, "Should find at least one book by Test Author")
+			shared.AssertNoError(t, err, "Find should succeed")
+			shared.AssertTrue(t, len(books) >= 1, "Should find at least one book by Test Author")
 			for _, book := range books {
-				AssertEqual(t, "Test Author", book.Author, "All returned books should be by Test Author")
+				shared.AssertEqual(t, "Test Author", book.Author, "All returned books should be by Test Author")
 			}
 		})
 
@@ -121,10 +123,10 @@ func TestFindMethods(t *testing.T) {
 				MinProgress: 0,
 			}
 			books, err := repos.Books.Find(ctx, options)
-			AssertNoError(t, err, "Find should succeed")
-			AssertTrue(t, len(books) >= 1, "Should find books with progress >= 0")
+			shared.AssertNoError(t, err, "Find should succeed")
+			shared.AssertTrue(t, len(books) >= 1, "Should find books with progress >= 0")
 			for _, book := range books {
-				AssertTrue(t, book.Progress >= 0, "All returned books should have progress >= 0")
+				shared.AssertTrue(t, book.Progress >= 0, "All returned books should have progress >= 0")
 			}
 		})
 
@@ -135,11 +137,11 @@ func TestFindMethods(t *testing.T) {
 				MinProgress: 0,
 			}
 			books, err := repos.Books.Find(ctx, options)
-			AssertNoError(t, err, "Find should succeed")
+			shared.AssertNoError(t, err, "Find should succeed")
 			for _, book := range books {
-				AssertEqual(t, "reading", book.Status, "Book should be reading")
-				AssertEqual(t, "Test Author", book.Author, "Book should be by Test Author")
-				AssertTrue(t, book.Progress >= 0, "Book should have progress >= 0")
+				shared.AssertEqual(t, "reading", book.Status, "Book should be reading")
+				shared.AssertEqual(t, "Test Author", book.Author, "Book should be by Test Author")
+				shared.AssertTrue(t, book.Progress >= 0, "Book should have progress >= 0")
 			}
 		})
 
@@ -148,15 +150,15 @@ func TestFindMethods(t *testing.T) {
 				Status: "non-existent-status",
 			}
 			books, err := repos.Books.Find(ctx, options)
-			AssertNoError(t, err, "Find should succeed even with no results")
-			AssertEqual(t, 0, len(books), "Should find no books")
+			shared.AssertNoError(t, err, "Find should succeed even with no results")
+			shared.AssertEqual(t, 0, len(books), "Should find no books")
 		})
 
 		t.Run("returns all books with empty options", func(t *testing.T) {
 			options := BookListOptions{}
 			books, err := repos.Books.Find(ctx, options)
-			AssertNoError(t, err, "Find should succeed with empty options")
-			AssertTrue(t, len(books) >= 2, "Should return all books for empty options")
+			shared.AssertNoError(t, err, "Find should succeed with empty options")
+			shared.AssertTrue(t, len(books) >= 2, "Should return all books for empty options")
 		})
 	})
 
@@ -166,10 +168,10 @@ func TestFindMethods(t *testing.T) {
 				Status: "watched",
 			}
 			movies, err := repos.Movies.Find(ctx, options)
-			AssertNoError(t, err, "Find should succeed")
-			AssertTrue(t, len(movies) >= 1, "Should find at least one watched movie")
+			shared.AssertNoError(t, err, "Find should succeed")
+			shared.AssertTrue(t, len(movies) >= 1, "Should find at least one watched movie")
 			for _, movie := range movies {
-				AssertEqual(t, "watched", movie.Status, "All returned movies should be watched")
+				shared.AssertEqual(t, "watched", movie.Status, "All returned movies should be watched")
 			}
 		})
 
@@ -178,10 +180,10 @@ func TestFindMethods(t *testing.T) {
 				Year: 2023,
 			}
 			movies, err := repos.Movies.Find(ctx, options)
-			AssertNoError(t, err, "Find should succeed")
-			AssertTrue(t, len(movies) >= 1, "Should find movies from 2023")
+			shared.AssertNoError(t, err, "Find should succeed")
+			shared.AssertTrue(t, len(movies) >= 1, "Should find movies from 2023")
 			for _, movie := range movies {
-				AssertEqual(t, 2023, movie.Year, "Movie should be from 2023")
+				shared.AssertEqual(t, 2023, movie.Year, "Movie should be from 2023")
 			}
 		})
 
@@ -190,10 +192,10 @@ func TestFindMethods(t *testing.T) {
 				MinRating: 0.0,
 			}
 			movies, err := repos.Movies.Find(ctx, options)
-			AssertNoError(t, err, "Find should succeed")
-			AssertTrue(t, len(movies) >= 1, "Should find movies with rating >= 0")
+			shared.AssertNoError(t, err, "Find should succeed")
+			shared.AssertTrue(t, len(movies) >= 1, "Should find movies with rating >= 0")
 			for _, movie := range movies {
-				AssertTrue(t, movie.Rating >= 0.0, "Movie rating should be >= 0")
+				shared.AssertTrue(t, movie.Rating >= 0.0, "Movie rating should be >= 0")
 			}
 		})
 
@@ -204,11 +206,11 @@ func TestFindMethods(t *testing.T) {
 				MinRating: 0.0,
 			}
 			movies, err := repos.Movies.Find(ctx, options)
-			AssertNoError(t, err, "Find should succeed")
+			shared.AssertNoError(t, err, "Find should succeed")
 			for _, movie := range movies {
-				AssertEqual(t, "watched", movie.Status, "Movie should be watched")
-				AssertEqual(t, 2023, movie.Year, "Movie should be from 2023")
-				AssertTrue(t, movie.Rating >= 0.0, "Movie rating should be >= 0")
+				shared.AssertEqual(t, "watched", movie.Status, "Movie should be watched")
+				shared.AssertEqual(t, 2023, movie.Year, "Movie should be from 2023")
+				shared.AssertTrue(t, movie.Rating >= 0.0, "Movie rating should be >= 0")
 			}
 		})
 
@@ -217,15 +219,15 @@ func TestFindMethods(t *testing.T) {
 				Status: "non-existent-status",
 			}
 			movies, err := repos.Movies.Find(ctx, options)
-			AssertNoError(t, err, "Find should succeed even with no results")
-			AssertEqual(t, 0, len(movies), "Should find no movies")
+			shared.AssertNoError(t, err, "Find should succeed even with no results")
+			shared.AssertEqual(t, 0, len(movies), "Should find no movies")
 		})
 
 		t.Run("returns all movies with empty options", func(t *testing.T) {
 			options := MovieListOptions{}
 			movies, err := repos.Movies.Find(ctx, options)
-			AssertNoError(t, err, "Find should succeed with empty options")
-			AssertTrue(t, len(movies) >= 2, "Should return all movies for empty options")
+			shared.AssertNoError(t, err, "Find should succeed with empty options")
+			shared.AssertTrue(t, len(movies) >= 2, "Should return all movies for empty options")
 		})
 	})
 
@@ -235,10 +237,10 @@ func TestFindMethods(t *testing.T) {
 				Status: "watching",
 			}
 			shows, err := repos.TV.Find(ctx, options)
-			AssertNoError(t, err, "Find should succeed")
-			AssertTrue(t, len(shows) >= 1, "Should find at least one TV show being watched")
+			shared.AssertNoError(t, err, "Find should succeed")
+			shared.AssertTrue(t, len(shows) >= 1, "Should find at least one TV show being watched")
 			for _, show := range shows {
-				AssertEqual(t, "watching", show.Status, "All returned shows should be watching")
+				shared.AssertEqual(t, "watching", show.Status, "All returned shows should be watching")
 			}
 		})
 
@@ -247,10 +249,10 @@ func TestFindMethods(t *testing.T) {
 				Season: 1,
 			}
 			shows, err := repos.TV.Find(ctx, options)
-			AssertNoError(t, err, "Find should succeed")
-			AssertTrue(t, len(shows) >= 1, "Should find TV shows with season 1")
+			shared.AssertNoError(t, err, "Find should succeed")
+			shared.AssertTrue(t, len(shows) >= 1, "Should find TV shows with season 1")
 			for _, show := range shows {
-				AssertEqual(t, 1, show.Season, "All returned shows should be season 1")
+				shared.AssertEqual(t, 1, show.Season, "All returned shows should be season 1")
 			}
 		})
 
@@ -259,10 +261,10 @@ func TestFindMethods(t *testing.T) {
 				MinRating: 0.0,
 			}
 			shows, err := repos.TV.Find(ctx, options)
-			AssertNoError(t, err, "Find should succeed")
-			AssertTrue(t, len(shows) >= 1, "Should find TV shows with rating >= 0")
+			shared.AssertNoError(t, err, "Find should succeed")
+			shared.AssertTrue(t, len(shows) >= 1, "Should find TV shows with rating >= 0")
 			for _, show := range shows {
-				AssertTrue(t, show.Rating >= 0.0, "Show rating should be >= 0")
+				shared.AssertTrue(t, show.Rating >= 0.0, "Show rating should be >= 0")
 			}
 		})
 
@@ -273,11 +275,11 @@ func TestFindMethods(t *testing.T) {
 				MinRating: 0.0,
 			}
 			shows, err := repos.TV.Find(ctx, options)
-			AssertNoError(t, err, "Find should succeed")
+			shared.AssertNoError(t, err, "Find should succeed")
 			for _, show := range shows {
-				AssertEqual(t, "watching", show.Status, "Show should be watching")
-				AssertEqual(t, 1, show.Season, "Show should be season 1")
-				AssertTrue(t, show.Rating >= 0.0, "Show rating should be >= 0")
+				shared.AssertEqual(t, "watching", show.Status, "Show should be watching")
+				shared.AssertEqual(t, 1, show.Season, "Show should be season 1")
+				shared.AssertTrue(t, show.Rating >= 0.0, "Show rating should be >= 0")
 			}
 		})
 
@@ -286,15 +288,15 @@ func TestFindMethods(t *testing.T) {
 				Status: "non-existent-status",
 			}
 			shows, err := repos.TV.Find(ctx, options)
-			AssertNoError(t, err, "Find should succeed even with no results")
-			AssertEqual(t, 0, len(shows), "Should find no TV shows")
+			shared.AssertNoError(t, err, "Find should succeed even with no results")
+			shared.AssertEqual(t, 0, len(shows), "Should find no TV shows")
 		})
 
 		t.Run("returns all TV shows with empty options", func(t *testing.T) {
 			options := TVListOptions{}
 			shows, err := repos.TV.Find(ctx, options)
-			AssertNoError(t, err, "Find should succeed with empty options")
-			AssertTrue(t, len(shows) >= 2, "Should return all TV shows for empty options")
+			shared.AssertNoError(t, err, "Find should succeed with empty options")
+			shared.AssertTrue(t, len(shows) >= 2, "Should return all TV shows for empty options")
 		})
 	})
 }

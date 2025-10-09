@@ -13,7 +13,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stormlightlabs/noteleaf/internal/models"
-	"github.com/stormlightlabs/noteleaf/internal/repo"
+	"github.com/stormlightlabs/noteleaf/internal/shared"
 	"github.com/stormlightlabs/noteleaf/internal/ui"
 )
 
@@ -78,10 +78,10 @@ func TestTaskHandler(t *testing.T) {
 		t.Run("creates task successfully", func(t *testing.T) {
 			desc := "Buy groceries and cook dinner"
 			err := handler.Create(ctx, desc, "", "", "", "", "", "", "", "", []string{})
-			repo.AssertNoError(t, err, "CreateTask should succeed")
+			shared.AssertNoError(t, err, "CreateTask should succeed")
 
 			tasks, err := handler.repos.Tasks.GetPending(ctx)
-			repo.AssertNoError(t, err, "Failed to get pending tasks")
+			shared.AssertNoError(t, err, "Failed to get pending tasks")
 
 			if len(tasks) != 1 {
 				t.Errorf("Expected 1 task, got %d", len(tasks))
@@ -105,8 +105,8 @@ func TestTaskHandler(t *testing.T) {
 		t.Run("fails with empty description", func(t *testing.T) {
 			desc := ""
 			err := handler.Create(ctx, desc, "", "", "", "", "", "", "", "", []string{})
-			repo.AssertError(t, err, "Expected error for empty description")
-			repo.AssertContains(t, err.Error(), "task description required", "Error message should mention required description")
+			shared.AssertError(t, err, "Expected error for empty description")
+			shared.AssertContains(t, err.Error(), "task description required", "Error message should mention required description")
 		})
 
 		t.Run("creates task with flags", func(t *testing.T) {

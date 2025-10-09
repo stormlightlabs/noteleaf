@@ -10,8 +10,6 @@ import (
 	"github.com/stormlightlabs/noteleaf/internal/store"
 )
 
-// setupSeedTest removed - use NewHandlerTestSuite(t) instead
-
 func countRecords(t *testing.T, db *store.Database, table string) int {
 	t.Helper()
 

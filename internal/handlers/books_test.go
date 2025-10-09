@@ -11,9 +11,8 @@ import (
 	"github.com/stormlightlabs/noteleaf/internal/models"
 	"github.com/stormlightlabs/noteleaf/internal/repo"
 	"github.com/stormlightlabs/noteleaf/internal/services"
+	"github.com/stormlightlabs/noteleaf/internal/shared"
 )
-
-// setupBookTest removed - use NewHandlerTestSuite(t) instead
 
 func createTestBook(t *testing.T, handler *BookHandler, ctx context.Context) *models.Book {
 	t.Helper()
@@ -113,7 +112,7 @@ func TestBookHandler(t *testing.T) {
 			})
 
 			t.Run("handles HTTP error responses", func(t *testing.T) {
-				mockServer := HTTPErrorMockServer(500, "Internal Server Error")
+				mockServer := shared.HTTPErrorMockServer(500, "Internal Server Error")
 				defer mockServer.Close()
 
 				handler.service = services.NewBookService(mockServer.URL())
@@ -129,7 +128,7 @@ func TestBookHandler(t *testing.T) {
 			})
 
 			t.Run("handles malformed JSON response", func(t *testing.T) {
-				mockServer := InvalidJSONMockServer()
+				mockServer := shared.InvalidJSONMockServer()
 				defer mockServer.Close()
 
 				handler.service = services.NewBookService(mockServer.URL())
@@ -149,7 +148,7 @@ func TestBookHandler(t *testing.T) {
 					NumFound: 0, Start: 0, Docs: []services.OpenLibrarySearchDoc{},
 				}
 
-				mockServer := JSONMockServer(emptyResponse)
+				mockServer := shared.JSONMockServer(emptyResponse)
 				defer mockServer.Close()
 
 				handler.service = services.NewBookService(mockServer.URL())
@@ -163,7 +162,7 @@ func TestBookHandler(t *testing.T) {
 			})
 
 			t.Run("handles network timeouts", func(t *testing.T) {
-				mockServer := TimeoutMockServer(5 * time.Second)
+				mockServer := shared.TimeoutMockServer(5 * time.Second)
 				defer mockServer.Close()
 
 				handler.service = services.NewBookService(mockServer.URL())
@@ -181,7 +180,7 @@ func TestBookHandler(t *testing.T) {
 					{Key: "/works/OL123456W", Title: "Test Book", Authors: []string{"Author"}, Year: 2020},
 				}
 				mockResponse := MockOpenLibraryResponse(mockBooks)
-				mockServer := JSONMockServer(mockResponse)
+				mockServer := shared.JSONMockServer(mockResponse)
 				defer mockServer.Close()
 
 				handler.service = services.NewBookService(mockServer.URL())
@@ -249,7 +248,7 @@ func TestBookHandler(t *testing.T) {
 					{Key: "/works/OL456W", Title: "Test Book 2", Authors: []string{"Author 2"}, Year: 2021, Editions: 3, CoverID: 456},
 				}
 				mockResponse := MockOpenLibraryResponse(mockBooks)
-				mockServer := JSONMockServer(mockResponse)
+				mockServer := shared.JSONMockServer(mockResponse)
 				defer mockServer.Close()
 
 				handler.service = services.NewBookService(mockServer.URL())
@@ -279,7 +278,7 @@ func TestBookHandler(t *testing.T) {
 					{Key: "/works/OL789W", Title: "Another Book", Authors: []string{"Another Author"}, Year: 2022},
 				}
 				mockResponse := MockOpenLibraryResponse(mockBooks)
-				mockServer := JSONMockServer(mockResponse)
+				mockServer := shared.JSONMockServer(mockResponse)
 				defer mockServer.Close()
 
 				handler.service = services.NewBookService(mockServer.URL())
@@ -307,7 +306,7 @@ func TestBookHandler(t *testing.T) {
 					{Key: "/works/OL999W", Title: "Choice Test Book", Authors: []string{"Choice Author"}, Year: 2023},
 				}
 				mockResponse := MockOpenLibraryResponse(mockBooks)
-				mockServer := JSONMockServer(mockResponse)
+				mockServer := shared.JSONMockServer(mockResponse)
 				defer mockServer.Close()
 
 				handler.service = services.NewBookService(mockServer.URL())
@@ -821,9 +820,7 @@ func TestBookHandler(t *testing.T) {
 	})
 }
 
-// TestBookHandlerWithSuite demonstrates using HandlerTestSuite for cleaner tests
 func TestBookHandlerWithSuite(t *testing.T) {
-	// Example: Using HandlerTestSuite for lifecycle testing
 	t.Run("Lifecycle", func(t *testing.T) {
 		suite := NewMediaHandlerTestSuite(t)
 
@@ -831,22 +828,15 @@ func TestBookHandlerWithSuite(t *testing.T) {
 		suite.AssertNoError(err, "NewBookHandler")
 		defer handler.Close()
 
-		// Test basic behaviors using reusable patterns
 		InputReaderTest(t, handler)
 	})
 
-	// Example: Using generic CreateHandler
 	t.Run("GenericHandlerCreation", func(t *testing.T) {
 		_ = NewHandlerTestSuite(t)
-
-		// Generic CreateHandler replaces CreateBookHandler
 		handler := CreateHandler(t, NewBookHandler)
-
-		// Handler automatically cleaned up via t.Cleanup
 		_ = handler
 	})
 
-	// Example: Using HandlerTestSuite for media operations
 	t.Run("MediaOperations", func(t *testing.T) {
 		suite := NewMediaHandlerTestSuite(t)
 
@@ -854,7 +844,6 @@ func TestBookHandlerWithSuite(t *testing.T) {
 		suite.AssertNoError(err, "NewBookHandler")
 		defer handler.Close()
 
-		// Create a test book first
 		book := &models.Book{
 			Title:  "Suite Test Book",
 			Author: "Suite Test Author",
@@ -862,26 +851,16 @@ func TestBookHandlerWithSuite(t *testing.T) {
 			Added:  time.Now(),
 		}
 		id, err := handler.repos.Books.Create(suite.Context(), book)
+
 		suite.AssertNoError(err, "Create test book")
-
-		// Test list operation
 		suite.TestList(handler, "")
-
-		// Test status update
 		suite.TestUpdateStatus(handler, strconv.FormatInt(id, 10), "reading", true)
-
-		// Test invalid status update
 		suite.TestUpdateStatus(handler, strconv.FormatInt(id, 10), "invalid", false)
-
-		// Test remove operation
 		suite.TestRemove(handler, strconv.FormatInt(id, 10), true)
 	})
 
-	// Example: Generic lifecycle test
 	t.Run("GenericLifecycle", func(t *testing.T) {
 		_ = NewHandlerTestSuite(t)
-
-		// Demonstrates using generic HandlerLifecycleTest
 		HandlerLifecycleTest(t, NewBookHandler)
 	})
 }

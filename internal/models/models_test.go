@@ -78,7 +78,7 @@ func TestModels(t *testing.T) {
 
 	t.Run("Task Model", func(t *testing.T) {
 		t.Run("Status Methods", func(t *testing.T) {
-			testCases := []struct {
+			tc := []struct {
 				status      string
 				isCompleted bool
 				isPending   bool
@@ -90,23 +90,23 @@ func TestModels(t *testing.T) {
 				{"unknown", false, false, false},
 			}
 
-			for _, tc := range testCases {
-				task := &Task{Status: tc.status}
+			for _, tt := range tc {
+				task := &Task{Status: tt.status}
 
-				if task.IsCompleted() != tc.isCompleted {
-					t.Errorf("Status %s: expected IsCompleted %v, got %v", tc.status, tc.isCompleted, task.IsCompleted())
+				if task.IsCompleted() != tt.isCompleted {
+					t.Errorf("Status %s: expected IsCompleted %v, got %v", tt.status, tt.isCompleted, task.IsCompleted())
 				}
-				if task.IsPending() != tc.isPending {
-					t.Errorf("Status %s: expected IsPending %v, got %v", tc.status, tc.isPending, task.IsPending())
+				if task.IsPending() != tt.isPending {
+					t.Errorf("Status %s: expected IsPending %v, got %v", tt.status, tt.isPending, task.IsPending())
 				}
-				if task.IsDeleted() != tc.isDeleted {
-					t.Errorf("Status %s: expected IsDeleted %v, got %v", tc.status, tc.isDeleted, task.IsDeleted())
+				if task.IsDeleted() != tt.isDeleted {
+					t.Errorf("Status %s: expected IsDeleted %v, got %v", tt.status, tt.isDeleted, task.IsDeleted())
 				}
 			}
 		})
 
 		t.Run("New Status Tracking Methods", func(t *testing.T) {
-			testCases := []struct {
+			tc := []struct {
 				status       string
 				isTodo       bool
 				isInProgress bool
@@ -122,23 +122,23 @@ func TestModels(t *testing.T) {
 				{"unknown", false, false, false, false, false},
 			}
 
-			for _, tc := range testCases {
-				task := &Task{Status: tc.status}
+			for _, tt := range tc {
+				task := &Task{Status: tt.status}
 
-				if task.IsTodo() != tc.isTodo {
-					t.Errorf("Status %s: expected IsTodo %v, got %v", tc.status, tc.isTodo, task.IsTodo())
+				if task.IsTodo() != tt.isTodo {
+					t.Errorf("Status %s: expected IsTodo %v, got %v", tt.status, tt.isTodo, task.IsTodo())
 				}
-				if task.IsInProgress() != tc.isInProgress {
-					t.Errorf("Status %s: expected IsInProgress %v, got %v", tc.status, tc.isInProgress, task.IsInProgress())
+				if task.IsInProgress() != tt.isInProgress {
+					t.Errorf("Status %s: expected IsInProgress %v, got %v", tt.status, tt.isInProgress, task.IsInProgress())
 				}
-				if task.IsBlocked() != tc.isBlocked {
-					t.Errorf("Status %s: expected IsBlocked %v, got %v", tc.status, tc.isBlocked, task.IsBlocked())
+				if task.IsBlocked() != tt.isBlocked {
+					t.Errorf("Status %s: expected IsBlocked %v, got %v", tt.status, tt.isBlocked, task.IsBlocked())
 				}
-				if task.IsDone() != tc.isDone {
-					t.Errorf("Status %s: expected IsDone %v, got %v", tc.status, tc.isDone, task.IsDone())
+				if task.IsDone() != tt.isDone {
+					t.Errorf("Status %s: expected IsDone %v, got %v", tt.status, tt.isDone, task.IsDone())
 				}
-				if task.IsAbandoned() != tc.isAbandoned {
-					t.Errorf("Status %s: expected IsAbandoned %v, got %v", tc.status, tc.isAbandoned, task.IsAbandoned())
+				if task.IsAbandoned() != tt.isAbandoned {
+					t.Errorf("Status %s: expected IsAbandoned %v, got %v", tt.status, tt.isAbandoned, task.IsAbandoned())
 				}
 			}
 		})
@@ -238,7 +238,7 @@ func TestModels(t *testing.T) {
 			})
 
 			t.Run("Priority Weight Calculation", func(t *testing.T) {
-				testCases := []struct {
+				tc := []struct {
 					priority string
 					weight   int
 				}{
@@ -258,11 +258,11 @@ func TestModels(t *testing.T) {
 					{"invalid", 0},
 				}
 
-				for _, tc := range testCases {
-					task := &Task{Priority: tc.priority}
+				for _, tt := range tc {
+					task := &Task{Priority: tt.priority}
 					weight := task.GetPriorityWeight()
-					if weight != tc.weight {
-						t.Errorf("Priority %s: expected weight %d, got %d", tc.priority, tc.weight, weight)
+					if weight != tt.weight {
+						t.Errorf("Priority %s: expected weight %d, got %d", tt.priority, tt.weight, weight)
 					}
 				}
 			})
@@ -481,7 +481,7 @@ func TestModels(t *testing.T) {
 
 	t.Run("Movie Model", func(t *testing.T) {
 		t.Run("Status Methods", func(t *testing.T) {
-			testCases := []struct {
+			tc := []struct {
 				status    string
 				isWatched bool
 				isQueued  bool
@@ -492,14 +492,14 @@ func TestModels(t *testing.T) {
 				{"unknown", false, false},
 			}
 
-			for _, tc := range testCases {
-				movie := &Movie{Status: tc.status}
+			for _, tt := range tc {
+				movie := &Movie{Status: tt.status}
 
-				if movie.IsWatched() != tc.isWatched {
-					t.Errorf("Status %s: expected IsWatched %v, got %v", tc.status, tc.isWatched, movie.IsWatched())
+				if movie.IsWatched() != tt.isWatched {
+					t.Errorf("Status %s: expected IsWatched %v, got %v", tt.status, tt.isWatched, movie.IsWatched())
 				}
-				if movie.IsQueued() != tc.isQueued {
-					t.Errorf("Status %s: expected IsQueued %v, got %v", tc.status, tc.isQueued, movie.IsQueued())
+				if movie.IsQueued() != tt.isQueued {
+					t.Errorf("Status %s: expected IsQueued %v, got %v", tt.status, tt.isQueued, movie.IsQueued())
 				}
 			}
 		})
@@ -507,7 +507,7 @@ func TestModels(t *testing.T) {
 
 	t.Run("TV Show Model", func(t *testing.T) {
 		t.Run("Status Methods", func(t *testing.T) {
-			testCases := []struct {
+			tc := []struct {
 				status     string
 				isWatching bool
 				isWatched  bool
@@ -520,17 +520,17 @@ func TestModels(t *testing.T) {
 				{"unknown", false, false, false},
 			}
 
-			for _, tc := range testCases {
-				tvShow := &TVShow{Status: tc.status}
+			for _, tt := range tc {
+				tvShow := &TVShow{Status: tt.status}
 
-				if tvShow.IsWatching() != tc.isWatching {
-					t.Errorf("Status %s: expected IsWatching %v, got %v", tc.status, tc.isWatching, tvShow.IsWatching())
+				if tvShow.IsWatching() != tt.isWatching {
+					t.Errorf("Status %s: expected IsWatching %v, got %v", tt.status, tt.isWatching, tvShow.IsWatching())
 				}
-				if tvShow.IsWatched() != tc.isWatched {
-					t.Errorf("Status %s: expected IsWatched %v, got %v", tc.status, tc.isWatched, tvShow.IsWatched())
+				if tvShow.IsWatched() != tt.isWatched {
+					t.Errorf("Status %s: expected IsWatched %v, got %v", tt.status, tt.isWatched, tvShow.IsWatched())
 				}
-				if tvShow.IsQueued() != tc.isQueued {
-					t.Errorf("Status %s: expected IsQueued %v, got %v", tc.status, tc.isQueued, tvShow.IsQueued())
+				if tvShow.IsQueued() != tt.isQueued {
+					t.Errorf("Status %s: expected IsQueued %v, got %v", tt.status, tt.isQueued, tvShow.IsQueued())
 				}
 			}
 		})
@@ -538,7 +538,7 @@ func TestModels(t *testing.T) {
 
 	t.Run("Book Model", func(t *testing.T) {
 		t.Run("Status Methods", func(t *testing.T) {
-			testCases := []struct {
+			tc := []struct {
 				status     string
 				isReading  bool
 				isFinished bool
@@ -551,17 +551,17 @@ func TestModels(t *testing.T) {
 				{"unknown", false, false, false},
 			}
 
-			for _, tc := range testCases {
-				book := &Book{Status: tc.status}
+			for _, tt := range tc {
+				book := &Book{Status: tt.status}
 
-				if book.IsReading() != tc.isReading {
-					t.Errorf("Status %s: expected IsReading %v, got %v", tc.status, tc.isReading, book.IsReading())
+				if book.IsReading() != tt.isReading {
+					t.Errorf("Status %s: expected IsReading %v, got %v", tt.status, tt.isReading, book.IsReading())
 				}
-				if book.IsFinished() != tc.isFinished {
-					t.Errorf("Status %s: expected IsFinished %v, got %v", tc.status, tc.isFinished, book.IsFinished())
+				if book.IsFinished() != tt.isFinished {
+					t.Errorf("Status %s: expected IsFinished %v, got %v", tt.status, tt.isFinished, book.IsFinished())
 				}
-				if book.IsQueued() != tc.isQueued {
-					t.Errorf("Status %s: expected IsQueued %v, got %v", tc.status, tc.isQueued, book.IsQueued())
+				if book.IsQueued() != tt.isQueued {
+					t.Errorf("Status %s: expected IsQueued %v, got %v", tt.status, tt.isQueued, book.IsQueued())
 				}
 			}
 		})

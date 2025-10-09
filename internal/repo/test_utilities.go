@@ -12,6 +12,7 @@ import (
 	"github.com/jaswdr/faker/v2"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stormlightlabs/noteleaf/internal/models"
+	"github.com/stormlightlabs/noteleaf/internal/shared"
 	"github.com/stormlightlabs/noteleaf/internal/store"
 )
 
@@ -169,85 +170,8 @@ func CreateFakeArticles(count int) []*models.Article {
 	return articles
 }
 
-func AssertNoError(t *testing.T, err error, msg string) {
-	t.Helper()
-	if err != nil {
-		t.Fatalf("%s: %v", msg, err)
-	}
-}
-
-func AssertError(t *testing.T, err error, msg string) {
-	t.Helper()
-	if err == nil {
-		t.Fatalf("%s: expected error but got none", msg)
-	}
-}
-
 func AssertCancelledContext(t *testing.T, err error) {
-	AssertError(t, err, "Expected error with cancelled context")
-}
-
-func AssertEqual[T comparable](t *testing.T, expected, actual T, msg string) {
-	t.Helper()
-	if expected != actual {
-		t.Fatalf("%s: expected %v, got %v", msg, expected, actual)
-	}
-}
-
-func AssertNotEqual[T comparable](t *testing.T, notExpected, actual T, msg string) {
-	t.Helper()
-	if notExpected == actual {
-		t.Fatalf("%s: expected value to not equal %v", msg, notExpected)
-	}
-}
-
-func AssertTrue(t *testing.T, condition bool, msg string) {
-	t.Helper()
-	if !condition {
-		t.Fatalf("%s: expected true", msg)
-	}
-}
-
-func AssertFalse(t *testing.T, condition bool, msg string) {
-	t.Helper()
-	if condition {
-		t.Fatalf("%s: expected false", msg)
-	}
-}
-
-func AssertContains(t *testing.T, str, substr, msg string) {
-	t.Helper()
-	if !strings.Contains(str, substr) {
-		t.Fatalf("%s: expected string '%s' to contain '%s'", msg, str, substr)
-	}
-}
-
-func AssertNil(t *testing.T, value any, msg string) {
-	t.Helper()
-	if value != nil {
-		t.Fatalf("%s: expected nil, got %v", msg, value)
-	}
-}
-
-func AssertNotNil(t *testing.T, value any, msg string) {
-	t.Helper()
-	if value == nil {
-		t.Fatalf("%s: expected non-nil value", msg)
-	}
-}
-
-func AssertGreaterThan[T interface{ int | int64 | float64 }](t *testing.T, actual, threshold T, msg string) {
-	t.Helper()
-	if actual <= threshold {
-		t.Fatalf("%s: expected %v > %v", msg, actual, threshold)
-	}
-}
-
-func AssertLessThan[T interface{ int | int64 | float64 }](t *testing.T, actual, threshold T, msg string) {
-	t.Helper()
-	if actual >= threshold {
-		t.Fatalf("%s: expected %v < %v", msg, actual, threshold)
-	}
+	shared.AssertError(t, err, "Expected error with cancelled context")
 }
 
 // NewCanceledContext returns a pre-canceled context for testing error conditions
@@ -565,11 +489,11 @@ func SetupTestData(t *testing.T, db *sql.DB) *Repositories {
 	task2.Priority = "low"
 
 	id1, err := repos.Tasks.Create(ctx, task1)
-	AssertNoError(t, err, "Failed to create sample task 1")
+	shared.AssertNoError(t, err, "Failed to create sample task 1")
 	task1.ID = id1
 
 	id2, err := repos.Tasks.Create(ctx, task2)
-	AssertNoError(t, err, "Failed to create sample task 2")
+	shared.AssertNoError(t, err, "Failed to create sample task 2")
 	task2.ID = id2
 
 	book1 := CreateSampleBook()
@@ -581,11 +505,11 @@ func SetupTestData(t *testing.T, db *sql.DB) *Repositories {
 	book2.Status = "finished"
 
 	bookID1, err := repos.Books.Create(ctx, book1)
-	AssertNoError(t, err, "Failed to create sample book 1")
+	shared.AssertNoError(t, err, "Failed to create sample book 1")
 	book1.ID = bookID1
 
 	bookID2, err := repos.Books.Create(ctx, book2)
-	AssertNoError(t, err, "Failed to create sample book 2")
+	shared.AssertNoError(t, err, "Failed to create sample book 2")
 	book2.ID = bookID2
 
 	movie1 := CreateSampleMovie()
@@ -597,11 +521,11 @@ func SetupTestData(t *testing.T, db *sql.DB) *Repositories {
 	movie2.Status = "watched"
 
 	movieID1, err := repos.Movies.Create(ctx, movie1)
-	AssertNoError(t, err, "Failed to create sample movie 1")
+	shared.AssertNoError(t, err, "Failed to create sample movie 1")
 	movie1.ID = movieID1
 
 	movieID2, err := repos.Movies.Create(ctx, movie2)
-	AssertNoError(t, err, "Failed to create sample movie 2")
+	shared.AssertNoError(t, err, "Failed to create sample movie 2")
 	movie2.ID = movieID2
 
 	tv1 := CreateSampleTVShow()
@@ -613,11 +537,11 @@ func SetupTestData(t *testing.T, db *sql.DB) *Repositories {
 	tv2.Status = "watching"
 
 	tvID1, err := repos.TV.Create(ctx, tv1)
-	AssertNoError(t, err, "Failed to create sample TV show 1")
+	shared.AssertNoError(t, err, "Failed to create sample TV show 1")
 	tv1.ID = tvID1
 
 	tvID2, err := repos.TV.Create(ctx, tv2)
-	AssertNoError(t, err, "Failed to create sample TV show 2")
+	shared.AssertNoError(t, err, "Failed to create sample TV show 2")
 	tv2.ID = tvID2
 
 	note1 := CreateSampleNote()
@@ -630,11 +554,11 @@ func SetupTestData(t *testing.T, db *sql.DB) *Repositories {
 	note2.Archived = true
 
 	noteID1, err := repos.Notes.Create(ctx, note1)
-	AssertNoError(t, err, "Failed to create sample note 1")
+	shared.AssertNoError(t, err, "Failed to create sample note 1")
 	note1.ID = noteID1
 
 	noteID2, err := repos.Notes.Create(ctx, note2)
-	AssertNoError(t, err, "Failed to create sample note 2")
+	shared.AssertNoError(t, err, "Failed to create sample note 2")
 	note2.ID = noteID2
 
 	return repos

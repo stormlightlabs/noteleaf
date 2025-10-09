@@ -7,6 +7,7 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stormlightlabs/noteleaf/internal/models"
+	"github.com/stormlightlabs/noteleaf/internal/shared"
 )
 
 func TestTVRepository(t *testing.T) {
@@ -475,7 +476,7 @@ func TestTVRepository(t *testing.T) {
 
 		tvShow := NewTVShowBuilder().WithTitle("Test Show").WithSeason(1).WithEpisode(1).Build()
 		id, err := repo.Create(ctx, tvShow)
-		AssertNoError(t, err, "Failed to create TV show")
+		shared.AssertNoError(t, err, "Failed to create TV show")
 
 		t.Run("Create with cancelled context", func(t *testing.T) {
 			newShow := NewTVShowBuilder().WithTitle("Cancelled").Build()
@@ -547,41 +548,41 @@ func TestTVRepository(t *testing.T) {
 
 		t.Run("Get non-existent TV show", func(t *testing.T) {
 			_, err := repo.Get(ctx, 99999)
-			AssertError(t, err, "Expected error for non-existent TV show")
+			shared.AssertError(t, err, "Expected error for non-existent TV show")
 		})
 
 		t.Run("Update non-existent TV show succeeds with no rows affected", func(t *testing.T) {
 			show := NewTVShowBuilder().WithTitle("Non-existent").Build()
 			show.ID = 99999
 			err := repo.Update(ctx, show)
-			AssertNoError(t, err, "Update should not error when no rows affected")
+			shared.AssertNoError(t, err, "Update should not error when no rows affected")
 		})
 
 		t.Run("Delete non-existent TV show succeeds with no rows affected", func(t *testing.T) {
 			err := repo.Delete(ctx, 99999)
-			AssertNoError(t, err, "Delete should not error when no rows affected")
+			shared.AssertNoError(t, err, "Delete should not error when no rows affected")
 		})
 
 		t.Run("MarkWatched non-existent TV show", func(t *testing.T) {
 			err := repo.MarkWatched(ctx, 99999)
-			AssertError(t, err, "Expected error for non-existent TV show")
+			shared.AssertError(t, err, "Expected error for non-existent TV show")
 		})
 
 		t.Run("StartWatching non-existent TV show", func(t *testing.T) {
 			err := repo.StartWatching(ctx, 99999)
-			AssertError(t, err, "Expected error for non-existent TV show")
+			shared.AssertError(t, err, "Expected error for non-existent TV show")
 		})
 
 		t.Run("GetByTitle with no results", func(t *testing.T) {
 			shows, err := repo.GetByTitle(ctx, "NonExistentShow")
-			AssertNoError(t, err, "Should not error when no shows found")
-			AssertEqual(t, 0, len(shows), "Expected empty result set")
+			shared.AssertNoError(t, err, "Should not error when no shows found")
+			shared.AssertEqual(t, 0, len(shows), "Expected empty result set")
 		})
 
 		t.Run("GetBySeason with no results", func(t *testing.T) {
 			shows, err := repo.GetBySeason(ctx, "NonExistentShow", 1)
-			AssertNoError(t, err, "Should not error when no shows found")
-			AssertEqual(t, 0, len(shows), "Expected empty result set")
+			shared.AssertNoError(t, err, "Should not error when no shows found")
+			shared.AssertEqual(t, 0, len(shows), "Expected empty result set")
 		})
 	})
 }

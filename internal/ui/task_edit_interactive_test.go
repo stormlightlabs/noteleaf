@@ -6,6 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/stormlightlabs/noteleaf/internal/models"
+	"github.com/stormlightlabs/noteleaf/internal/shared"
 )
 
 func TestInteractiveTUIBehavior(t *testing.T) {
@@ -195,7 +196,7 @@ func TestTUIFrameworkFeatures(t *testing.T) {
 			t.Error("View should not be empty")
 		}
 
-		if !containsString(view, "Test Output") {
+		if !shared.ContainsString(view, "Test Output") {
 			t.Error("View should contain task description")
 		}
 	})

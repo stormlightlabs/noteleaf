@@ -6,6 +6,7 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stormlightlabs/noteleaf/internal/models"
+	"github.com/stormlightlabs/noteleaf/internal/shared"
 )
 
 func TestBaseMediaRepository(t *testing.T) {
@@ -23,14 +24,14 @@ func TestBaseMediaRepository(t *testing.T) {
 			}
 
 			id, err := repo.Create(ctx, book)
-			AssertNoError(t, err, "Failed to create book")
-			AssertNotEqual(t, int64(0), id, "Expected non-zero ID")
+			shared.AssertNoError(t, err, "Failed to create book")
+			shared.AssertNotEqual(t, int64(0), id, "Expected non-zero ID")
 
 			retrieved, err := repo.Get(ctx, id)
-			AssertNoError(t, err, "Failed to get book")
-			AssertEqual(t, book.Title, retrieved.Title, "Title mismatch")
-			AssertEqual(t, book.Author, retrieved.Author, "Author mismatch")
-			AssertEqual(t, book.Status, retrieved.Status, "Status mismatch")
+			shared.AssertNoError(t, err, "Failed to get book")
+			shared.AssertEqual(t, book.Title, retrieved.Title, "Title mismatch")
+			shared.AssertEqual(t, book.Author, retrieved.Author, "Author mismatch")
+			shared.AssertEqual(t, book.Status, retrieved.Status, "Status mismatch")
 		})
 
 		t.Run("Update", func(t *testing.T) {
@@ -44,20 +45,20 @@ func TestBaseMediaRepository(t *testing.T) {
 			}
 
 			id, err := repo.Create(ctx, book)
-			AssertNoError(t, err, "Failed to create book")
+			shared.AssertNoError(t, err, "Failed to create book")
 
 			book.Title = "Updated Title"
 			book.Author = "Updated Author"
 			book.Status = "reading"
 
 			err = repo.Update(ctx, book)
-			AssertNoError(t, err, "Failed to update book")
+			shared.AssertNoError(t, err, "Failed to update book")
 
 			retrieved, err := repo.Get(ctx, id)
-			AssertNoError(t, err, "Failed to get updated book")
-			AssertEqual(t, "Updated Title", retrieved.Title, "Title not updated")
-			AssertEqual(t, "Updated Author", retrieved.Author, "Author not updated")
-			AssertEqual(t, "reading", retrieved.Status, "Status not updated")
+			shared.AssertNoError(t, err, "Failed to get updated book")
+			shared.AssertEqual(t, "Updated Title", retrieved.Title, "Title not updated")
+			shared.AssertEqual(t, "Updated Author", retrieved.Author, "Author not updated")
+			shared.AssertEqual(t, "reading", retrieved.Status, "Status not updated")
 		})
 
 		t.Run("Delete", func(t *testing.T) {
@@ -70,13 +71,13 @@ func TestBaseMediaRepository(t *testing.T) {
 			}
 
 			id, err := repo.Create(ctx, book)
-			AssertNoError(t, err, "Failed to create book")
+			shared.AssertNoError(t, err, "Failed to create book")
 
 			err = repo.Delete(ctx, id)
-			AssertNoError(t, err, "Failed to delete book")
+			shared.AssertNoError(t, err, "Failed to delete book")
 
 			_, err = repo.Get(ctx, id)
-			AssertError(t, err, "Expected error when getting deleted book")
+			shared.AssertError(t, err, "Expected error when getting deleted book")
 		})
 
 		t.Run("Get non-existent", func(t *testing.T) {
@@ -84,8 +85,8 @@ func TestBaseMediaRepository(t *testing.T) {
 			repo := NewBookRepository(db)
 
 			_, err := repo.Get(ctx, 9999)
-			AssertError(t, err, "Expected error for non-existent book")
-			AssertContains(t, err.Error(), "not found", "Error should mention 'not found'")
+			shared.AssertError(t, err, "Expected error for non-existent book")
+			shared.AssertContains(t, err.Error(), "not found", "Error should mention 'not found'")
 		})
 
 		t.Run("ListQuery with multiple books", func(t *testing.T) {
@@ -100,11 +101,11 @@ func TestBaseMediaRepository(t *testing.T) {
 
 			for _, book := range books {
 				_, err := repo.Create(ctx, book)
-				AssertNoError(t, err, "Failed to create book")
+				shared.AssertNoError(t, err, "Failed to create book")
 			}
 
 			allBooks, err := repo.List(ctx, BookListOptions{})
-			AssertNoError(t, err, "Failed to list books")
+			shared.AssertNoError(t, err, "Failed to list books")
 			if len(allBooks) != 3 {
 				t.Errorf("Expected 3 books, got %d", len(allBooks))
 			}
@@ -120,11 +121,11 @@ func TestBaseMediaRepository(t *testing.T) {
 					Status: "queued",
 				}
 				_, err := repo.Create(ctx, book)
-				AssertNoError(t, err, "Failed to create book")
+				shared.AssertNoError(t, err, "Failed to create book")
 			}
 
 			count, err := repo.Count(ctx, BookListOptions{})
-			AssertNoError(t, err, "Failed to count books")
+			shared.AssertNoError(t, err, "Failed to count books")
 			if count != 5 {
 				t.Errorf("Expected count of 5, got %d", count)
 			}
@@ -143,14 +144,14 @@ func TestBaseMediaRepository(t *testing.T) {
 			}
 
 			id, err := repo.Create(ctx, movie)
-			AssertNoError(t, err, "Failed to create movie")
-			AssertNotEqual(t, int64(0), id, "Expected non-zero ID")
+			shared.AssertNoError(t, err, "Failed to create movie")
+			shared.AssertNotEqual(t, int64(0), id, "Expected non-zero ID")
 
 			retrieved, err := repo.Get(ctx, id)
-			AssertNoError(t, err, "Failed to get movie")
-			AssertEqual(t, movie.Title, retrieved.Title, "Title mismatch")
-			AssertEqual(t, movie.Year, retrieved.Year, "Year mismatch")
-			AssertEqual(t, movie.Status, retrieved.Status, "Status mismatch")
+			shared.AssertNoError(t, err, "Failed to get movie")
+			shared.AssertEqual(t, movie.Title, retrieved.Title, "Title mismatch")
+			shared.AssertEqual(t, movie.Year, retrieved.Year, "Year mismatch")
+			shared.AssertEqual(t, movie.Status, retrieved.Status, "Status mismatch")
 		})
 
 		t.Run("Update", func(t *testing.T) {
@@ -164,20 +165,20 @@ func TestBaseMediaRepository(t *testing.T) {
 			}
 
 			id, err := repo.Create(ctx, movie)
-			AssertNoError(t, err, "Failed to create movie")
+			shared.AssertNoError(t, err, "Failed to create movie")
 
 			movie.Title = "Updated Movie"
 			movie.Year = 2023
 			movie.Status = "watched"
 
 			err = repo.Update(ctx, movie)
-			AssertNoError(t, err, "Failed to update movie")
+			shared.AssertNoError(t, err, "Failed to update movie")
 
 			retrieved, err := repo.Get(ctx, id)
-			AssertNoError(t, err, "Failed to get updated movie")
-			AssertEqual(t, "Updated Movie", retrieved.Title, "Title not updated")
-			AssertEqual(t, 2023, retrieved.Year, "Year not updated")
-			AssertEqual(t, "watched", retrieved.Status, "Status not updated")
+			shared.AssertNoError(t, err, "Failed to get updated movie")
+			shared.AssertEqual(t, "Updated Movie", retrieved.Title, "Title not updated")
+			shared.AssertEqual(t, 2023, retrieved.Year, "Year not updated")
+			shared.AssertEqual(t, "watched", retrieved.Status, "Status not updated")
 		})
 
 		t.Run("Delete", func(t *testing.T) {
@@ -190,13 +191,13 @@ func TestBaseMediaRepository(t *testing.T) {
 			}
 
 			id, err := repo.Create(ctx, movie)
-			AssertNoError(t, err, "Failed to create movie")
+			shared.AssertNoError(t, err, "Failed to create movie")
 
 			err = repo.Delete(ctx, id)
-			AssertNoError(t, err, "Failed to delete movie")
+			shared.AssertNoError(t, err, "Failed to delete movie")
 
 			_, err = repo.Get(ctx, id)
-			AssertError(t, err, "Expected error when getting deleted movie")
+			shared.AssertError(t, err, "Expected error when getting deleted movie")
 		})
 	})
 
@@ -213,15 +214,15 @@ func TestBaseMediaRepository(t *testing.T) {
 			}
 
 			id, err := repo.Create(ctx, show)
-			AssertNoError(t, err, "Failed to create TV show")
-			AssertNotEqual(t, int64(0), id, "Expected non-zero ID")
+			shared.AssertNoError(t, err, "Failed to create TV show")
+			shared.AssertNotEqual(t, int64(0), id, "Expected non-zero ID")
 
 			retrieved, err := repo.Get(ctx, id)
-			AssertNoError(t, err, "Failed to get TV show")
-			AssertEqual(t, show.Title, retrieved.Title, "Title mismatch")
-			AssertEqual(t, show.Season, retrieved.Season, "Season mismatch")
-			AssertEqual(t, show.Episode, retrieved.Episode, "Episode mismatch")
-			AssertEqual(t, show.Status, retrieved.Status, "Status mismatch")
+			shared.AssertNoError(t, err, "Failed to get TV show")
+			shared.AssertEqual(t, show.Title, retrieved.Title, "Title mismatch")
+			shared.AssertEqual(t, show.Season, retrieved.Season, "Season mismatch")
+			shared.AssertEqual(t, show.Episode, retrieved.Episode, "Episode mismatch")
+			shared.AssertEqual(t, show.Status, retrieved.Status, "Status mismatch")
 		})
 
 		t.Run("Update", func(t *testing.T) {
@@ -236,7 +237,7 @@ func TestBaseMediaRepository(t *testing.T) {
 			}
 
 			id, err := repo.Create(ctx, show)
-			AssertNoError(t, err, "Failed to create TV show")
+			shared.AssertNoError(t, err, "Failed to create TV show")
 
 			show.Title = "Updated Show"
 			show.Season = 2
@@ -244,14 +245,14 @@ func TestBaseMediaRepository(t *testing.T) {
 			show.Status = "watching"
 
 			err = repo.Update(ctx, show)
-			AssertNoError(t, err, "Failed to update TV show")
+			shared.AssertNoError(t, err, "Failed to update TV show")
 
 			retrieved, err := repo.Get(ctx, id)
-			AssertNoError(t, err, "Failed to get updated TV show")
-			AssertEqual(t, "Updated Show", retrieved.Title, "Title not updated")
-			AssertEqual(t, 2, retrieved.Season, "Season not updated")
-			AssertEqual(t, 5, retrieved.Episode, "Episode not updated")
-			AssertEqual(t, "watching", retrieved.Status, "Status not updated")
+			shared.AssertNoError(t, err, "Failed to get updated TV show")
+			shared.AssertEqual(t, "Updated Show", retrieved.Title, "Title not updated")
+			shared.AssertEqual(t, 2, retrieved.Season, "Season not updated")
+			shared.AssertEqual(t, 5, retrieved.Episode, "Episode not updated")
+			shared.AssertEqual(t, "watching", retrieved.Status, "Status not updated")
 		})
 
 		t.Run("Delete", func(t *testing.T) {
@@ -264,13 +265,13 @@ func TestBaseMediaRepository(t *testing.T) {
 			}
 
 			id, err := repo.Create(ctx, show)
-			AssertNoError(t, err, "Failed to create TV show")
+			shared.AssertNoError(t, err, "Failed to create TV show")
 
 			err = repo.Delete(ctx, id)
-			AssertNoError(t, err, "Failed to delete TV show")
+			shared.AssertNoError(t, err, "Failed to delete TV show")
 
 			_, err = repo.Get(ctx, id)
-			AssertError(t, err, "Expected error when getting deleted TV show")
+			shared.AssertError(t, err, "Expected error when getting deleted TV show")
 		})
 	})
 

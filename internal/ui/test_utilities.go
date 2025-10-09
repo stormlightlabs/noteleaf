@@ -10,6 +10,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/stormlightlabs/noteleaf/internal/models"
+	"github.com/stormlightlabs/noteleaf/internal/shared"
 )
 
 type AssertionHelpers struct{}
@@ -212,7 +213,7 @@ func (suite *TUITestSuite) WaitFor(condition func(tea.Model) bool, timeout time.
 func (suite *TUITestSuite) WaitForView(contains string, timeout time.Duration) error {
 	return suite.WaitFor(func(model tea.Model) bool {
 		view := model.View()
-		return len(view) > 0 && containsString(view, contains)
+		return len(view) > 0 && shared.ContainsString(view, contains)
 	}, timeout)
 }
 
@@ -314,7 +315,7 @@ func (ah *AssertionHelpers) AssertModelState(t *testing.T, suite *TUITestSuite, 
 func (ah *AssertionHelpers) AssertViewContains(t *testing.T, suite *TUITestSuite, expected string, msg string) {
 	t.Helper()
 	view := suite.GetCurrentView()
-	if !containsString(view, expected) {
+	if !shared.ContainsString(view, expected) {
 		t.Errorf("View assertion failed: %s\nView content: %s\nExpected to contain: %s", msg, view, expected)
 	}
 }
@@ -322,7 +323,7 @@ func (ah *AssertionHelpers) AssertViewContains(t *testing.T, suite *TUITestSuite
 func (ah *AssertionHelpers) AssertViewNotContains(t *testing.T, suite *TUITestSuite, unexpected string, msg string) {
 	t.Helper()
 	view := suite.GetCurrentView()
-	if containsString(view, unexpected) {
+	if shared.ContainsString(view, unexpected) {
 		t.Errorf("View assertion failed: %s\nView content: %s\nShould not contain: %s", msg, view, unexpected)
 	}
 }
@@ -335,19 +336,6 @@ func (ah *AssertionHelpers) AssertZeroTime(t *testing.T, getter func() time.Time
 }
 
 var Expect = AssertionHelpers{}
-
-func containsString(haystack, needle string) bool {
-	if needle == "" {
-		return true
-	}
-
-	for i := 0; i <= len(haystack)-len(needle); i++ {
-		if haystack[i:i+len(needle)] == needle {
-			return true
-		}
-	}
-	return false
-}
 
 // Test generators for switch case coverage
 type SwitchCaseTest struct {

@@ -21,7 +21,7 @@ func TestHTTPFuncs(t *testing.T) {
 		ParseSearch = origSearch
 	}()
 
-	tests := []struct {
+	tc := []struct {
 		name      string
 		setup     func()
 		call      func() error
@@ -165,20 +165,20 @@ func TestHTTPFuncs(t *testing.T) {
 		},
 	}
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
+	for _, tt := range tc {
+		t.Run(tt.name, func(t *testing.T) {
 			FetchHTML = origFetch
 			ExtractMovieMetadata = origMovie
 			ExtractTVSeriesMetadata = origTV
 			ExtractTVSeasonMetadata = origSeason
 			ParseSearch = origSearch
 
-			tc.setup()
-			err := tc.call()
-			if tc.expectErr && err == nil {
+			tt.setup()
+			err := tt.call()
+			if tt.expectErr && err == nil {
 				t.Fatalf("expected error, got nil")
 			}
-			if !tc.expectErr && err != nil {
+			if !tt.expectErr && err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
 		})

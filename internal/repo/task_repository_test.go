@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stormlightlabs/noteleaf/internal/models"
+	"github.com/stormlightlabs/noteleaf/internal/shared"
 )
 
 func newUUID() string {
@@ -156,7 +157,7 @@ func TestTaskRepository(t *testing.T) {
 			t.Run("when called with context cancellation", func(t *testing.T) {
 				task := CreateSampleTask()
 				_, err := repo.Create(ctx, task)
-				AssertNoError(t, err, "Failed to create task")
+				shared.AssertNoError(t, err, "Failed to create task")
 
 				task.Description = "Updated"
 				err = repo.Update(NewCanceledContext(), task)
@@ -923,8 +924,8 @@ func TestTaskRepository(t *testing.T) {
 			defer func() { marshalTaskTags = orig }()
 
 			_, err := repo.Create(ctx, CreateSampleTask())
-			AssertError(t, err, "expected MarshalTags error")
-			AssertContains(t, err.Error(), "failed to marshal tags", "error message")
+			shared.AssertError(t, err, "expected MarshalTags error")
+			shared.AssertContains(t, err.Error(), "failed to marshal tags", "error message")
 		})
 
 		t.Run("Create fails on MarshalAnnotations error", func(t *testing.T) {
@@ -935,14 +936,14 @@ func TestTaskRepository(t *testing.T) {
 			defer func() { marshalTaskAnnotations = orig }()
 
 			_, err := repo.Create(ctx, CreateSampleTask())
-			AssertError(t, err, "expected MarshalAnnotations error")
-			AssertContains(t, err.Error(), "failed to marshal annotations", "error message")
+			shared.AssertError(t, err, "expected MarshalAnnotations error")
+			shared.AssertContains(t, err.Error(), "failed to marshal annotations", "error message")
 		})
 
 		t.Run("Update fails on MarshalTags error", func(t *testing.T) {
 			task := CreateSampleTask()
 			id, err := repo.Create(ctx, task)
-			AssertNoError(t, err, "create should succeed")
+			shared.AssertNoError(t, err, "create should succeed")
 
 			orig := marshalTaskTags
 			marshalTaskTags = func(t *models.Task) (string, error) {
@@ -952,14 +953,14 @@ func TestTaskRepository(t *testing.T) {
 
 			task.ID = id
 			err = repo.Update(ctx, task)
-			AssertError(t, err, "expected MarshalTags error")
-			AssertContains(t, err.Error(), "failed to marshal tags", "error message")
+			shared.AssertError(t, err, "expected MarshalTags error")
+			shared.AssertContains(t, err.Error(), "failed to marshal tags", "error message")
 		})
 
 		t.Run("Update fails on MarshalAnnotations error", func(t *testing.T) {
 			task := CreateSampleTask()
 			id, err := repo.Create(ctx, task)
-			AssertNoError(t, err, "create should succeed")
+			shared.AssertNoError(t, err, "create should succeed")
 
 			orig := marshalTaskAnnotations
 			marshalTaskAnnotations = func(t *models.Task) (string, error) {
@@ -969,15 +970,15 @@ func TestTaskRepository(t *testing.T) {
 
 			task.ID = id
 			err = repo.Update(ctx, task)
-			AssertError(t, err, "expected MarshalAnnotations error")
-			AssertContains(t, err.Error(), "failed to marshal annotations", "error message")
+			shared.AssertError(t, err, "expected MarshalAnnotations error")
+			shared.AssertContains(t, err.Error(), "failed to marshal annotations", "error message")
 		})
 
 		t.Run("Get fails on UnmarshalTags error", func(t *testing.T) {
 			task := CreateSampleTask()
 			task.Tags = []string{"test"}
 			id, err := repo.Create(ctx, task)
-			AssertNoError(t, err, "create should succeed")
+			shared.AssertNoError(t, err, "create should succeed")
 
 			orig := unmarshalTaskTags
 			unmarshalTaskTags = func(t *models.Task, s string) error {
@@ -986,15 +987,15 @@ func TestTaskRepository(t *testing.T) {
 			defer func() { unmarshalTaskTags = orig }()
 
 			_, err = repo.Get(ctx, id)
-			AssertError(t, err, "expected UnmarshalTags error")
-			AssertContains(t, err.Error(), "failed to unmarshal tags", "error message")
+			shared.AssertError(t, err, "expected UnmarshalTags error")
+			shared.AssertContains(t, err.Error(), "failed to unmarshal tags", "error message")
 		})
 
 		t.Run("Get fails on UnmarshalAnnotations error", func(t *testing.T) {
 			task := CreateSampleTask()
 			task.Annotations = []string{"test"}
 			id, err := repo.Create(ctx, task)
-			AssertNoError(t, err, "create should succeed")
+			shared.AssertNoError(t, err, "create should succeed")
 
 			orig := unmarshalTaskAnnotations
 			unmarshalTaskAnnotations = func(t *models.Task, s string) error {
@@ -1003,15 +1004,15 @@ func TestTaskRepository(t *testing.T) {
 			defer func() { unmarshalTaskAnnotations = orig }()
 
 			_, err = repo.Get(ctx, id)
-			AssertError(t, err, "expected UnmarshalAnnotations error")
-			AssertContains(t, err.Error(), "failed to unmarshal annotations", "error message")
+			shared.AssertError(t, err, "expected UnmarshalAnnotations error")
+			shared.AssertContains(t, err.Error(), "failed to unmarshal annotations", "error message")
 		})
 
 		t.Run("GetByUUID fails on UnmarshalTags error", func(t *testing.T) {
 			task := CreateSampleTask()
 			task.Tags = []string{"test"}
 			_, err := repo.Create(ctx, task)
-			AssertNoError(t, err, "create should succeed")
+			shared.AssertNoError(t, err, "create should succeed")
 
 			orig := unmarshalTaskTags
 			unmarshalTaskTags = func(t *models.Task, s string) error {
@@ -1020,15 +1021,15 @@ func TestTaskRepository(t *testing.T) {
 			defer func() { unmarshalTaskTags = orig }()
 
 			_, err = repo.GetByUUID(ctx, task.UUID)
-			AssertError(t, err, "expected UnmarshalTags error")
-			AssertContains(t, err.Error(), "failed to unmarshal tags", "error message")
+			shared.AssertError(t, err, "expected UnmarshalTags error")
+			shared.AssertContains(t, err.Error(), "failed to unmarshal tags", "error message")
 		})
 
 		t.Run("GetByUUID fails on UnmarshalAnnotations error", func(t *testing.T) {
 			task := CreateSampleTask()
 			task.Annotations = []string{"test"}
 			_, err := repo.Create(ctx, task)
-			AssertNoError(t, err, "create should succeed")
+			shared.AssertNoError(t, err, "create should succeed")
 
 			orig := unmarshalTaskAnnotations
 			unmarshalTaskAnnotations = func(t *models.Task, s string) error {
@@ -1037,8 +1038,8 @@ func TestTaskRepository(t *testing.T) {
 			defer func() { unmarshalTaskAnnotations = orig }()
 
 			_, err = repo.GetByUUID(ctx, task.UUID)
-			AssertError(t, err, "expected UnmarshalAnnotations error")
-			AssertContains(t, err.Error(), "failed to unmarshal annotations", "error message")
+			shared.AssertError(t, err, "expected UnmarshalAnnotations error")
+			shared.AssertContains(t, err.Error(), "failed to unmarshal annotations", "error message")
 		})
 	})
 
@@ -1101,15 +1102,15 @@ func TestTaskRepository(t *testing.T) {
 	t.Run("GetByContext", func(t *testing.T) {
 		task1 := NewTaskBuilder().WithContext("work").WithDescription("Work task 1").Build()
 		_, err := repo.Create(ctx, task1)
-		AssertNoError(t, err, "Failed to create task1")
+		shared.AssertNoError(t, err, "Failed to create task1")
 
 		task2 := NewTaskBuilder().WithContext("home").WithDescription("Home task 1").Build()
 		_, err = repo.Create(ctx, task2)
-		AssertNoError(t, err, "Failed to create task2")
+		shared.AssertNoError(t, err, "Failed to create task2")
 
 		task3 := NewTaskBuilder().WithContext("work").WithDescription("Work task 2").Build()
 		_, err = repo.Create(ctx, task3)
-		AssertNoError(t, err, "Failed to create task3")
+		shared.AssertNoError(t, err, "Failed to create task3")
 
 		workTasks, err := repo.GetByContext(ctx, "work")
 		if err != nil {
@@ -1142,35 +1143,35 @@ func TestTaskRepository(t *testing.T) {
 		blocker := CreateSampleTask()
 		blocker.Description = "Blocker task"
 		_, err := repo.Create(ctx, blocker)
-		AssertNoError(t, err, "create blocker should succeed")
+		shared.AssertNoError(t, err, "create blocker should succeed")
 
 		blocked1 := CreateSampleTask()
 		blocked1.Description = "Blocked task 1"
 		blocked1.DependsOn = []string{blocker.UUID}
 		_, err = repo.Create(ctx, blocked1)
-		AssertNoError(t, err, "create blocked1 should succeed")
+		shared.AssertNoError(t, err, "create blocked1 should succeed")
 
 		blocked2 := CreateSampleTask()
 		blocked2.Description = "Blocked task 2"
 		blocked2.DependsOn = []string{blocker.UUID}
 		_, err = repo.Create(ctx, blocked2)
-		AssertNoError(t, err, "create blocked2 should succeed")
+		shared.AssertNoError(t, err, "create blocked2 should succeed")
 
 		independent := CreateSampleTask()
 		independent.Description = "Independent task"
 		_, err = repo.Create(ctx, independent)
-		AssertNoError(t, err, "create independent should succeed")
+		shared.AssertNoError(t, err, "create independent should succeed")
 
 		blockedTasks, err := repo.GetBlockedTasks(ctx, blocker.UUID)
-		AssertNoError(t, err, "GetBlockedTasks should succeed")
-		AssertEqual(t, 2, len(blockedTasks), "should find 2 blocked tasks")
+		shared.AssertNoError(t, err, "GetBlockedTasks should succeed")
+		shared.AssertEqual(t, 2, len(blockedTasks), "should find 2 blocked tasks")
 
 		for _, task := range blockedTasks {
-			AssertTrue(t, slices.Contains(task.DependsOn, blocker.UUID), "task should depend on blocker")
+			shared.AssertTrue(t, slices.Contains(task.DependsOn, blocker.UUID), "task should depend on blocker")
 		}
 
 		emptyBlocked, err := repo.GetBlockedTasks(ctx, independent.UUID)
-		AssertNoError(t, err, "GetBlockedTasks for independent should succeed")
-		AssertEqual(t, 0, len(emptyBlocked), "independent task should not block anything")
+		shared.AssertNoError(t, err, "GetBlockedTasks for independent should succeed")
+		shared.AssertEqual(t, 0, len(emptyBlocked), "independent task should not block anything")
 	})
 }

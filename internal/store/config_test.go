@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/BurntSushi/toml"
+	"github.com/stormlightlabs/noteleaf/internal/shared"
 )
 
 func TestDefaultConfig(t *testing.T) {
@@ -47,11 +48,8 @@ func TestDefaultConfig(t *testing.T) {
 }
 
 func TestConfigOperations(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "noteleaf-config-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp directory: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
+	tempDir, cleanup := shared.CreateTempDir("noteleaf-config-test-*", t)
+	defer cleanup()
 
 	originalGetConfigDir := GetConfigDir
 	GetConfigDir = func() (string, error) {
@@ -124,11 +122,8 @@ func TestConfigOperations(t *testing.T) {
 }
 
 func TestConfigPersistence(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "noteleaf-config-persist-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp directory: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
+	tempDir, cleanup := shared.CreateTempDir("noteleaf-config-persist-test-*", t)
+	defer cleanup()
 
 	originalGetConfigDir := GetConfigDir
 	GetConfigDir = func() (string, error) {
@@ -199,11 +194,8 @@ func TestConfigPersistence(t *testing.T) {
 
 func TestConfigErrorHandling(t *testing.T) {
 	t.Run("LoadConfig handles invalid TOML", func(t *testing.T) {
-		tempDir, err := os.MkdirTemp("", "noteleaf-config-error-test-*")
-		if err != nil {
-			t.Fatalf("Failed to create temp directory: %v", err)
-		}
-		defer os.RemoveAll(tempDir)
+		tempDir, cleanup := shared.CreateTempDir("noteleaf-config-error-test-*", t)
+		defer cleanup()
 
 		originalGetConfigDir := GetConfigDir
 		GetConfigDir = func() (string, error) {
@@ -213,13 +205,11 @@ func TestConfigErrorHandling(t *testing.T) {
 
 		configPath := filepath.Join(tempDir, ".noteleaf.conf.toml")
 		invalidTOML := `[invalid toml content`
-		err = os.WriteFile(configPath, []byte(invalidTOML), 0644)
-		if err != nil {
+		if err := os.WriteFile(configPath, []byte(invalidTOML), 0644); err != nil {
 			t.Fatalf("Failed to write invalid TOML: %v", err)
 		}
 
-		_, err = LoadConfig()
-		if err == nil {
+		if _, err := LoadConfig(); err == nil {
 			t.Error("LoadConfig should fail with invalid TOML")
 		}
 	})
@@ -229,11 +219,8 @@ func TestConfigErrorHandling(t *testing.T) {
 			t.Skip("Permission test not reliable on Windows")
 		}
 
-		tempDir, err := os.MkdirTemp("", "noteleaf-config-perm-test-*")
-		if err != nil {
-			t.Fatalf("Failed to create temp directory: %v", err)
-		}
-		defer os.RemoveAll(tempDir)
+		tempDir, cleanup := shared.CreateTempDir("noteleaf-config-perm-test-*", t)
+		defer cleanup()
 
 		originalGetConfigDir := GetConfigDir
 		GetConfigDir = func() (string, error) {
@@ -243,19 +230,16 @@ func TestConfigErrorHandling(t *testing.T) {
 
 		configPath := filepath.Join(tempDir, ".noteleaf.conf.toml")
 		validTOML := `color_scheme = "dark"`
-		err = os.WriteFile(configPath, []byte(validTOML), 0644)
-		if err != nil {
+		if err := os.WriteFile(configPath, []byte(validTOML), 0644); err != nil {
 			t.Fatalf("Failed to write config file: %v", err)
 		}
 
-		err = os.Chmod(configPath, 0000)
-		if err != nil {
+		if err := os.Chmod(configPath, 0000); err != nil {
 			t.Fatalf("Failed to change file permissions: %v", err)
 		}
 		defer os.Chmod(configPath, 0644)
 
-		_, err = LoadConfig()
-		if err == nil {
+		if _, err := LoadConfig(); err == nil {
 			t.Error("LoadConfig should fail when config file is not readable")
 		}
 	})
@@ -274,11 +258,8 @@ func TestConfigErrorHandling(t *testing.T) {
 	})
 
 	t.Run("LoadConfig handles SaveConfig failure when creating default", func(t *testing.T) {
-		tempDir, err := os.MkdirTemp("", "noteleaf-config-save-fail-test-*")
-		if err != nil {
-			t.Fatalf("Failed to create temp directory: %v", err)
-		}
-		defer os.RemoveAll(tempDir)
+		tempDir, cleanup := shared.CreateTempDir("noteleaf-config-save-fail-test-*", t)
+		defer cleanup()
 
 		_ = filepath.Join(tempDir, ".noteleaf.conf.toml")
 
@@ -293,8 +274,7 @@ func TestConfigErrorHandling(t *testing.T) {
 		}
 		defer func() { GetConfigDir = originalGetConfigDir }()
 
-		_, err = LoadConfig()
-		if err == nil {
+		if _, err := LoadConfig(); err == nil {
 			t.Error("LoadConfig should fail when SaveConfig fails during default config creation")
 		}
 	})
@@ -307,8 +287,7 @@ func TestConfigErrorHandling(t *testing.T) {
 		defer func() { GetConfigDir = originalGetConfigDir }()
 
 		config := DefaultConfig()
-		err := SaveConfig(config)
-		if err == nil {
+		if err := SaveConfig(config); err == nil {
 			t.Error("SaveConfig should fail when config directory cannot be accessed")
 		}
 	})
@@ -318,11 +297,8 @@ func TestConfigErrorHandling(t *testing.T) {
 			t.Skip("Permission test not reliable on Windows")
 		}
 
-		tempDir, err := os.MkdirTemp("", "noteleaf-config-write-perm-test-*")
-		if err != nil {
-			t.Fatalf("Failed to create temp directory: %v", err)
-		}
-		defer os.RemoveAll(tempDir)
+		tempDir, cleanup := shared.CreateTempDir("noteleaf-config-write-perm-test-*", t)
+		defer cleanup()
 
 		originalGetConfigDir := GetConfigDir
 		GetConfigDir = func() (string, error) {
@@ -330,15 +306,13 @@ func TestConfigErrorHandling(t *testing.T) {
 		}
 		defer func() { GetConfigDir = originalGetConfigDir }()
 
-		err = os.Chmod(tempDir, 0555)
-		if err != nil {
+		if err := os.Chmod(tempDir, 0555); err != nil {
 			t.Fatalf("Failed to change directory permissions: %v", err)
 		}
 		defer os.Chmod(tempDir, 0755)
 
 		config := DefaultConfig()
-		err = SaveConfig(config)
-		if err == nil {
+		if err := SaveConfig(config); err == nil {
 			t.Error("SaveConfig should fail when directory is not writable")
 		}
 	})
@@ -378,11 +352,8 @@ func TestGetConfigDir(t *testing.T) {
 	})
 
 	t.Run("creates directory if it doesn't exist", func(t *testing.T) {
-		tempDir, err := os.MkdirTemp("", "noteleaf-test-*")
-		if err != nil {
-			t.Fatalf("Failed to create temp directory: %v", err)
-		}
-		defer os.RemoveAll(tempDir)
+		tempDir, cleanup := shared.CreateTempDir("noteleaf-test-*", t)
+		defer cleanup()
 
 		var originalEnv string
 		var envVar string
@@ -537,25 +508,20 @@ func TestGetConfigDir(t *testing.T) {
 
 func TestEnvironmentVariableOverrides(t *testing.T) {
 	t.Run("NOTELEAF_CONFIG overrides default config path for LoadConfig", func(t *testing.T) {
-		tempDir, err := os.MkdirTemp("", "noteleaf-env-config-test-*")
-		if err != nil {
-			t.Fatalf("Failed to create temp directory: %v", err)
-		}
-		defer os.RemoveAll(tempDir)
+		tempDir, cleanup := shared.CreateTempDir("noteleaf-env-config-test-*", t)
+		defer cleanup()
 
 		customConfigPath := filepath.Join(tempDir, "custom-config.toml")
 		originalEnv := os.Getenv("NOTELEAF_CONFIG")
 		os.Setenv("NOTELEAF_CONFIG", customConfigPath)
 		defer os.Setenv("NOTELEAF_CONFIG", originalEnv)
 
-		// Create a custom config
 		customConfig := DefaultConfig()
 		customConfig.ColorScheme = "custom-env-test"
 		if err := SaveConfig(customConfig); err != nil {
 			t.Fatalf("Failed to save custom config: %v", err)
 		}
 
-		// Load config should use the custom path
 		loadedConfig, err := LoadConfig()
 		if err != nil {
 			t.Fatalf("LoadConfig failed: %v", err)
@@ -567,11 +533,8 @@ func TestEnvironmentVariableOverrides(t *testing.T) {
 	})
 
 	t.Run("NOTELEAF_CONFIG overrides default config path for SaveConfig", func(t *testing.T) {
-		tempDir, err := os.MkdirTemp("", "noteleaf-env-save-test-*")
-		if err != nil {
-			t.Fatalf("Failed to create temp directory: %v", err)
-		}
-		defer os.RemoveAll(tempDir)
+		tempDir, cleanup := shared.CreateTempDir("noteleaf-env-save-test-*", t)
+		defer cleanup()
 
 		customConfigPath := filepath.Join(tempDir, "subdir", "config.toml")
 		originalEnv := os.Getenv("NOTELEAF_CONFIG")
@@ -584,12 +547,10 @@ func TestEnvironmentVariableOverrides(t *testing.T) {
 			t.Fatalf("SaveConfig failed: %v", err)
 		}
 
-		// Verify the file was created at the custom path
 		if _, err := os.Stat(customConfigPath); os.IsNotExist(err) {
 			t.Error("Config file should be created at custom NOTELEAF_CONFIG path")
 		}
 
-		// Verify the content
 		data, err := os.ReadFile(customConfigPath)
 		if err != nil {
 			t.Fatalf("Failed to read config file: %v", err)
@@ -606,11 +567,8 @@ func TestEnvironmentVariableOverrides(t *testing.T) {
 	})
 
 	t.Run("NOTELEAF_CONFIG overrides default config path for GetConfigPath", func(t *testing.T) {
-		tempDir, err := os.MkdirTemp("", "noteleaf-env-path-test-*")
-		if err != nil {
-			t.Fatalf("Failed to create temp directory: %v", err)
-		}
-		defer os.RemoveAll(tempDir)
+		tempDir, cleanup := shared.CreateTempDir("noteleaf-env-path-test-*", t)
+		defer cleanup()
 
 		customConfigPath := filepath.Join(tempDir, "my-config.toml")
 		originalEnv := os.Getenv("NOTELEAF_CONFIG")
@@ -628,11 +586,8 @@ func TestEnvironmentVariableOverrides(t *testing.T) {
 	})
 
 	t.Run("NOTELEAF_CONFIG creates parent directories if needed", func(t *testing.T) {
-		tempDir, err := os.MkdirTemp("", "noteleaf-env-mkdir-test-*")
-		if err != nil {
-			t.Fatalf("Failed to create temp directory: %v", err)
-		}
-		defer os.RemoveAll(tempDir)
+		tempDir, cleanup := shared.CreateTempDir("noteleaf-env-mkdir-test-*", t)
+		defer cleanup()
 
 		customConfigPath := filepath.Join(tempDir, "nested", "deep", "config.toml")
 		originalEnv := os.Getenv("NOTELEAF_CONFIG")
@@ -652,11 +607,8 @@ func TestEnvironmentVariableOverrides(t *testing.T) {
 
 func TestGetDataDir(t *testing.T) {
 	t.Run("NOTELEAF_DATA_DIR overrides default data directory", func(t *testing.T) {
-		tempDir, err := os.MkdirTemp("", "noteleaf-data-dir-test-*")
-		if err != nil {
-			t.Fatalf("Failed to create temp directory: %v", err)
-		}
-		defer os.RemoveAll(tempDir)
+		tempDir, cleanup := shared.CreateTempDir("noteleaf-data-dir-test-*", t)
+		defer cleanup()
 
 		customDataDir := filepath.Join(tempDir, "my-data")
 		originalEnv := os.Getenv("NOTELEAF_DATA_DIR")
@@ -672,14 +624,12 @@ func TestGetDataDir(t *testing.T) {
 			t.Errorf("Expected data dir '%s', got '%s'", customDataDir, dataDir)
 		}
 
-		// Verify directory was created
 		if _, err := os.Stat(customDataDir); os.IsNotExist(err) {
 			t.Error("Data directory should be created")
 		}
 	})
 
 	t.Run("GetDataDir returns correct directory based on OS", func(t *testing.T) {
-		// Temporarily unset NOTELEAF_DATA_DIR
 		originalEnv := os.Getenv("NOTELEAF_DATA_DIR")
 		os.Unsetenv("NOTELEAF_DATA_DIR")
 		defer os.Setenv("NOTELEAF_DATA_DIR", originalEnv)
@@ -699,11 +649,8 @@ func TestGetDataDir(t *testing.T) {
 	})
 
 	t.Run("GetDataDir handles NOTELEAF_DATA_DIR with nested path", func(t *testing.T) {
-		tempDir, err := os.MkdirTemp("", "noteleaf-nested-data-test-*")
-		if err != nil {
-			t.Fatalf("Failed to create temp directory: %v", err)
-		}
-		defer os.RemoveAll(tempDir)
+		tempDir, cleanup := shared.CreateTempDir("noteleaf-nested-data-test-*", t)
+		defer cleanup()
 
 		customDataDir := filepath.Join(tempDir, "level1", "level2", "data")
 		originalEnv := os.Getenv("NOTELEAF_DATA_DIR")
@@ -719,19 +666,16 @@ func TestGetDataDir(t *testing.T) {
 			t.Errorf("Expected data dir '%s', got '%s'", customDataDir, dataDir)
 		}
 
-		// Verify nested directories were created
 		if _, err := os.Stat(customDataDir); os.IsNotExist(err) {
 			t.Error("Nested data directories should be created")
 		}
 	})
 
 	t.Run("GetDataDir uses platform-specific defaults", func(t *testing.T) {
-		// Temporarily unset NOTELEAF_DATA_DIR
 		originalEnv := os.Getenv("NOTELEAF_DATA_DIR")
 		os.Unsetenv("NOTELEAF_DATA_DIR")
 		defer os.Setenv("NOTELEAF_DATA_DIR", originalEnv)
 
-		// Create temporary environment for testing
 		tempHome, err := os.MkdirTemp("", "noteleaf-home-test-*")
 		if err != nil {
 			t.Fatalf("Failed to create temp home: %v", err)
@@ -760,7 +704,6 @@ func TestGetDataDir(t *testing.T) {
 			t.Fatalf("GetDataDir failed: %v", err)
 		}
 
-		// Verify the path contains our temp directory
 		if !strings.Contains(dataDir, tempHome) {
 			t.Errorf("Data directory should be under temp home, got: %s", dataDir)
 		}

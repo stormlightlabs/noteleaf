@@ -34,13 +34,12 @@ type ParsedContent struct {
 
 // ParsingRule represents XPath rules for extracting content from a specific domain
 type ParsingRule struct {
-	Domain string
-	Title  string
-	Author string
-	Date   string
-	Body   string
-	// XPath selectors for elements to remove
-	Strip    []string
+	Domain   string
+	Title    string
+	Author   string
+	Date     string
+	Body     string
+	Strip    []string // XPath selectors for elements to remove
 	TestURLs []string
 }
 
@@ -152,15 +151,15 @@ func (p *ArticleParser) parseRules(domain, content string) (*ParsingRule, error)
 }
 
 // ParseURL extracts article content from a given URL
-func (p *ArticleParser) ParseURL(urlStr string) (*ParsedContent, error) {
-	parsedURL, err := url.Parse(urlStr)
+func (p *ArticleParser) ParseURL(s string) (*ParsedContent, error) {
+	parsedURL, err := url.Parse(s)
 	if err != nil {
 		return nil, fmt.Errorf("invalid URL: %w", err)
 	}
 
 	domain := parsedURL.Hostname()
 
-	resp, err := p.client.Get(urlStr)
+	resp, err := p.client.Get(s)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch URL: %w", err)
 	}
@@ -175,7 +174,7 @@ func (p *ArticleParser) ParseURL(urlStr string) (*ParsedContent, error) {
 		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	return p.Parse(string(htmlBytes), domain, urlStr)
+	return p.Parse(string(htmlBytes), domain, s)
 }
 
 // ParseHTML extracts article content from HTML string using domain-specific rules
@@ -257,8 +256,8 @@ func (p *ArticleParser) GetSupportedDomains() []string {
 }
 
 // SaveArticle saves the parsed content to filesystem and returns file paths
-func (p *ArticleParser) SaveArticle(content *ParsedContent, storageDir string) (markdownPath, htmlPath string, err error) {
-	if err := os.MkdirAll(storageDir, 0755); err != nil {
+func (p *ArticleParser) SaveArticle(content *ParsedContent, dir string) (markdownPath, htmlPath string, err error) {
+	if err := os.MkdirAll(dir, 0755); err != nil {
 		return "", "", fmt.Errorf("failed to create storage directory: %w", err)
 	}
 
@@ -267,8 +266,8 @@ func (p *ArticleParser) SaveArticle(content *ParsedContent, storageDir string) (
 		slug = "article"
 	}
 
-	baseMarkdownPath := filepath.Join(storageDir, slug+".md")
-	baseHTMLPath := filepath.Join(storageDir, slug+".html")
+	baseMarkdownPath := filepath.Join(dir, slug+".md")
+	baseHTMLPath := filepath.Join(dir, slug+".html")
 
 	markdownPath = baseMarkdownPath
 	htmlPath = baseHTMLPath
@@ -280,8 +279,8 @@ func (p *ArticleParser) SaveArticle(content *ParsedContent, storageDir string) (
 				break
 			}
 		}
-		markdownPath = filepath.Join(storageDir, fmt.Sprintf("%s_%d.md", slug, counter))
-		htmlPath = filepath.Join(storageDir, fmt.Sprintf("%s_%d.html", slug, counter))
+		markdownPath = filepath.Join(dir, fmt.Sprintf("%s_%d.md", slug, counter))
+		htmlPath = filepath.Join(dir, fmt.Sprintf("%s_%d.html", slug, counter))
 		counter++
 	}
 
@@ -385,7 +384,7 @@ func CreateArticleFromURL(url, dir string) (*models.Article, error) {
 		return nil, fmt.Errorf("failed to save article: %w", err)
 	}
 
-	article := &models.Article{
+	return &models.Article{
 		URL:          url,
 		Title:        content.Title,
 		Author:       content.Author,
@@ -394,7 +393,5 @@ func CreateArticleFromURL(url, dir string) (*models.Article, error) {
 		HTMLPath:     htmlPath,
 		Created:      time.Now(),
 		Modified:     time.Now(),
-	}
-
-	return article, nil
+	}, nil
 }

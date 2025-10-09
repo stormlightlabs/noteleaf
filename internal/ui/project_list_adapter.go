@@ -14,7 +14,6 @@ type ProjectRepository interface {
 	GetProjects(ctx context.Context) ([]repo.ProjectSummary, error)
 }
 
-
 func pluralizeCount(count int) string {
 	if count == 1 {
 		return ""

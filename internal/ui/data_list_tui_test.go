@@ -5,6 +5,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/stormlightlabs/noteleaf/internal/shared"
 )
 
 type mockListModel struct {
@@ -67,7 +68,7 @@ func TestDataListInteractiveBehavior(t *testing.T) {
 
 		if err := suite.WaitFor(func(m tea.Model) bool {
 			view := m.View()
-			return !containsString(view, "help")
+			return !shared.ContainsString(view, "help")
 		}, 1*time.Second); err != nil {
 			t.Errorf("Help should have been hidden: %v", err)
 		}

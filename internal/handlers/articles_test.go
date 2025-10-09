@@ -12,6 +12,7 @@ import (
 	"github.com/stormlightlabs/noteleaf/internal/articles"
 	"github.com/stormlightlabs/noteleaf/internal/models"
 	"github.com/stormlightlabs/noteleaf/internal/repo"
+	"github.com/stormlightlabs/noteleaf/internal/shared"
 )
 
 func TestArticleHandler(t *testing.T) {
@@ -49,7 +50,7 @@ func TestArticleHandler(t *testing.T) {
 			}
 
 			_, err := NewArticleHandler()
-			Expect.AssertError(t, err, "failed to initialize database", "NewArticleHandler should fail when database initialization fails")
+			shared.AssertErrorContains(t, err, "failed to initialize database", "NewArticleHandler should fail when database initialization fails")
 		})
 
 	})
@@ -85,7 +86,7 @@ func TestArticleHandler(t *testing.T) {
 			helper.AddTestRule("127.0.0.1", testRule)
 
 			err := helper.Add(ctx, server.URL+"/test-article")
-			Expect.AssertNoError(t, err, "Add should succeed with valid URL")
+			shared.AssertNoError(t, err, "Add should succeed with valid URL")
 
 			articles, err := helper.repos.Articles.List(ctx, &repo.ArticleListOptions{})
 			if err != nil {
@@ -128,7 +129,7 @@ func TestArticleHandler(t *testing.T) {
 			}
 
 			err = helper.Add(ctx, duplicateURL)
-			Expect.AssertNoError(t, err, "Add should succeed with duplicate URL and return existing")
+			shared.AssertNoError(t, err, "Add should succeed with duplicate URL and return existing")
 		})
 
 		t.Run("handles unsupported domain", func(t *testing.T) {
@@ -142,7 +143,7 @@ func TestArticleHandler(t *testing.T) {
 			defer server.Close()
 
 			err := helper.Add(ctx, server.URL+"/unsupported")
-			Expect.AssertError(t, err, "failed to parse article", "Add should fail with unsupported domain")
+			shared.AssertErrorContains(t, err, "failed to parse article", "Add should fail with unsupported domain")
 		})
 
 		t.Run("handles HTTP error", func(t *testing.T) {
@@ -155,7 +156,7 @@ func TestArticleHandler(t *testing.T) {
 			defer server.Close()
 
 			err := helper.Add(ctx, server.URL+"/404")
-			Expect.AssertError(t, err, "failed to parse article", "Add should fail with HTTP error")
+			shared.AssertErrorContains(t, err, "failed to parse article", "Add should fail with HTTP error")
 		})
 
 		t.Run("handles storage directory error", func(t *testing.T) {
@@ -180,7 +181,7 @@ func TestArticleHandler(t *testing.T) {
 			}
 
 			err := helper.Add(ctx, "https://example.com/test-article")
-			Expect.AssertError(t, err, "failed to get article storage dir", "Add should fail when storage directory cannot be determined")
+			shared.AssertErrorContains(t, err, "failed to get article storage dir", "Add should fail when storage directory cannot be determined")
 		})
 
 		t.Run("handles database save error", func(t *testing.T) {
@@ -209,7 +210,7 @@ func TestArticleHandler(t *testing.T) {
 			helper.db.Exec("DROP TABLE articles")
 
 			err := helper.Add(ctx, server.URL+"/test")
-			Expect.AssertError(t, err, "failed to save article to database", "Add should fail when database save fails")
+			shared.AssertErrorContains(t, err, "failed to save article to database", "Add should fail when database save fails")
 		})
 	})
 
@@ -222,7 +223,7 @@ func TestArticleHandler(t *testing.T) {
 			id2 := helper.CreateTestArticle(t, "https://example.com/article2", "Second Article", "Jane Smith", "2024-01-02")
 
 			err := helper.List(ctx, "", "", 0)
-			Expect.AssertNoError(t, err, "List should succeed")
+			shared.AssertNoError(t, err, "List should succeed")
 
 			AssertExists(t, helper.repos.Articles.Get, id1, "article")
 			AssertExists(t, helper.repos.Articles.Get, id2, "article")
@@ -236,7 +237,7 @@ func TestArticleHandler(t *testing.T) {
 			helper.CreateTestArticle(t, "https://example.com/second", "Second Article", "Jane", "2024-01-02")
 
 			err := helper.List(ctx, "First", "", 0)
-			Expect.AssertNoError(t, err, "List with title filter should succeed")
+			shared.AssertNoError(t, err, "List with title filter should succeed")
 		})
 
 		t.Run("lists with author filter", func(t *testing.T) {
@@ -247,7 +248,7 @@ func TestArticleHandler(t *testing.T) {
 			helper.CreateTestArticle(t, "https://example.com/jane1", "Article by Jane", "Jane Smith", "2024-01-02")
 
 			err := helper.List(ctx, "", "John", 0)
-			Expect.AssertNoError(t, err, "List with author filter should succeed")
+			shared.AssertNoError(t, err, "List with author filter should succeed")
 		})
 
 		t.Run("lists with limit", func(t *testing.T) {
@@ -259,7 +260,7 @@ func TestArticleHandler(t *testing.T) {
 			helper.CreateTestArticle(t, "https://example.com/3", "Article 3", "Author", "2024-01-03")
 
 			err := helper.List(ctx, "", "", 2)
-			Expect.AssertNoError(t, err, "List with limit should succeed")
+			shared.AssertNoError(t, err, "List with limit should succeed")
 		})
 
 		t.Run("handles empty results", func(t *testing.T) {
@@ -267,7 +268,7 @@ func TestArticleHandler(t *testing.T) {
 			ctx := context.Background()
 
 			err := helper.List(ctx, "nonexistent", "", 0)
-			Expect.AssertNoError(t, err, "List with no matches should succeed")
+			shared.AssertNoError(t, err, "List with no matches should succeed")
 		})
 
 		t.Run("handles database error", func(t *testing.T) {
@@ -277,7 +278,7 @@ func TestArticleHandler(t *testing.T) {
 			helper.db.Exec("DROP TABLE articles")
 
 			err := helper.List(ctx, "", "", 0)
-			Expect.AssertError(t, err, "failed to list articles", "List should fail when database is corrupted")
+			shared.AssertErrorContains(t, err, "failed to list articles", "List should fail when database is corrupted")
 		})
 	})
 
@@ -289,7 +290,7 @@ func TestArticleHandler(t *testing.T) {
 			id := helper.CreateTestArticle(t, "https://example.com/test", "Test Article", "Test Author", "2024-01-01")
 
 			err := helper.View(ctx, id)
-			Expect.AssertNoError(t, err, "View should succeed with valid article ID")
+			shared.AssertNoError(t, err, "View should succeed with valid article ID")
 		})
 
 		t.Run("handles non-existent article", func(t *testing.T) {
@@ -297,7 +298,7 @@ func TestArticleHandler(t *testing.T) {
 			ctx := context.Background()
 
 			err := helper.View(ctx, 99999)
-			Expect.AssertError(t, err, "failed to get article", "View should fail with non-existent article ID")
+			shared.AssertErrorContains(t, err, "failed to get article", "View should fail with non-existent article ID")
 		})
 
 		t.Run("handles missing files gracefully", func(t *testing.T) {
@@ -321,7 +322,7 @@ func TestArticleHandler(t *testing.T) {
 			}
 
 			err = helper.View(ctx, id)
-			Expect.AssertNoError(t, err, "View should succeed even when files are missing")
+			shared.AssertNoError(t, err, "View should succeed even when files are missing")
 		})
 
 		t.Run("handles database error", func(t *testing.T) {
@@ -331,7 +332,7 @@ func TestArticleHandler(t *testing.T) {
 			helper.db.Exec("DROP TABLE articles")
 
 			err := helper.View(ctx, 1)
-			Expect.AssertError(t, err, "failed to get article", "View should fail when database is corrupted")
+			shared.AssertErrorContains(t, err, "failed to get article", "View should fail when database is corrupted")
 		})
 	})
 
@@ -341,14 +342,14 @@ func TestArticleHandler(t *testing.T) {
 			ctx := context.Background()
 			id := helper.CreateTestArticle(t, "https://example.com/read", "Read Test Article", "Test Author", "2024-01-01")
 			err := helper.Read(ctx, id)
-			Expect.AssertNoError(t, err, "Read should succeed with valid article ID")
+			shared.AssertNoError(t, err, "Read should succeed with valid article ID")
 		})
 
 		t.Run("handles non-existent article", func(t *testing.T) {
 			helper := NewArticleTestHelper(t)
 			ctx := context.Background()
 			err := helper.Read(ctx, 99999)
-			Expect.AssertError(t, err, "failed to get article", "Read should fail with non-existent article ID")
+			shared.AssertErrorContains(t, err, "failed to get article", "Read should fail with non-existent article ID")
 		})
 
 		t.Run("handles missing markdown file", func(t *testing.T) {
@@ -372,7 +373,7 @@ func TestArticleHandler(t *testing.T) {
 			}
 
 			err = helper.Read(ctx, id)
-			Expect.AssertError(t, err, "markdown file not found", "Read should fail when markdown file is missing")
+			shared.AssertErrorContains(t, err, "markdown file not found", "Read should fail when markdown file is missing")
 		})
 
 		t.Run("handles database error", func(t *testing.T) {
@@ -380,7 +381,7 @@ func TestArticleHandler(t *testing.T) {
 			ctx := context.Background()
 			helper.db.Exec("DROP TABLE articles")
 			err := helper.Read(ctx, 1)
-			Expect.AssertError(t, err, "failed to get article", "Read should fail when database is corrupted")
+			shared.AssertErrorContains(t, err, "failed to get article", "Read should fail when database is corrupted")
 		})
 	})
 
@@ -392,7 +393,7 @@ func TestArticleHandler(t *testing.T) {
 			AssertExists(t, helper.repos.Articles.Get, id, "article")
 
 			err := helper.Remove(ctx, id)
-			Expect.AssertNoError(t, err, "Remove should succeed")
+			shared.AssertNoError(t, err, "Remove should succeed")
 			AssertNotExists(t, helper.repos.Articles.Get, id, "article")
 		})
 
@@ -400,7 +401,7 @@ func TestArticleHandler(t *testing.T) {
 			helper := NewArticleTestHelper(t)
 			ctx := context.Background()
 			err := helper.Remove(ctx, 99999)
-			Expect.AssertError(t, err, "failed to get article", "Remove should fail with non-existent article ID")
+			shared.AssertErrorContains(t, err, "failed to get article", "Remove should fail with non-existent article ID")
 		})
 
 		t.Run("handles missing files gracefully", func(t *testing.T) {
@@ -424,7 +425,7 @@ func TestArticleHandler(t *testing.T) {
 			}
 
 			err = helper.Remove(ctx, id)
-			Expect.AssertNoError(t, err, "Remove should succeed even when files don't exist")
+			shared.AssertNoError(t, err, "Remove should succeed even when files don't exist")
 		})
 
 		t.Run("handles database error", func(t *testing.T) {
@@ -435,7 +436,7 @@ func TestArticleHandler(t *testing.T) {
 			helper.db.Exec("DROP TABLE articles")
 
 			err := helper.Remove(ctx, id)
-			Expect.AssertError(t, err, "failed to get article", "Remove should fail when database is corrupted")
+			shared.AssertErrorContains(t, err, "failed to get article", "Remove should fail when database is corrupted")
 		})
 	})
 
@@ -443,7 +444,7 @@ func TestArticleHandler(t *testing.T) {
 		t.Run("shows supported domains", func(t *testing.T) {
 			helper := NewArticleTestHelper(t)
 			err := helper.Help()
-			Expect.AssertNoError(t, err, "Help should succeed")
+			shared.AssertNoError(t, err, "Help should succeed")
 		})
 
 		t.Run("handles storage directory error", func(t *testing.T) {
@@ -467,7 +468,7 @@ func TestArticleHandler(t *testing.T) {
 			}
 
 			err := helper.Help()
-			Expect.AssertError(t, err, "failed to get storage directory", "Help should fail when storage directory cannot be determined")
+			shared.AssertErrorContains(t, err, "failed to get storage directory", "Help should fail when storage directory cannot be determined")
 		})
 	})
 
@@ -475,14 +476,14 @@ func TestArticleHandler(t *testing.T) {
 		t.Run("closes successfully", func(t *testing.T) {
 			helper := NewArticleTestHelper(t)
 			err := helper.Close()
-			Expect.AssertNoError(t, err, "Close should succeed")
+			shared.AssertNoError(t, err, "Close should succeed")
 		})
 
 		t.Run("handles nil database gracefully", func(t *testing.T) {
 			helper := NewArticleTestHelper(t)
 			helper.db = nil
 			err := helper.Close()
-			Expect.AssertNoError(t, err, "Close should succeed with nil database")
+			shared.AssertNoError(t, err, "Close should succeed with nil database")
 		})
 	})
 
@@ -490,7 +491,7 @@ func TestArticleHandler(t *testing.T) {
 		t.Run("returns storage directory successfully", func(t *testing.T) {
 			helper := NewArticleTestHelper(t)
 			dir, err := helper.getStorageDirectory()
-			Expect.AssertNoError(t, err, "getStorageDirectory should succeed")
+			shared.AssertNoError(t, err, "getStorageDirectory should succeed")
 
 			if dir == "" {
 				t.Error("Storage directory should not be empty")
@@ -522,7 +523,7 @@ func TestArticleHandler(t *testing.T) {
 			}
 
 			_, err := helper.getStorageDirectory()
-			Expect.AssertError(t, err, "", "getStorageDirectory should fail when home directory cannot be determined")
+			shared.AssertErrorContains(t, err, "", "getStorageDirectory should fail when home directory cannot be determined")
 		})
 	})
 }
@@ -556,10 +557,10 @@ func TestArticleHandlerIntegration(t *testing.T) {
 		helper.AddTestRule("127.0.0.1", testRule)
 
 		err := helper.Add(ctx, server.URL+"/integration-test")
-		Expect.AssertNoError(t, err, "Add should succeed in integration test")
+		shared.AssertNoError(t, err, "Add should succeed in integration test")
 
 		err = helper.List(ctx, "", "", 0)
-		Expect.AssertNoError(t, err, "List should succeed in integration test")
+		shared.AssertNoError(t, err, "List should succeed in integration test")
 
 		articles, err := helper.repos.Articles.List(ctx, &repo.ArticleListOptions{})
 		if err != nil {
@@ -573,13 +574,13 @@ func TestArticleHandlerIntegration(t *testing.T) {
 		articleID := articles[0].ID
 
 		err = helper.View(ctx, articleID)
-		Expect.AssertNoError(t, err, "View should succeed in integration test")
+		shared.AssertNoError(t, err, "View should succeed in integration test")
 
 		err = helper.Help()
-		Expect.AssertNoError(t, err, "Help should succeed in integration test")
+		shared.AssertNoError(t, err, "Help should succeed in integration test")
 
 		err = helper.Remove(ctx, articleID)
-		Expect.AssertNoError(t, err, "Remove should succeed in integration test")
+		shared.AssertNoError(t, err, "Remove should succeed in integration test")
 
 		AssertNotExists(t, helper.repos.Articles.Get, articleID, "article")
 	})

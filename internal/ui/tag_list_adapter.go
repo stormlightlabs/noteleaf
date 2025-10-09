@@ -14,7 +14,6 @@ type TagRepository interface {
 	GetTags(ctx context.Context) ([]repo.TagSummary, error)
 }
 
-
 // TagSummaryRecord adapts repo.TagSummary to work with DataTable
 type TagSummaryRecord struct {
 	summary repo.TagSummary

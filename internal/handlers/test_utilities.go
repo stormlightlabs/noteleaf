@@ -2,11 +2,8 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -24,15 +21,15 @@ import (
 	"github.com/stormlightlabs/noteleaf/internal/ui"
 )
 
-// HandlerTestHelper wraps NoteHandler with test-specific functionality
+// HandlerTestHelper wraps [NoteHandler] with test-specific functionality
 //
-// Uses HandlerTestSuite internally to avoid code duplication
+// Uses [HandlerTestSuite] internally to avoid code duplication
 type HandlerTestHelper struct {
 	*NoteHandler
 	suite *HandlerTestSuite
 }
 
-// NewHandlerTestHelper creates a NoteHandler with isolated test database
+// NewHandlerTestHelper creates a [NoteHandler] with isolated test database
 func NewHandlerTestHelper(t *testing.T) *HandlerTestHelper {
 	suite := NewHandlerTestSuite(t)
 
@@ -126,7 +123,7 @@ func (me *MockEditor) WithReadOnly() *MockEditor {
 	return me
 }
 
-// GetEditorFunc returns the editor function for use with NoteHandler
+// GetEditorFunc returns the editor function for use with [NoteHandler]
 func (me *MockEditor) GetEditorFunc() editorFunc {
 	return func(editor, filePath string) error {
 		if me.shouldFail {
@@ -192,33 +189,7 @@ func (dth *DatabaseTestHelper) CreateCorruptedDatabase(t *testing.T) {
 	dth.handler.db = db
 }
 
-// AssertionHelpers provides test assertion utilities
-type AssertionHelpers struct{}
-
-// AssertError checks that an error occurred and optionally contains expected text
-func (ah AssertionHelpers) AssertError(t *testing.T, err error, expectedSubstring string, msg string) {
-	t.Helper()
-	if err == nil {
-		t.Errorf("%s: expected error but got none", msg)
-		return
-	}
-	if expectedSubstring != "" && !containsString(err.Error(), expectedSubstring) {
-		t.Errorf("%s: expected error containing %q, got: %v", msg, expectedSubstring, err)
-	}
-}
-
-// AssertNoError checks that no error occurred
-func (ah AssertionHelpers) AssertNoError(t *testing.T, err error, msg string) {
-	t.Helper()
-	if err != nil {
-		t.Errorf("%s: unexpected error: %v", msg, err)
-	}
-}
-
 // EnvironmentTestHelper provides environment manipulation utilities for testing
-//
-// Use this for tests requiring fine-grained environment control beyond HandlerTestSuite.
-// Examples: testing missing EDITOR, invalid PATH, corrupt TMPDIR, etc.
 type EnvironmentTestHelper struct {
 	originalVars map[string]string
 }
@@ -281,32 +252,13 @@ func (eth *EnvironmentTestHelper) CreateTestDir(t *testing.T) (string, error) {
 	return tempDir, nil
 }
 
-// Helper function to check if string contains substring (case-insensitive)
-func containsString(haystack, needle string) bool {
-	if needle == "" {
-		return true
-	}
-	return len(haystack) >= len(needle) &&
-		haystack[len(haystack)-len(needle):] == needle ||
-		haystack[:len(needle)] == needle ||
-		(len(haystack) > len(needle) &&
-			func() bool {
-				for i := 1; i <= len(haystack)-len(needle); i++ {
-					if haystack[i:i+len(needle)] == needle {
-						return true
-					}
-				}
-				return false
-			}())
-}
-
-// ArticleTestHelper wraps ArticleHandler with test-specific functionality
+// ArticleTestHelper wraps [ArticleHandler] with test-specific functionality
 type ArticleTestHelper struct {
 	*ArticleHandler
 	suite *HandlerTestSuite
 }
 
-// NewArticleTestHelper creates an ArticleHandler with isolated test database
+// NewArticleTestHelper creates an [ArticleHandler] with isolated test database
 func NewArticleTestHelper(t *testing.T) *ArticleTestHelper {
 	suite := NewHandlerTestSuite(t)
 
@@ -373,60 +325,7 @@ func (ath *ArticleTestHelper) AddTestRule(domain string, rule *articles.ParsingR
 	}
 }
 
-var Expect = AssertionHelpers{}
-
-// HTTPMockServer provides utilities for mocking HTTP services in tests
-type HTTPMockServer struct {
-	server   *httptest.Server
-	requests []*http.Request
-}
-
-// NewMockServer creates a new mock HTTP server
-func NewMockServer() *HTTPMockServer {
-	mock := &HTTPMockServer{
-		requests: make([]*http.Request, 0),
-	}
-	return mock
-}
-
-// WithHandler sets up the mock server with a custom handler
-func (m *HTTPMockServer) WithHandler(handler http.HandlerFunc) *HTTPMockServer {
-	m.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		m.requests = append(m.requests, r)
-		handler(w, r)
-	}))
-	return m
-}
-
-// URL returns the mock server URL
-func (m *HTTPMockServer) URL() string {
-	if m.server == nil {
-		panic("mock server not initialized - call WithHandler first")
-	}
-	return m.server.URL
-}
-
-// Close closes the mock server
-func (m *HTTPMockServer) Close() {
-	if m.server != nil {
-		m.server.Close()
-	}
-}
-
-// GetRequests returns all recorded HTTP requests
-func (m *HTTPMockServer) GetRequests() []*http.Request {
-	return m.requests
-}
-
-// GetLastRequest returns the last recorded HTTP request
-func (m *HTTPMockServer) GetLastRequest() *http.Request {
-	if len(m.requests) == 0 {
-		return nil
-	}
-	return m.requests[len(m.requests)-1]
-}
-
-// MockOpenLibraryResponse creates a mock OpenLibrary search response
+// MockOpenLibraryResponse creates a mocked instance of [services.OpenLibrarySearchResponse]
 func MockOpenLibraryResponse(books []MockBook) services.OpenLibrarySearchResponse {
 	docs := make([]services.OpenLibrarySearchDoc, len(books))
 	for i, book := range books {
@@ -487,85 +386,6 @@ type MockMedia struct {
 	Link  string
 	Score string
 	Type  string
-}
-
-// HTTPErrorMockServer creates a mock server that returns HTTP errors
-func HTTPErrorMockServer(statusCode int, message string) *HTTPMockServer {
-	return NewMockServer().WithHandler(func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, message, statusCode)
-	})
-}
-
-// JSONMockServer creates a mock server that returns JSON responses
-func JSONMockServer(response any) *HTTPMockServer {
-	return NewMockServer().WithHandler(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(response); err != nil {
-			http.Error(w, "Failed to encode response", http.StatusInternalServerError)
-		}
-	})
-}
-
-// TimeoutMockServer creates a mock server that simulates timeouts
-func TimeoutMockServer(delay time.Duration) *HTTPMockServer {
-	return NewMockServer().WithHandler(func(w http.ResponseWriter, r *http.Request) {
-		time.Sleep(delay)
-		w.WriteHeader(http.StatusOK)
-	})
-}
-
-// InvalidJSONMockServer creates a mock server that returns malformed JSON
-func InvalidJSONMockServer() *HTTPMockServer {
-	return NewMockServer().WithHandler(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"invalid": json`))
-	})
-}
-
-// EmptyResponseMockServer creates a mock server that returns empty responses
-func EmptyResponseMockServer() *HTTPMockServer {
-	return NewMockServer().WithHandler(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
-}
-
-// ServiceTestHelper provides utilities for testing services with HTTP mocks
-type ServiceTestHelper struct {
-	mockServers []*HTTPMockServer
-}
-
-// NewServiceTestHelper creates a new service test helper
-func NewServiceTestHelper() *ServiceTestHelper {
-	return &ServiceTestHelper{
-		mockServers: make([]*HTTPMockServer, 0),
-	}
-}
-
-// AddMockServer adds a mock server and returns its URL
-func (sth *ServiceTestHelper) AddMockServer(server *HTTPMockServer) string {
-	sth.mockServers = append(sth.mockServers, server)
-	return server.URL()
-}
-
-// Cleanup closes all mock servers
-func (sth *ServiceTestHelper) Cleanup() {
-	for _, server := range sth.mockServers {
-		server.Close()
-	}
-}
-
-// AssertRequestMade verifies that a request was made to the mock server
-func (sth *ServiceTestHelper) AssertRequestMade(t *testing.T, server *HTTPMockServer, expectedPath string) {
-	t.Helper()
-	if len(server.requests) == 0 {
-		t.Error("Expected HTTP request to be made but none were recorded")
-		return
-	}
-
-	lastReq := server.GetLastRequest()
-	if lastReq.URL.Path != expectedPath {
-		t.Errorf("Expected request to path %s, got %s", expectedPath, lastReq.URL.Path)
-	}
 }
 
 // MockMediaFetcher provides a test implementation of Fetchable and Searchable interfaces
@@ -1011,24 +831,5 @@ func CommonTUIScenarios() []TUITestScenario {
 			KeySequence: []tea.KeyType{tea.KeyCtrlC},
 			Timeout:     500 * time.Millisecond,
 		},
-	}
-}
-
-// AssertTaskHasUUID verifies that a task has a non-empty UUID
-func AssertTaskHasUUID(t *testing.T, task *models.Task) {
-	t.Helper()
-	if task.UUID == "" {
-		t.Fatal("Task should have a UUID")
-	}
-}
-
-// AssertTaskDatesSet verifies that Entry and Modified timestamps are set
-func AssertTaskDatesSet(t *testing.T, task *models.Task) {
-	t.Helper()
-	if task.Entry.IsZero() {
-		t.Error("Task Entry timestamp should be set")
-	}
-	if task.Modified.IsZero() {
-		t.Error("Task Modified timestamp should be set")
 	}
 }

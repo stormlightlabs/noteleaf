@@ -161,7 +161,7 @@ body: //article
 	t.Run("slugify", func(t *testing.T) {
 		parser := &ArticleParser{}
 
-		testCases := []struct {
+		tc := []struct {
 			input    string
 			expected string
 		}{
@@ -174,11 +174,11 @@ body: //article
 			{strings.Repeat("a", 150), strings.Repeat("a", 100)},
 		}
 
-		for _, tc := range testCases {
-			t.Run(fmt.Sprintf("slugify '%s'", tc.input), func(t *testing.T) {
-				result := parser.slugify(tc.input)
-				if result != tc.expected {
-					t.Errorf("Expected '%s', got '%s'", tc.expected, result)
+		for _, tt := range tc {
+			t.Run(fmt.Sprintf("slugify '%s'", tt.input), func(t *testing.T) {
+				result := parser.slugify(tt.input)
+				if result != tt.expected {
+					t.Errorf("Expected '%s', got '%s'", tt.expected, result)
 				}
 			})
 		}
@@ -536,7 +536,6 @@ func TestCreateArticleFromURL(t *testing.T) {
 		}))
 		defer server.Close()
 
-		// Use a direct Wikipedia URL that would be processed by the real function
 		_, err := CreateArticleFromURL("https://en.wikipedia.org/wiki/NonExistentPage12345", tempDir)
 		if err == nil {
 			t.Error("Expected error for HTTP 404")
@@ -547,7 +546,6 @@ func TestCreateArticleFromURL(t *testing.T) {
 	})
 
 	t.Run("fails with network error", func(t *testing.T) {
-		// Use a non-existent server to trigger network error
 		_, err := CreateArticleFromURL("http://localhost:99999/test", tempDir)
 		if err == nil {
 			t.Error("Expected error for network failure")
@@ -565,11 +563,10 @@ func TestCreateArticleFromURL(t *testing.T) {
 	t.Run("fails with malformed HTML", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("<html><head><title>Test</head></body>")) // Malformed HTML
+			w.Write([]byte("<html><head><title>Test</head></body>"))
 		}))
 		defer server.Close()
 
-		// Create a custom parser with localhost rule for testing
 		parser, err := NewArticleParser(server.Client())
 		if err != nil {
 			t.Fatalf("Failed to create parser: %v", err)
@@ -587,7 +584,6 @@ func TestCreateArticleFromURL(t *testing.T) {
 		if err == nil {
 			t.Error("Expected error for malformed HTML")
 		}
-		// Malformed HTML may either fail to parse or fail to extract title
 		if !strings.Contains(err.Error(), "failed to parse HTML") && !strings.Contains(err.Error(), "could not extract title") {
 			t.Errorf("Expected HTML parsing or title extraction error, got %v", err)
 		}
@@ -607,7 +603,6 @@ func TestCreateArticleFromURL(t *testing.T) {
 		}))
 		defer server.Close()
 
-		// Create a custom parser with localhost rule for testing
 		parser, err := NewArticleParser(server.Client())
 		if err != nil {
 			t.Fatalf("Failed to create parser: %v", err)
@@ -646,7 +641,6 @@ func TestCreateArticleFromURL(t *testing.T) {
 		server := newServerWithHtml(wikipediaHTML)
 		defer server.Close()
 
-		// Create a custom parser with localhost rule for testing
 		parser, err := NewArticleParser(server.Client())
 		if err != nil {
 			t.Fatalf("Failed to create parser: %v", err)
@@ -699,7 +693,6 @@ func TestCreateArticleFromURL(t *testing.T) {
 			t.Error("Expected Modified timestamp to be set")
 		}
 
-		// Check files exist
 		if _, err := os.Stat(article.MarkdownPath); os.IsNotExist(err) {
 			t.Error("Expected markdown file to exist")
 		}
@@ -707,7 +700,6 @@ func TestCreateArticleFromURL(t *testing.T) {
 			t.Error("Expected HTML file to exist")
 		}
 
-		// Verify file contents
 		mdContent, err := os.ReadFile(article.MarkdownPath)
 		if err != nil {
 			t.Fatalf("Failed to read markdown file: %v", err)

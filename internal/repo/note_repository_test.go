@@ -6,6 +6,7 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stormlightlabs/noteleaf/internal/models"
+	"github.com/stormlightlabs/noteleaf/internal/shared"
 )
 
 func TestNoteRepository(t *testing.T) {
@@ -18,33 +19,33 @@ func TestNoteRepository(t *testing.T) {
 			note := CreateSampleNote()
 
 			id, err := repo.Create(ctx, note)
-			AssertNoError(t, err, "Failed to create note")
-			AssertNotEqual(t, int64(0), id, "Expected non-zero ID")
-			AssertEqual(t, id, note.ID, "Expected note ID to be set correctly")
-			AssertFalse(t, note.Created.IsZero(), "Expected Created timestamp to be set")
-			AssertFalse(t, note.Modified.IsZero(), "Expected Modified timestamp to be set")
+			shared.AssertNoError(t, err, "Failed to create note")
+			shared.AssertNotEqual(t, int64(0), id, "Expected non-zero ID")
+			shared.AssertEqual(t, id, note.ID, "Expected note ID to be set correctly")
+			shared.AssertFalse(t, note.Created.IsZero(), "Expected Created timestamp to be set")
+			shared.AssertFalse(t, note.Modified.IsZero(), "Expected Modified timestamp to be set")
 		})
 
 		t.Run("Get Note", func(t *testing.T) {
 			original := CreateSampleNote()
 			id, err := repo.Create(ctx, original)
-			AssertNoError(t, err, "Failed to create note")
+			shared.AssertNoError(t, err, "Failed to create note")
 
 			retrieved, err := repo.Get(ctx, id)
-			AssertNoError(t, err, "Failed to get note")
+			shared.AssertNoError(t, err, "Failed to get note")
 
-			AssertEqual(t, original.ID, retrieved.ID, "ID mismatch")
-			AssertEqual(t, original.Title, retrieved.Title, "Title mismatch")
-			AssertEqual(t, original.Content, retrieved.Content, "Content mismatch")
-			AssertEqual(t, len(original.Tags), len(retrieved.Tags), "Tags length mismatch")
-			AssertEqual(t, original.Archived, retrieved.Archived, "Archived mismatch")
-			AssertEqual(t, original.FilePath, retrieved.FilePath, "FilePath mismatch")
+			shared.AssertEqual(t, original.ID, retrieved.ID, "ID mismatch")
+			shared.AssertEqual(t, original.Title, retrieved.Title, "Title mismatch")
+			shared.AssertEqual(t, original.Content, retrieved.Content, "Content mismatch")
+			shared.AssertEqual(t, len(original.Tags), len(retrieved.Tags), "Tags length mismatch")
+			shared.AssertEqual(t, original.Archived, retrieved.Archived, "Archived mismatch")
+			shared.AssertEqual(t, original.FilePath, retrieved.FilePath, "FilePath mismatch")
 		})
 
 		t.Run("Update Note", func(t *testing.T) {
 			note := CreateSampleNote()
 			id, err := repo.Create(ctx, note)
-			AssertNoError(t, err, "Failed to create note")
+			shared.AssertNoError(t, err, "Failed to create note")
 
 			originalModified := note.Modified
 
@@ -55,33 +56,33 @@ func TestNoteRepository(t *testing.T) {
 			note.FilePath = "/new/path/note.md"
 
 			err = repo.Update(ctx, note)
-			AssertNoError(t, err, "Failed to update note")
+			shared.AssertNoError(t, err, "Failed to update note")
 
 			retrieved, err := repo.Get(ctx, id)
-			AssertNoError(t, err, "Failed to get updated note")
+			shared.AssertNoError(t, err, "Failed to get updated note")
 
-			AssertEqual(t, "Updated Title", retrieved.Title, "Expected updated title")
-			AssertEqual(t, "Updated content", retrieved.Content, "Expected updated content")
-			AssertEqual(t, 2, len(retrieved.Tags), "Expected 2 tags")
+			shared.AssertEqual(t, "Updated Title", retrieved.Title, "Expected updated title")
+			shared.AssertEqual(t, "Updated content", retrieved.Content, "Expected updated content")
+			shared.AssertEqual(t, 2, len(retrieved.Tags), "Expected 2 tags")
 			if len(retrieved.Tags) >= 2 {
-				AssertEqual(t, "updated", retrieved.Tags[0], "Expected first tag to be 'updated'")
-				AssertEqual(t, "test", retrieved.Tags[1], "Expected second tag to be 'test'")
+				shared.AssertEqual(t, "updated", retrieved.Tags[0], "Expected first tag to be 'updated'")
+				shared.AssertEqual(t, "test", retrieved.Tags[1], "Expected second tag to be 'test'")
 			}
-			AssertTrue(t, retrieved.Archived, "Expected note to be archived")
-			AssertEqual(t, "/new/path/note.md", retrieved.FilePath, "Expected updated file path")
-			AssertTrue(t, retrieved.Modified.After(originalModified), "Expected Modified timestamp to be updated")
+			shared.AssertTrue(t, retrieved.Archived, "Expected note to be archived")
+			shared.AssertEqual(t, "/new/path/note.md", retrieved.FilePath, "Expected updated file path")
+			shared.AssertTrue(t, retrieved.Modified.After(originalModified), "Expected Modified timestamp to be updated")
 		})
 
 		t.Run("Delete Note", func(t *testing.T) {
 			note := CreateSampleNote()
 			id, err := repo.Create(ctx, note)
-			AssertNoError(t, err, "Failed to create note")
+			shared.AssertNoError(t, err, "Failed to create note")
 
 			err = repo.Delete(ctx, id)
-			AssertNoError(t, err, "Failed to delete note")
+			shared.AssertNoError(t, err, "Failed to delete note")
 
 			_, err = repo.Get(ctx, id)
-			AssertError(t, err, "Expected error when getting deleted note")
+			shared.AssertError(t, err, "Expected error when getting deleted note")
 		})
 	})
 
@@ -98,61 +99,61 @@ func TestNoteRepository(t *testing.T) {
 
 		for _, note := range notes {
 			_, err := repo.Create(ctx, note)
-			AssertNoError(t, err, "Failed to create test note")
+			shared.AssertNoError(t, err, "Failed to create test note")
 		}
 
 		t.Run("List All Notes", func(t *testing.T) {
 			results, err := repo.List(ctx, NoteListOptions{})
-			AssertNoError(t, err, "Failed to list notes")
-			AssertEqual(t, 3, len(results), "Expected 3 notes")
+			shared.AssertNoError(t, err, "Failed to list notes")
+			shared.AssertEqual(t, 3, len(results), "Expected 3 notes")
 		})
 
 		t.Run("List Archived Notes Only", func(t *testing.T) {
 			archived := true
 			results, err := repo.List(ctx, NoteListOptions{Archived: &archived})
-			AssertNoError(t, err, "Failed to list archived notes")
-			AssertEqual(t, 1, len(results), "Expected 1 archived note")
+			shared.AssertNoError(t, err, "Failed to list archived notes")
+			shared.AssertEqual(t, 1, len(results), "Expected 1 archived note")
 			if len(results) > 0 {
-				AssertTrue(t, results[0].Archived, "Retrieved note should be archived")
+				shared.AssertTrue(t, results[0].Archived, "Retrieved note should be archived")
 			}
 		})
 
 		t.Run("List Active Notes Only", func(t *testing.T) {
 			archived := false
 			results, err := repo.List(ctx, NoteListOptions{Archived: &archived})
-			AssertNoError(t, err, "Failed to list active notes")
-			AssertEqual(t, 2, len(results), "Expected 2 active notes")
+			shared.AssertNoError(t, err, "Failed to list active notes")
+			shared.AssertEqual(t, 2, len(results), "Expected 2 active notes")
 			for _, note := range results {
-				AssertFalse(t, note.Archived, "Retrieved note should not be archived")
+				shared.AssertFalse(t, note.Archived, "Retrieved note should not be archived")
 			}
 		})
 
 		t.Run("Search by Title", func(t *testing.T) {
 			results, err := repo.List(ctx, NoteListOptions{Title: "First"})
-			AssertNoError(t, err, "Failed to search by title")
-			AssertEqual(t, 1, len(results), "Expected 1 note")
+			shared.AssertNoError(t, err, "Failed to search by title")
+			shared.AssertEqual(t, 1, len(results), "Expected 1 note")
 			if len(results) > 0 {
-				AssertEqual(t, "First Note", results[0].Title, "Expected 'First Note'")
+				shared.AssertEqual(t, "First Note", results[0].Title, "Expected 'First Note'")
 			}
 		})
 
 		t.Run("Search by Content", func(t *testing.T) {
 			results, err := repo.List(ctx, NoteListOptions{Content: "Important"})
-			AssertNoError(t, err, "Failed to search by content")
-			AssertEqual(t, 1, len(results), "Expected 1 note")
+			shared.AssertNoError(t, err, "Failed to search by content")
+			shared.AssertEqual(t, 1, len(results), "Expected 1 note")
 			if len(results) > 0 {
-				AssertEqual(t, "Third Note", results[0].Title, "Expected 'Third Note'")
+				shared.AssertEqual(t, "Third Note", results[0].Title, "Expected 'Third Note'")
 			}
 		})
 
 		t.Run("Limit and Offset", func(t *testing.T) {
 			results, err := repo.List(ctx, NoteListOptions{Limit: 2})
-			AssertNoError(t, err, "Failed to list with limit")
-			AssertEqual(t, 2, len(results), "Expected 2 notes")
+			shared.AssertNoError(t, err, "Failed to list with limit")
+			shared.AssertEqual(t, 2, len(results), "Expected 2 notes")
 
 			results, err = repo.List(ctx, NoteListOptions{Limit: 2, Offset: 1})
-			AssertNoError(t, err, "Failed to list with limit and offset")
-			AssertEqual(t, 2, len(results), "Expected 2 notes with offset")
+			shared.AssertNoError(t, err, "Failed to list with limit and offset")
+			shared.AssertEqual(t, 2, len(results), "Expected 2 notes with offset")
 		})
 	})
 
@@ -169,33 +170,33 @@ func TestNoteRepository(t *testing.T) {
 
 		for _, note := range notes {
 			_, err := repo.Create(ctx, note)
-			AssertNoError(t, err, "Failed to create test note")
+			shared.AssertNoError(t, err, "Failed to create test note")
 		}
 
 		t.Run("GetByTitle", func(t *testing.T) {
 			results, err := repo.GetByTitle(ctx, "Work")
-			AssertNoError(t, err, "Failed to get by title")
-			AssertEqual(t, 1, len(results), "Expected 1 note")
+			shared.AssertNoError(t, err, "Failed to get by title")
+			shared.AssertEqual(t, 1, len(results), "Expected 1 note")
 			if len(results) > 0 {
-				AssertEqual(t, "Work Note", results[0].Title, "Expected 'Work Note'")
+				shared.AssertEqual(t, "Work Note", results[0].Title, "Expected 'Work Note'")
 			}
 		})
 
 		t.Run("GetArchived", func(t *testing.T) {
 			results, err := repo.GetArchived(ctx)
-			AssertNoError(t, err, "Failed to get archived notes")
-			AssertEqual(t, 1, len(results), "Expected 1 archived note")
+			shared.AssertNoError(t, err, "Failed to get archived notes")
+			shared.AssertEqual(t, 1, len(results), "Expected 1 archived note")
 			if len(results) > 0 {
-				AssertTrue(t, results[0].Archived, "Retrieved note should be archived")
+				shared.AssertTrue(t, results[0].Archived, "Retrieved note should be archived")
 			}
 		})
 
 		t.Run("GetActive", func(t *testing.T) {
 			results, err := repo.GetActive(ctx)
-			AssertNoError(t, err, "Failed to get active notes")
-			AssertEqual(t, 2, len(results), "Expected 2 active notes")
+			shared.AssertNoError(t, err, "Failed to get active notes")
+			shared.AssertEqual(t, 2, len(results), "Expected 2 active notes")
 			for _, note := range results {
-				AssertFalse(t, note.Archived, "Retrieved note should not be archived")
+				shared.AssertFalse(t, note.Archived, "Retrieved note should not be archived")
 			}
 		})
 
@@ -206,36 +207,36 @@ func TestNoteRepository(t *testing.T) {
 				Archived: false,
 			}
 			id, err := repo.Create(ctx, note)
-			AssertNoError(t, err, "Failed to create note")
+			shared.AssertNoError(t, err, "Failed to create note")
 
 			err = repo.Archive(ctx, id)
-			AssertNoError(t, err, "Failed to archive note")
+			shared.AssertNoError(t, err, "Failed to archive note")
 
 			retrieved, err := repo.Get(ctx, id)
-			AssertNoError(t, err, "Failed to get note")
-			AssertTrue(t, retrieved.Archived, "Note should be archived")
+			shared.AssertNoError(t, err, "Failed to get note")
+			shared.AssertTrue(t, retrieved.Archived, "Note should be archived")
 
 			err = repo.Unarchive(ctx, id)
-			AssertNoError(t, err, "Failed to unarchive note")
+			shared.AssertNoError(t, err, "Failed to unarchive note")
 
 			retrieved, err = repo.Get(ctx, id)
-			AssertNoError(t, err, "Failed to get note")
-			AssertFalse(t, retrieved.Archived, "Note should not be archived")
+			shared.AssertNoError(t, err, "Failed to get note")
+			shared.AssertFalse(t, retrieved.Archived, "Note should not be archived")
 		})
 
 		t.Run("SearchContent", func(t *testing.T) {
 			results, err := repo.SearchContent(ctx, "Important")
-			AssertNoError(t, err, "Failed to search content")
-			AssertEqual(t, 1, len(results), "Expected 1 note")
+			shared.AssertNoError(t, err, "Failed to search content")
+			shared.AssertEqual(t, 1, len(results), "Expected 1 note")
 			if len(results) > 0 {
-				AssertEqual(t, "Important Note", results[0].Title, "Expected 'Important Note'")
+				shared.AssertEqual(t, "Important Note", results[0].Title, "Expected 'Important Note'")
 			}
 		})
 
 		t.Run("GetRecent", func(t *testing.T) {
 			results, err := repo.GetRecent(ctx, 2)
-			AssertNoError(t, err, "Failed to get recent notes")
-			AssertEqual(t, 2, len(results), "Expected 2 notes")
+			shared.AssertNoError(t, err, "Failed to get recent notes")
+			shared.AssertEqual(t, 2, len(results), "Expected 2 notes")
 		})
 	})
 
@@ -250,16 +251,16 @@ func TestNoteRepository(t *testing.T) {
 			Tags:    []string{"initial"},
 		}
 		id, err := repo.Create(ctx, note)
-		AssertNoError(t, err, "Failed to create note")
+		shared.AssertNoError(t, err, "Failed to create note")
 
 		t.Run("AddTag", func(t *testing.T) {
 			err := repo.AddTag(ctx, id, "new-tag")
-			AssertNoError(t, err, "Failed to add tag")
+			shared.AssertNoError(t, err, "Failed to add tag")
 
 			retrieved, err := repo.Get(ctx, id)
-			AssertNoError(t, err, "Failed to get note")
+			shared.AssertNoError(t, err, "Failed to get note")
 
-			AssertEqual(t, 2, len(retrieved.Tags), "Expected 2 tags")
+			shared.AssertEqual(t, 2, len(retrieved.Tags), "Expected 2 tags")
 
 			found := false
 			for _, tag := range retrieved.Tags {
@@ -268,30 +269,30 @@ func TestNoteRepository(t *testing.T) {
 					break
 				}
 			}
-			AssertTrue(t, found, "New tag not found in note")
+			shared.AssertTrue(t, found, "New tag not found in note")
 		})
 
 		t.Run("AddTag Duplicate", func(t *testing.T) {
 			err := repo.AddTag(ctx, id, "new-tag")
-			AssertNoError(t, err, "Failed to add duplicate tag")
+			shared.AssertNoError(t, err, "Failed to add duplicate tag")
 
 			retrieved, err := repo.Get(ctx, id)
-			AssertNoError(t, err, "Failed to get note")
+			shared.AssertNoError(t, err, "Failed to get note")
 
-			AssertEqual(t, 2, len(retrieved.Tags), "Expected 2 tags (no duplicate)")
+			shared.AssertEqual(t, 2, len(retrieved.Tags), "Expected 2 tags (no duplicate)")
 		})
 
 		t.Run("RemoveTag", func(t *testing.T) {
 			err := repo.RemoveTag(ctx, id, "initial")
-			AssertNoError(t, err, "Failed to remove tag")
+			shared.AssertNoError(t, err, "Failed to remove tag")
 
 			retrieved, err := repo.Get(ctx, id)
-			AssertNoError(t, err, "Failed to get note")
+			shared.AssertNoError(t, err, "Failed to get note")
 
-			AssertEqual(t, 1, len(retrieved.Tags), "Expected 1 tag after removal")
+			shared.AssertEqual(t, 1, len(retrieved.Tags), "Expected 1 tag after removal")
 
 			for _, tag := range retrieved.Tags {
-				AssertNotEqual(t, "initial", tag, "Removed tag still found in note")
+				shared.AssertNotEqual(t, "initial", tag, "Removed tag still found in note")
 			}
 		})
 
@@ -313,23 +314,23 @@ func TestNoteRepository(t *testing.T) {
 			}
 
 			_, err := repo.Create(ctx, note1)
-			AssertNoError(t, err, "Failed to create note1")
+			shared.AssertNoError(t, err, "Failed to create note1")
 			_, err = repo.Create(ctx, note2)
-			AssertNoError(t, err, "Failed to create note2")
+			shared.AssertNoError(t, err, "Failed to create note2")
 			_, err = repo.Create(ctx, note3)
-			AssertNoError(t, err, "Failed to create note3")
+			shared.AssertNoError(t, err, "Failed to create note3")
 
 			results, err := repo.GetByTags(ctx, []string{"work"})
-			AssertNoError(t, err, "Failed to get notes by tag")
-			AssertTrue(t, len(results) >= 2, "Expected at least 2 notes with 'work' tag")
+			shared.AssertNoError(t, err, "Failed to get notes by tag")
+			shared.AssertTrue(t, len(results) >= 2, "Expected at least 2 notes with 'work' tag")
 
 			results, err = repo.GetByTags(ctx, []string{"nonexistent"})
-			AssertNoError(t, err, "Failed to get notes by nonexistent tag")
-			AssertEqual(t, 0, len(results), "Expected 0 notes with nonexistent tag")
+			shared.AssertNoError(t, err, "Failed to get notes by nonexistent tag")
+			shared.AssertEqual(t, 0, len(results), "Expected 0 notes with nonexistent tag")
 
 			results, err = repo.GetByTags(ctx, []string{})
-			AssertNoError(t, err, "Failed to get notes with empty tags")
-			AssertEqual(t, 0, len(results), "Expected 0 notes with empty tag list")
+			shared.AssertNoError(t, err, "Failed to get notes with empty tags")
+			shared.AssertEqual(t, 0, len(results), "Expected 0 notes with empty tag list")
 		})
 	})
 
@@ -340,7 +341,7 @@ func TestNoteRepository(t *testing.T) {
 
 		note := NewNoteBuilder().WithTitle("Test Note").WithContent("Test content").Build()
 		id, err := repo.Create(ctx, note)
-		AssertNoError(t, err, "Failed to create note")
+		shared.AssertNoError(t, err, "Failed to create note")
 
 		t.Run("Create with cancelled context", func(t *testing.T) {
 			newNote := NewNoteBuilder().WithTitle("Cancelled").Build()
@@ -427,7 +428,7 @@ func TestNoteRepository(t *testing.T) {
 
 		t.Run("Get non-existent note", func(t *testing.T) {
 			_, err := repo.Get(ctx, 99999)
-			AssertError(t, err, "Expected error for non-existent note")
+			shared.AssertError(t, err, "Expected error for non-existent note")
 		})
 
 		t.Run("Update non-existent note", func(t *testing.T) {
@@ -438,22 +439,22 @@ func TestNoteRepository(t *testing.T) {
 			}
 
 			err := repo.Update(ctx, note)
-			AssertError(t, err, "Expected error when updating non-existent note")
+			shared.AssertError(t, err, "Expected error when updating non-existent note")
 		})
 
 		t.Run("Delete non-existent note", func(t *testing.T) {
 			err := repo.Delete(ctx, 99999)
-			AssertError(t, err, "Expected error when deleting non-existent note")
+			shared.AssertError(t, err, "Expected error when deleting non-existent note")
 		})
 
 		t.Run("Archive non-existent note", func(t *testing.T) {
 			err := repo.Archive(ctx, 99999)
-			AssertError(t, err, "Expected error when archiving non-existent note")
+			shared.AssertError(t, err, "Expected error when archiving non-existent note")
 		})
 
 		t.Run("AddTag to non-existent note", func(t *testing.T) {
 			err := repo.AddTag(ctx, 99999, "tag")
-			AssertError(t, err, "Expected error when adding tag to non-existent note")
+			shared.AssertError(t, err, "Expected error when adding tag to non-existent note")
 		})
 
 		t.Run("Note with empty tags", func(t *testing.T) {
@@ -464,12 +465,12 @@ func TestNoteRepository(t *testing.T) {
 			}
 
 			id, err := repo.Create(ctx, note)
-			AssertNoError(t, err, "Failed to create note with empty tags")
+			shared.AssertNoError(t, err, "Failed to create note with empty tags")
 
 			retrieved, err := repo.Get(ctx, id)
-			AssertNoError(t, err, "Failed to get note")
+			shared.AssertNoError(t, err, "Failed to get note")
 
-			AssertEqual(t, 0, len(retrieved.Tags), "Expected empty tags slice")
+			shared.AssertEqual(t, 0, len(retrieved.Tags), "Expected empty tags slice")
 		})
 
 		t.Run("Note with nil tags", func(t *testing.T) {
@@ -480,12 +481,12 @@ func TestNoteRepository(t *testing.T) {
 			}
 
 			id, err := repo.Create(ctx, note)
-			AssertNoError(t, err, "Failed to create note with nil tags")
+			shared.AssertNoError(t, err, "Failed to create note with nil tags")
 
 			retrieved, err := repo.Get(ctx, id)
-			AssertNoError(t, err, "Failed to get note")
+			shared.AssertNoError(t, err, "Failed to get note")
 
-			AssertEqual(t, 0, len(retrieved.Tags), "Expected empty tags")
+			shared.AssertEqual(t, 0, len(retrieved.Tags), "Expected empty tags")
 		})
 
 		t.Run("Note with long content", func(t *testing.T) {
@@ -500,18 +501,18 @@ func TestNoteRepository(t *testing.T) {
 			}
 
 			id, err := repo.Create(ctx, note)
-			AssertNoError(t, err, "Failed to create note with long content")
+			shared.AssertNoError(t, err, "Failed to create note with long content")
 
 			retrieved, err := repo.Get(ctx, id)
-			AssertNoError(t, err, "Failed to get note")
+			shared.AssertNoError(t, err, "Failed to get note")
 
-			AssertEqual(t, longContent, retrieved.Content, "Long content was not stored/retrieved correctly")
+			shared.AssertEqual(t, longContent, retrieved.Content, "Long content was not stored/retrieved correctly")
 		})
 
 		t.Run("List with no results", func(t *testing.T) {
 			notes, err := repo.List(ctx, NoteListOptions{Title: "NonexistentTitle"})
-			AssertNoError(t, err, "Should not error when no notes found")
-			AssertEqual(t, 0, len(notes), "Expected empty result set")
+			shared.AssertNoError(t, err, "Should not error when no notes found")
+			shared.AssertEqual(t, 0, len(notes), "Expected empty result set")
 		})
 	})
 }

@@ -11,10 +11,9 @@ import (
 	"time"
 
 	"github.com/stormlightlabs/noteleaf/internal/models"
+	"github.com/stormlightlabs/noteleaf/internal/shared"
 	"github.com/stormlightlabs/noteleaf/internal/store"
 )
-
-// setupNoteTest removed - use NewHandlerTestSuite(t) instead
 
 func createTestMarkdownFile(t *testing.T, dir, filename, content string) string {
 	filePath := filepath.Join(dir, filename)
@@ -37,7 +36,7 @@ func TestNoteHandler(t *testing.T) {
 	t.Run("New", func(t *testing.T) {
 		t.Run("creates handler successfully", func(t *testing.T) {
 			testHandler, err := NewNoteHandler()
-			Expect.AssertNoError(t, err, "NewNoteHandler should succeed")
+			shared.AssertNoError(t, err, "NewNoteHandler should succeed")
 			if testHandler == nil {
 				t.Fatal("Handler should not be nil")
 			}
@@ -68,7 +67,7 @@ func TestNoteHandler(t *testing.T) {
 			envHelper.UnsetEnv("NOTELEAF_DATA_DIR")
 
 			_, err := NewNoteHandler()
-			Expect.AssertError(t, err, "failed to initialize database", "NewNoteHandler should fail when database initialization fails")
+			shared.AssertErrorContains(t, err, "failed to initialize database", "NewNoteHandler should fail when database initialization fails")
 		})
 	})
 
@@ -77,12 +76,12 @@ func TestNoteHandler(t *testing.T) {
 
 		t.Run("creates note from title only", func(t *testing.T) {
 			err := handler.Create(ctx, "Test Note 1", "", "", false)
-			Expect.AssertNoError(t, err, "Create should succeed")
+			shared.AssertNoError(t, err, "Create should succeed")
 		})
 
 		t.Run("creates note from title and content", func(t *testing.T) {
 			err := handler.Create(ctx, "Test Note 2", "This is test content", "", false)
-			Expect.AssertNoError(t, err, "Create should succeed")
+			shared.AssertNoError(t, err, "Create should succeed")
 		})
 
 		t.Run("creates note from markdown file", func(t *testing.T) {
@@ -93,12 +92,12 @@ This is the content of my note.`
 			filePath := createTestMarkdownFile(t, suite.TempDir(), "test.md", content)
 
 			err := handler.Create(ctx, "", "", filePath, false)
-			Expect.AssertNoError(t, err, "Create from file should succeed")
+			shared.AssertNoError(t, err, "Create from file should succeed")
 		})
 
 		t.Run("handles non-existent file", func(t *testing.T) {
 			err := handler.Create(ctx, "", "", "/non/existent/file.md", false)
-			Expect.AssertError(t, err, "", "Create should fail with non-existent file")
+			shared.AssertErrorContains(t, err, "", "Create should fail with non-existent file")
 		})
 	})
 
@@ -107,7 +106,7 @@ This is the content of my note.`
 
 		t.Run("handles non-existent note", func(t *testing.T) {
 			err := handler.Edit(ctx, 999)
-			Expect.AssertError(t, err, "failed to get note", "Edit should fail with non-existent note ID")
+			shared.AssertErrorContains(t, err, "failed to get note", "Edit should fail with non-existent note ID")
 		})
 
 		t.Run("handles no editor configured", func(t *testing.T) {
@@ -118,7 +117,7 @@ This is the content of my note.`
 			envHelper.SetEnv("PATH", "")
 
 			err := handler.Edit(ctx, 1)
-			Expect.AssertError(t, err, "failed to open editor", "Edit should fail when no editor is configured")
+			shared.AssertErrorContains(t, err, "failed to open editor", "Edit should fail when no editor is configured")
 		})
 
 		t.Run("handles database connection error", func(t *testing.T) {
@@ -126,42 +125,42 @@ This is the content of my note.`
 			defer func() {
 				var err error
 				handler.db, err = store.NewDatabase()
-				Expect.AssertNoError(t, err, "Failed to reconnect to database")
+				shared.AssertNoError(t, err, "Failed to reconnect to database")
 			}()
 
 			err := handler.Edit(ctx, 1)
-			Expect.AssertError(t, err, "failed to get note", "Edit should fail when database is closed")
+			shared.AssertErrorContains(t, err, "failed to get note", "Edit should fail when database is closed")
 		})
 
 		t.Run("handles temp file creation error", func(t *testing.T) {
 			testHandler, err := NewNoteHandler()
-			Expect.AssertNoError(t, err, "Failed to create test handler")
+			shared.AssertNoError(t, err, "Failed to create test handler")
 			defer testHandler.Close()
 
 			err = testHandler.Create(ctx, "Temp File Test Note", "Test content", "", false)
-			Expect.AssertNoError(t, err, "Failed to create test note")
+			shared.AssertNoError(t, err, "Failed to create test note")
 
 			envHelper := NewEnvironmentTestHelper()
 			defer envHelper.RestoreEnv()
 			envHelper.SetEnv("TMPDIR", "/non/existent/path")
 
 			err = testHandler.Edit(ctx, 1)
-			Expect.AssertError(t, err, "failed to create temporary file", "Edit should fail when temp file creation fails")
+			shared.AssertErrorContains(t, err, "failed to create temporary file", "Edit should fail when temp file creation fails")
 		})
 
 		t.Run("handles editor failure", func(t *testing.T) {
 			testHandler, err := NewNoteHandler()
-			Expect.AssertNoError(t, err, "Failed to create test handler")
+			shared.AssertNoError(t, err, "Failed to create test handler")
 			defer testHandler.Close()
 
 			err = testHandler.Create(ctx, "Editor Failure Test Note", "Test content", "", false)
-			Expect.AssertNoError(t, err, "Failed to create test note")
+			shared.AssertNoError(t, err, "Failed to create test note")
 
 			mockEditor := NewMockEditor().WithFailure("editor process failed")
 			testHandler.openInEditorFunc = mockEditor.GetEditorFunc()
 
 			err = testHandler.Edit(ctx, 1)
-			Expect.AssertError(t, err, "failed to open editor", "Edit should fail when editor fails")
+			shared.AssertErrorContains(t, err, "failed to open editor", "Edit should fail when editor fails")
 		})
 
 		t.Run("handles temp file write error", func(t *testing.T) {
@@ -172,22 +171,22 @@ This is the content of my note.`
 			handler.openInEditorFunc = mockEditor.GetEditorFunc()
 
 			err := handler.Edit(ctx, 1)
-			Expect.AssertError(t, err, "", "Edit should handle temp file write issues")
+			shared.AssertErrorContains(t, err, "", "Edit should handle temp file write issues")
 		})
 
 		t.Run("handles file read error after editing", func(t *testing.T) {
 			testHandler, err := NewNoteHandler()
-			Expect.AssertNoError(t, err, "Failed to create test handler")
+			shared.AssertNoError(t, err, "Failed to create test handler")
 			defer testHandler.Close()
 
 			err = testHandler.Create(ctx, "File Read Error Test Note", "Test content", "", false)
-			Expect.AssertNoError(t, err, "Failed to create test note")
+			shared.AssertNoError(t, err, "Failed to create test note")
 
 			mockEditor := NewMockEditor().WithFileDeleted()
 			testHandler.openInEditorFunc = mockEditor.GetEditorFunc()
 
 			err = testHandler.Edit(ctx, 1)
-			Expect.AssertError(t, err, "failed to read edited content", "Edit should fail when temp file is deleted")
+			shared.AssertErrorContains(t, err, "failed to read edited content", "Edit should fail when temp file is deleted")
 		})
 
 		t.Run("handles database update error", func(t *testing.T) {
@@ -203,7 +202,7 @@ Modified content here.`)
 			handler.openInEditorFunc = mockEditor.GetEditorFunc()
 
 			err := handler.Edit(ctx, id)
-			Expect.AssertError(t, err, "failed to get note", "Edit should fail when database is corrupted")
+			shared.AssertErrorContains(t, err, "failed to get note", "Edit should fail when database is corrupted")
 		})
 
 		t.Run("handles validation error - corrupted note content", func(t *testing.T) {
@@ -282,7 +281,7 @@ This is the modified content.
 			handler.openInEditorFunc = mockEditor.GetEditorFunc()
 
 			err := handler.Edit(ctx, id)
-			Expect.AssertNoError(t, err, "Edit should succeed")
+			shared.AssertNoError(t, err, "Edit should succeed")
 		})
 
 		t.Run("Edit Errors", func(t *testing.T) {
@@ -351,7 +350,7 @@ This is the modified content.
 					handler.openInEditorFunc = mockEditor.GetEditorFunc()
 					err := handler.Edit(ctx, noteID)
 
-					Expect.AssertNoError(t, err, "Edit should succeed")
+					shared.AssertNoError(t, err, "Edit should succeed")
 					AssertExists(t, handler.repos.Notes.Get, noteID, "note")
 				})
 
@@ -369,7 +368,7 @@ This is the modified content.
 					handler.openInEditorFunc = mockEditor.GetEditorFunc()
 
 					err := handler.Edit(ctx, noteID)
-					Expect.AssertNoError(t, err, "Edit should succeed even with no changes")
+					shared.AssertNoError(t, err, "Edit should succeed even with no changes")
 				})
 
 				t.Run("handles content without title", func(t *testing.T) {
@@ -382,7 +381,7 @@ This is the modified content.
 					handler.openInEditorFunc = mockEditor.GetEditorFunc()
 
 					err := handler.Edit(ctx, noteID)
-					Expect.AssertNoError(t, err, "Edit should succeed without title")
+					shared.AssertNoError(t, err, "Edit should succeed without title")
 				})
 			})
 		})
@@ -701,7 +700,7 @@ This is content from the interactive editor.
 			handler.openInEditorFunc = mockEditor.GetEditorFunc()
 
 			err := handler.createInteractive(ctx)
-			Expect.AssertNoError(t, err, "createInteractive should succeed")
+			shared.AssertNoError(t, err, "createInteractive should succeed")
 		})
 
 		t.Run("handles cancelled note creation", func(t *testing.T) {
@@ -710,7 +709,7 @@ This is content from the interactive editor.
 			handler.openInEditorFunc = mockEditor.GetEditorFunc()
 
 			err := handler.createInteractive(ctx)
-			Expect.AssertNoError(t, err, "createInteractive should succeed even when cancelled")
+			shared.AssertNoError(t, err, "createInteractive should succeed even when cancelled")
 		})
 
 		t.Run("handles editor error", func(t *testing.T) {
@@ -719,7 +718,7 @@ This is content from the interactive editor.
 			handler.openInEditorFunc = mockEditor.GetEditorFunc()
 
 			err := handler.createInteractive(ctx)
-			Expect.AssertError(t, err, "failed to open editor", "createInteractive should fail when editor fails")
+			shared.AssertErrorContains(t, err, "failed to open editor", "createInteractive should fail when editor fails")
 		})
 
 		t.Run("handles no editor configured", func(t *testing.T) {
@@ -731,7 +730,7 @@ This is content from the interactive editor.
 			envHelper.SetEnv("PATH", "")
 
 			err := handler.createInteractive(ctx)
-			Expect.AssertError(t, err, "no editor configured", "createInteractive should fail when no editor is configured")
+			shared.AssertErrorContains(t, err, "no editor configured", "createInteractive should fail when no editor is configured")
 		})
 
 		t.Run("handles file read error after editing", func(t *testing.T) {
@@ -740,7 +739,7 @@ This is content from the interactive editor.
 			handler.openInEditorFunc = mockEditor.GetEditorFunc()
 
 			err := handler.createInteractive(ctx)
-			Expect.AssertError(t, err, "failed to read edited content", "createInteractive should fail when temp file is deleted")
+			shared.AssertErrorContains(t, err, "failed to read edited content", "createInteractive should fail when temp file is deleted")
 		})
 	})
 
@@ -750,13 +749,13 @@ This is content from the interactive editor.
 		t.Run("creates note successfully without editor prompt", func(t *testing.T) {
 			handler := NewHandlerTestHelper(t)
 			err := handler.CreateWithOptions(ctx, "Test Note", "Test content", "", false, false)
-			Expect.AssertNoError(t, err, "CreateWithOptions should succeed")
+			shared.AssertNoError(t, err, "CreateWithOptions should succeed")
 		})
 
 		t.Run("creates note successfully with editor prompt disabled", func(t *testing.T) {
 			handler := NewHandlerTestHelper(t)
 			err := handler.CreateWithOptions(ctx, "Another Test Note", "More content", "", false, false)
-			Expect.AssertNoError(t, err, "CreateWithOptions should succeed")
+			shared.AssertNoError(t, err, "CreateWithOptions should succeed")
 		})
 
 		t.Run("handles database error during creation", func(t *testing.T) {
@@ -765,19 +764,19 @@ This is content from the interactive editor.
 			cancel()
 
 			err := handler.CreateWithOptions(cancelCtx, "Test Note", "Test content", "", false, false)
-			Expect.AssertError(t, err, "failed to create note", "CreateWithOptions should fail with cancelled context")
+			shared.AssertErrorContains(t, err, "failed to create note", "CreateWithOptions should fail with cancelled context")
 		})
 
 		t.Run("creates note with empty content", func(t *testing.T) {
 			handler := NewHandlerTestHelper(t)
 			err := handler.CreateWithOptions(ctx, "Empty Content Note", "", "", false, false)
-			Expect.AssertNoError(t, err, "CreateWithOptions should succeed with empty content")
+			shared.AssertNoError(t, err, "CreateWithOptions should succeed with empty content")
 		})
 
 		t.Run("creates note with empty title", func(t *testing.T) {
 			handler := NewHandlerTestHelper(t)
 			err := handler.CreateWithOptions(ctx, "", "Content without title", "", false, false)
-			Expect.AssertNoError(t, err, "CreateWithOptions should succeed with empty title")
+			shared.AssertNoError(t, err, "CreateWithOptions should succeed with empty title")
 		})
 
 		t.Run("handles editor prompt with no editor available", func(t *testing.T) {
@@ -789,7 +788,7 @@ This is content from the interactive editor.
 			envHelper.SetEnv("PATH", "")
 
 			err := handler.CreateWithOptions(ctx, "Test Note", "Test content", "", false, true)
-			Expect.AssertNoError(t, err, "CreateWithOptions should succeed even when no editor is available")
+			shared.AssertNoError(t, err, "CreateWithOptions should succeed even when no editor is available")
 		})
 	})
 
