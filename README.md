@@ -61,6 +61,9 @@ noteleaf note add "My first note"
 
 # Add a book to your reading list
 noteleaf media book add "The Name of the Wind"
+
+# Generate docs
+noteleaf docgen --format docusaurus --out ./website/docs/manual
 ```
 
 ## Status

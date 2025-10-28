@@ -18,7 +18,16 @@ func NewTaskCommand(handler *handlers.TaskHandler) *TaskCommand {
 }
 
 func (c *TaskCommand) Create() *cobra.Command {
-	root := &cobra.Command{Use: "todo", Aliases: []string{"task"}, Short: "task management"}
+	root := &cobra.Command{
+		Use:     "todo",
+		Aliases: []string{"task"},
+		Short:   "task management",
+		Long: `Manage tasks with TaskWarrior-inspired features.
+
+Track todos with priorities, projects, contexts, and tags. Supports hierarchical
+tasks with parent/child relationships, task dependencies, recurring tasks, and
+time tracking. Tasks can be filtered by status, priority, project, or context.`,
+	}
 
 	for _, init := range []func(*handlers.TaskHandler) *cobra.Command{
 		addTaskCmd, listTaskCmd, viewTaskCmd, updateTaskCmd, editTaskCmd,
@@ -38,6 +47,16 @@ func addTaskCmd(h *handlers.TaskHandler) *cobra.Command {
 		Use:     "add [description]",
 		Short:   "Add a new task",
 		Aliases: []string{"create", "new"},
+		Long: `Create a new task with description and optional attributes.
+
+Tasks can be created with priority levels (low, medium, high, urgent), assigned
+to projects and contexts, tagged for organization, and configured with due dates
+and recurrence rules. Dependencies can be established to ensure tasks are
+completed in order.
+
+Examples:
+  noteleaf todo add "Write documentation" --priority high --project docs
+  noteleaf todo add "Weekly review" --recur "FREQ=WEEKLY" --due 2024-01-15`,
 		Args:    cobra.MinimumNArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			description := strings.Join(args, " ")
@@ -101,6 +120,11 @@ func viewTaskCmd(handler *handlers.TaskHandler) *cobra.Command {
 	viewCmd := &cobra.Command{
 		Use:   "view [task-id]",
 		Short: "View task by ID",
+		Long: `Display detailed information for a specific task.
+
+Shows all task attributes including description, status, priority, project,
+context, tags, due date, creation time, and modification history. Use --json
+for machine-readable output or --no-metadata to show only the description.`,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			format, _ := cmd.Flags().GetString("format")
@@ -120,6 +144,15 @@ func updateTaskCmd(handler *handlers.TaskHandler) *cobra.Command {
 	updateCmd := &cobra.Command{
 		Use:   "update [task-id]",
 		Short: "Update task properties",
+		Long: `Modify attributes of an existing task.
+
+Update any task property including description, status, priority, project,
+context, due date, recurrence rule, or parent task. Add or remove tags and
+dependencies. Multiple attributes can be updated in a single command.
+
+Examples:
+  noteleaf todo update 123 --priority urgent --due tomorrow
+  noteleaf todo update 456 --add-tag urgent --project website`,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			taskID := args[0]
@@ -160,6 +193,11 @@ func taskProjectsCmd(h *handlers.TaskHandler) *cobra.Command {
 		Use:     "projects",
 		Short:   "List projects",
 		Aliases: []string{"proj"},
+		Long: `Display all projects with task counts.
+
+Shows each project used in your tasks along with the number of tasks in each
+project. Use --todo-txt to format output with +project syntax for compatibility
+with todo.txt tools.`,
 		RunE: func(c *cobra.Command, args []string) error {
 			static, _ := c.Flags().GetBool("static")
 			todoTxt, _ := c.Flags().GetBool("todo-txt")
@@ -179,6 +217,10 @@ func taskTagsCmd(h *handlers.TaskHandler) *cobra.Command {
 		Use:     "tags",
 		Short:   "List tags",
 		Aliases: []string{"t"},
+		Long: `Display all tags used across tasks.
+
+Shows each tag with the number of tasks using it. Tags provide flexible
+categorization orthogonal to projects and contexts.`,
 		RunE: func(c *cobra.Command, args []string) error {
 			static, _ := c.Flags().GetBool("static")
 			defer h.Close()
@@ -193,6 +235,10 @@ func taskStartCmd(h *handlers.TaskHandler) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "start [task-id]",
 		Short: "Start time tracking for a task",
+		Long: `Begin tracking time spent on a task.
+
+Records the start time for a work session. Only one task can be actively
+tracked at a time. Use --note to add a description of what you're working on.`,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			taskID := args[0]
@@ -210,6 +256,10 @@ func taskStopCmd(h *handlers.TaskHandler) *cobra.Command {
 	return &cobra.Command{
 		Use:   "stop [task-id]",
 		Short: "Stop time tracking for a task",
+		Long: `End time tracking for the active task.
+
+Records the end time and calculates duration for the current work session.
+Duration is added to the task's total time tracked.`,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			taskID := args[0]
@@ -246,6 +296,10 @@ func editTaskCmd(h *handlers.TaskHandler) *cobra.Command {
 		Use:     "edit [task-id]",
 		Short:   "Edit task interactively with status picker and priority toggle",
 		Aliases: []string{"e"},
+		Long: `Open interactive editor for task modification.
+
+Provides a user-friendly interface with status picker and priority toggle.
+Easier than using multiple command-line flags for complex updates.`,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			taskID := args[0]
@@ -259,6 +313,10 @@ func deleteTaskCmd(h *handlers.TaskHandler) *cobra.Command {
 	return &cobra.Command{
 		Use:   "delete [task-id]",
 		Short: "Delete a task",
+		Long: `Permanently remove a task from the database.
+
+This operation cannot be undone. Consider updating the task status to
+'deleted' instead if you want to preserve the record for historical purposes.`,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			defer h.Close()
@@ -272,6 +330,11 @@ func taskContextsCmd(h *handlers.TaskHandler) *cobra.Command {
 		Use:     "contexts",
 		Short:   "List contexts (locations)",
 		Aliases: []string{"con", "loc", "ctx", "locations"},
+		Long: `Display all contexts with task counts.
+
+Contexts represent locations or environments where tasks can be completed (e.g.,
+@home, @office, @errands). Use --todo-txt to format output with @context syntax
+for compatibility with todo.txt tools.`,
 		RunE: func(c *cobra.Command, args []string) error {
 			static, _ := c.Flags().GetBool("static")
 			todoTxt, _ := c.Flags().GetBool("todo-txt")
@@ -290,6 +353,10 @@ func taskCompleteCmd(h *handlers.TaskHandler) *cobra.Command {
 		Use:     "done [task-id]",
 		Short:   "Mark task as completed",
 		Aliases: []string{"complete"},
+		Long: `Mark a task as completed with current timestamp.
+
+Sets the task status to 'completed' and records the completion time. For
+recurring tasks, generates the next instance based on the recurrence rule.`,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			defer h.Close()
@@ -303,11 +370,24 @@ func taskRecurCmd(h *handlers.TaskHandler) *cobra.Command {
 		Use:     "recur",
 		Short:   "Manage task recurrence",
 		Aliases: []string{"repeat"},
+		Long: `Configure recurring task patterns.
+
+Create tasks that repeat on a schedule using iCalendar recurrence rules (RRULE).
+Supports daily, weekly, monthly, and yearly patterns with optional end dates.`,
 	}
 
 	setCmd := &cobra.Command{
 		Use:   "set [task-id]",
 		Short: "Set recurrence rule for a task",
+		Long: `Apply a recurrence rule to create repeating task instances.
+
+Uses iCalendar RRULE syntax (e.g., "FREQ=DAILY" for daily tasks, "FREQ=WEEKLY;BYDAY=MO,WE,FR"
+for specific weekdays). When a recurring task is completed, the next instance is
+automatically generated.
+
+Examples:
+  noteleaf todo recur set 123 --rule "FREQ=DAILY"
+  noteleaf todo recur set 456 --rule "FREQ=WEEKLY;BYDAY=MO" --until 2024-12-31`,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			rule, _ := c.Flags().GetString("rule")
@@ -322,6 +402,10 @@ func taskRecurCmd(h *handlers.TaskHandler) *cobra.Command {
 	clearCmd := &cobra.Command{
 		Use:   "clear [task-id]",
 		Short: "Clear recurrence rule from a task",
+		Long: `Remove recurrence from a task.
+
+Converts a recurring task to a one-time task. Existing future instances are not
+affected.`,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			defer h.Close()
@@ -332,6 +416,10 @@ func taskRecurCmd(h *handlers.TaskHandler) *cobra.Command {
 	showCmd := &cobra.Command{
 		Use:   "show [task-id]",
 		Short: "Show recurrence details for a task",
+		Long: `Display recurrence rule and schedule information.
+
+Shows the RRULE pattern, next occurrence date, and recurrence end date if
+configured.`,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			defer h.Close()
@@ -348,11 +436,19 @@ func taskDependCmd(h *handlers.TaskHandler) *cobra.Command {
 		Use:     "depend",
 		Short:   "Manage task dependencies",
 		Aliases: []string{"dep", "deps"},
+		Long: `Create and manage task dependencies.
+
+Establish relationships where one task must be completed before another can
+begin. Useful for multi-step workflows and project management.`,
 	}
 
 	addCmd := &cobra.Command{
 		Use:   "add [task-id] [depends-on-uuid]",
 		Short: "Add a dependency to a task",
+		Long: `Make a task dependent on another task's completion.
+
+The first task cannot be started until the second task is completed. Use task
+UUIDs to specify dependencies.`,
 		Args:  cobra.ExactArgs(2),
 		RunE: func(c *cobra.Command, args []string) error {
 			defer h.Close()
@@ -364,6 +460,7 @@ func taskDependCmd(h *handlers.TaskHandler) *cobra.Command {
 		Use:     "remove [task-id] [depends-on-uuid]",
 		Short:   "Remove a dependency from a task",
 		Aliases: []string{"rm"},
+		Long:    "Delete a dependency relationship between two tasks.",
 		Args:    cobra.ExactArgs(2),
 		RunE: func(c *cobra.Command, args []string) error {
 			defer h.Close()
@@ -375,6 +472,7 @@ func taskDependCmd(h *handlers.TaskHandler) *cobra.Command {
 		Use:     "list [task-id]",
 		Short:   "List dependencies for a task",
 		Aliases: []string{"ls"},
+		Long:    "Show all tasks that must be completed before this task can be started.",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			defer h.Close()
@@ -385,6 +483,7 @@ func taskDependCmd(h *handlers.TaskHandler) *cobra.Command {
 	blockedByCmd := &cobra.Command{
 		Use:   "blocked-by [task-id]",
 		Short: "Show tasks blocked by this task",
+		Long:  "Display all tasks that depend on this task's completion.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			defer h.Close()

@@ -228,6 +228,120 @@ Features that demonstrate Go proficiency and broaden Noteleaf’s scope.
 - [ ] Encryption support
 - [ ] Advanced classification
 
+### Local API Server
+
+A local HTTP server daemon that exposes Noteleaf data for web UIs and extensions. Runs on the user's machine and provides programmatic access to tasks, notes, and media.
+
+#### Architecture
+
+- [ ] Daemon mode via `noteleaf server start/stop/status`
+- [ ] Binds to localhost by default (configurable port)
+- [ ] HTTP/REST API using existing repository layer
+- [ ] Shares same SQLite database as CLI
+- [ ] Middleware: logging, CORS (for localhost web UIs), compression
+- [ ] Health and status endpoints
+
+#### Daemon Management
+
+- [ ] Commands: `start`, `stop`, `restart`, `status`
+- [ ] PID file tracking for process management
+- [ ] Systemd service file for Linux
+- [ ] launchd plist for macOS
+- [ ] Graceful shutdown with active request draining
+- [ ] Auto-restart on crash option
+- [ ] Configurable bind address and port
+- [ ] Log file rotation
+
+#### API Endpoints
+
+RESTful design matching CLI command structure:
+
+- [ ] `GET /api/v1/tasks` - List tasks with filters
+- [ ] `POST /api/v1/tasks` - Create task
+- [ ] `GET /api/v1/tasks/:id` - Get task details
+- [ ] `PUT /api/v1/tasks/:id` - Update task
+- [ ] `DELETE /api/v1/tasks/:id` - Delete task
+- [ ] `POST /api/v1/tasks/:id/start` - Start time tracking
+- [ ] `POST /api/v1/tasks/:id/stop` - Stop time tracking
+- [ ] `GET /api/v1/tasks/:id/time-entries` - Get time entries
+- [ ] Similar CRUD endpoints for notes, books, movies, TV shows, articles
+- [ ] `GET /api/v1/projects` - List all projects
+- [ ] `GET /api/v1/tags` - List all tags
+- [ ] `GET /api/v1/contexts` - List all contexts
+- [ ] `GET /api/v1/stats` - Dashboard statistics
+
+#### Real-time Updates
+
+- [ ] WebSocket endpoint for live data updates
+- [ ] Server-Sent Events (SSE) as fallback
+- [ ] Event types: task created/updated/deleted, note modified, etc.
+- [ ] Subscribe to specific domains or IDs
+- [ ] Change notification for web UI reactivity
+
+#### Authentication & Security
+
+- [ ] Optional API token authentication (disabled by default for localhost)
+- [ ] Token stored in config file
+- [ ] Token rotation command
+- [ ] CORS configuration for allowed origins
+- [ ] Localhost-only binding by default (security through network isolation)
+- [ ] Optional TLS for local network access
+
+#### Extension System
+
+- [ ] Webhook endpoints for extension registration
+- [ ] Event hooks for task/note lifecycle:
+    - [ ] Before/after create, update, delete
+    - [ ] Task completion, start, stop
+    - [ ] Note archive/unarchive
+- [ ] Webhook delivery with retries
+- [ ] Extension manifest for discovery
+- [ ] JavaScript plugin API (embedded V8/goja runtime)
+- [ ] Plugin sandbox for security
+
+#### Web UI
+
+- [ ] Reference web UI implementation
+- [ ] Static file serving from embedded assets
+- [ ] Single-page application architecture
+- [ ] Responsive design (desktop, tablet, mobile)
+- [ ] Features:
+    - [ ] Task board view (Kanban)
+    - [ ] Calendar view for tasks
+    - [ ] Note editor with Markdown preview
+    - [ ] Media queue management
+    - [ ] Search and filtering
+    - [ ] Keyboard shortcuts matching CLI
+
+#### Configuration
+
+- [ ] Server config section in noteleaf.toml:
+    - [ ] bind_address (default: 127.0.0.1)
+    - [ ] port (default: 8080)
+    - [ ] enable_auth (default: false)
+    - [ ] api_token (optional)
+    - [ ] enable_websocket (default: true)
+    - [ ] log_level (default: info)
+- [ ] Environment variable overrides
+- [ ] CLI flag overrides for daemon commands
+
+#### Monitoring & Diagnostics
+
+- [ ] `GET /health` - Health check endpoint
+- [ ] `GET /metrics` - Prometheus-compatible metrics
+- [ ] Request logging (access log)
+- [ ] Error logging with stack traces
+- [ ] Performance metrics (request duration, DB query time)
+- [ ] Active connections and goroutine count
+- [ ] Memory and CPU usage stats
+
+#### Client Libraries
+
+- [ ] Go client library for extensions
+- [ ] JavaScript/TypeScript client for web UIs
+- [ ] OpenAPI/Swagger specification
+- [ ] Auto-generated API documentation
+
 ## Technical Infrastructure
 
 ### Completed

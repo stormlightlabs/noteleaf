@@ -13,6 +13,7 @@ import (
 	"github.com/stormlightlabs/noteleaf/internal/store"
 	"github.com/stormlightlabs/noteleaf/internal/ui"
 	"github.com/stormlightlabs/noteleaf/internal/utils"
+	"github.com/stormlightlabs/noteleaf/tools"
 )
 
 var (
@@ -58,6 +59,11 @@ func statusCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "status",
 		Short: "Show application status and configuration",
+		Long: `Display comprehensive application status information.
+
+Shows database location, configuration file path, data directories, and current
+settings. Use this command to verify your noteleaf installation and diagnose
+configuration issues.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return handlers.Status(cmd.Context(), args, cmd.OutOrStdout())
 		},
@@ -68,6 +74,11 @@ func resetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "reset",
 		Short: "Reset the application (removes all data)",
+		Long: `Remove all application data and return to initial state.
+
+This command deletes the database, all media files, notes, and articles. The
+configuration file is preserved. Use with caution as this operation cannot be
+undone. You will be prompted for confirmation before deletion proceeds.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return handlers.Reset(cmd.Context(), args)
 		},
@@ -77,8 +88,16 @@ func resetCmd() *cobra.Command {
 func rootCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:   "noteleaf",
-		Long:  ui.Georgia.ColoredInViewport(),
 		Short: "A TaskWarrior-inspired CLI with notes, media queues and reading lists",
+		Long: `noteleaf - personal information manager for the command line
+
+A comprehensive CLI tool for managing tasks, notes, articles, and media queues.
+Inspired by TaskWarrior, noteleaf combines todo management with reading lists,
+watch queues, and a personal knowledge base.
+
+Core features include hierarchical tasks with dependencies, recurring tasks,
+time tracking, markdown notes with tags, article archiving, and media queue
+management for books, movies, and TV shows.`,
 		RunE: func(c *cobra.Command, args []string) error {
 			if len(args) == 0 {
 				return c.Help()
@@ -107,6 +126,11 @@ func setupCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:   "setup",
 		Short: "Initialize and manage application setup",
+		Long: `Initialize noteleaf for first use.
+
+Creates the database, configuration file, and required data directories. Run
+this command after installing noteleaf or when setting up a new environment.
+Safe to run multiple times as it will skip existing resources.`,
 		RunE: func(c *cobra.Command, args []string) error {
 			return handlers.Setup(c.Context(), args)
 		},
@@ -194,7 +218,15 @@ func run() int {
 		root.AddCommand(cmd)
 	}
 
-	mediaCmd := &cobra.Command{Use: "media", Short: "Manage media queues (books, movies, TV shows)"}
+	mediaCmd := &cobra.Command{
+		Use:   "media",
+		Short: "Manage media queues (books, movies, TV shows)",
+		Long: `Track and manage reading lists and watch queues.
+
+Organize books, movies, and TV shows you want to consume. Search external
+databases to add items, track reading/watching progress, and maintain a
+history of completed media.`,
+	}
 	mediaCmd.GroupID = "core"
 	mediaCmd.AddCommand(NewMovieCommand(movieHandler).Create())
 	mediaCmd.AddCommand(NewTVCommand(tvHandler).Create())
@@ -207,6 +239,8 @@ func run() int {
 		cmd.GroupID = "management"
 		root.AddCommand(cmd)
 	}
+
+	root.AddCommand(tools.NewDocGenCommand(root))
 
 	opts := []fang.Option{
 		fang.WithVersion("0.1.0"),

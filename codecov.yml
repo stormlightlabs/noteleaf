@@ -22,3 +22,4 @@ ignore:
   - "**/vendor/**"
   - "internal/**/test_utilities.go"
   - "internal/handlers/handler_test_suite.go"
+  - "internal/tools/docgen.go"
