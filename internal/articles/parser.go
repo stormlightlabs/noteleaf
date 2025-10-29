@@ -18,6 +18,7 @@ import (
 	"github.com/gomarkdown/markdown/html"
 	"github.com/gomarkdown/markdown/parser"
 	"github.com/stormlightlabs/noteleaf/internal/models"
+	exhtml "golang.org/x/net/html"
 )
 
 //go:embed rules/*.txt
@@ -34,13 +35,17 @@ type ParsedContent struct {
 
 // ParsingRule represents XPath rules for extracting content from a specific domain
 type ParsingRule struct {
-	Domain   string
-	Title    string
-	Author   string
-	Date     string
-	Body     string
-	Strip    []string // XPath selectors for elements to remove
-	TestURLs []string
+	Domain            string
+	Title             string
+	Author            string
+	Date              string
+	Body              string
+	Strip             []string // XPath selectors for elements to remove
+	StripIDsOrClasses []string
+	TestURLs          []string
+	Headers           map[string]string
+	Prune             bool
+	Tidy              bool
 }
 
 // Parser interface defines methods for parsing articles from URLs
@@ -138,8 +143,24 @@ func (p *ArticleParser) parseRules(domain, content string) (*ParsingRule, error)
 			rule.Body = value
 		case "strip":
 			rule.Strip = append(rule.Strip, value)
+		case "strip_id_or_class":
+			rule.StripIDsOrClasses = append(rule.StripIDsOrClasses, value)
+		case "prune":
+			rule.Prune = parseBool(value)
+		case "tidy":
+			rule.Tidy = parseBool(value)
 		case "test_url":
 			rule.TestURLs = append(rule.TestURLs, value)
+		default:
+			if strings.HasPrefix(key, "http_header(") && strings.HasSuffix(key, ")") {
+				headerName := strings.TrimSuffix(strings.TrimPrefix(key, "http_header("), ")")
+				if headerName != "" {
+					if rule.Headers == nil {
+						rule.Headers = make(map[string]string)
+					}
+					rule.Headers[http.CanonicalHeaderKey(headerName)] = value
+				}
+			}
 		}
 	}
 
@@ -148,6 +169,24 @@ func (p *ArticleParser) parseRules(domain, content string) (*ParsingRule, error)
 	}
 
 	return rule, nil
+}
+
+func parseBool(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
+}
+
+func (p *ArticleParser) findRule(domain string) *ParsingRule {
+	for ruleDomain, rule := range p.rules {
+		if domain == ruleDomain || strings.HasSuffix(domain, ruleDomain) {
+			return rule
+		}
+	}
+	return nil
 }
 
 // ParseURL extracts article content from a given URL
@@ -159,7 +198,25 @@ func (p *ArticleParser) ParseURL(s string) (*ParsedContent, error) {
 
 	domain := parsedURL.Hostname()
 
-	resp, err := p.client.Get(s)
+	rule := p.findRule(domain)
+
+	req, err := http.NewRequest(http.MethodGet, s, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	if rule != nil {
+		for header, value := range rule.Headers {
+			if value == "" {
+				continue
+			}
+			if req.Header.Get(header) == "" {
+				req.Header.Set(header, value)
+			}
+		}
+	}
+
+	resp, err := p.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch URL: %w", err)
 	}
@@ -179,13 +236,7 @@ func (p *ArticleParser) ParseURL(s string) (*ParsedContent, error) {
 
 // ParseHTML extracts article content from HTML string using domain-specific rules
 func (p *ArticleParser) Parse(htmlContent, domain, sourceURL string) (*ParsedContent, error) {
-	var rule *ParsingRule
-	for ruleDomain, r := range p.rules {
-		if strings.Contains(domain, ruleDomain) {
-			rule = r
-			break
-		}
-	}
+	rule := p.findRule(domain)
 
 	if rule == nil {
 		return nil, fmt.Errorf("no parsing rule found for domain: %s", domain)
@@ -217,16 +268,22 @@ func (p *ArticleParser) Parse(htmlContent, domain, sourceURL string) (*ParsedCon
 	}
 
 	if rule.Body != "" {
-		if bodyNode := htmlquery.FindOne(doc, rule.Body); bodyNode != nil {
-			for _, stripXPath := range rule.Strip {
-				stripNodes := htmlquery.Find(bodyNode, stripXPath)
-				for _, node := range stripNodes {
-					node.Parent.RemoveChild(node)
-				}
-			}
-
-			content.Content = strings.TrimSpace(htmlquery.InnerText(bodyNode))
+		bodyNode := htmlquery.FindOne(doc, rule.Body)
+		if bodyNode == nil {
+			return nil, fmt.Errorf("could not extract body content from HTML")
 		}
+
+		for _, stripXPath := range rule.Strip {
+			removeNodesByXPath(bodyNode, stripXPath)
+		}
+
+		for _, identifier := range rule.StripIDsOrClasses {
+			removeNodesByIdentifier(bodyNode, identifier)
+		}
+
+		removeDefaultNonContentNodes(bodyNode)
+
+		content.Content = normalizeWhitespace(htmlquery.InnerText(bodyNode))
 	}
 
 	if content.Title == "" {
@@ -234,6 +291,82 @@ func (p *ArticleParser) Parse(htmlContent, domain, sourceURL string) (*ParsedCon
 	}
 
 	return content, nil
+}
+
+func removeNodesByXPath(root *exhtml.Node, xpath string) {
+	if root == nil {
+		return
+	}
+
+	xpath = strings.TrimSpace(xpath)
+	if xpath == "" {
+		return
+	}
+
+	nodes := htmlquery.Find(root, xpath)
+	for _, node := range nodes {
+		if node != nil && node.Parent != nil {
+			node.Parent.RemoveChild(node)
+		}
+	}
+}
+
+func removeNodesByIdentifier(root *exhtml.Node, identifier string) {
+	identifier = strings.TrimSpace(identifier)
+	if root == nil || identifier == "" {
+		return
+	}
+
+	idLiteral := buildXPathLiteral(identifier)
+	removeNodesByXPath(root, fmt.Sprintf(".//*[@id=%s]", idLiteral))
+
+	classLiteral := buildXPathLiteral(" " + identifier + " ")
+	removeNodesByXPath(root, fmt.Sprintf(".//*[contains(concat(' ', normalize-space(@class), ' '), %s)]", classLiteral))
+}
+
+func removeDefaultNonContentNodes(root *exhtml.Node) {
+	for _, xp := range []string{
+		".//script",
+		".//style",
+		".//noscript",
+	} {
+		removeNodesByXPath(root, xp)
+	}
+}
+
+func normalizeWhitespace(value string) string {
+	value = strings.ReplaceAll(value, "\u00a0", " ")
+	return strings.TrimSpace(value)
+}
+
+func buildXPathLiteral(value string) string {
+	if !strings.Contains(value, "'") {
+		return "'" + value + "'"
+	}
+
+	if !strings.Contains(value, "\"") {
+		return `"` + value + `"`
+	}
+
+	segments := strings.Split(value, "'")
+	var builder strings.Builder
+	builder.WriteString("concat(")
+
+	for i, segment := range segments {
+		if i > 0 {
+			builder.WriteString(", \"'\", ")
+		}
+		if segment == "" {
+			builder.WriteString("''")
+			continue
+		}
+		builder.WriteString("'")
+		builder.WriteString(segment)
+		builder.WriteString("'")
+	}
+
+	builder.WriteString(")")
+	return builder.String()
 }
 
 // Convert HTML content directly to markdown using domain-specific rules
@@ -268,7 +401,6 @@ func (p *ArticleParser) SaveArticle(content *ParsedContent, dir string) (markdow
 
 	baseMarkdownPath := filepath.Join(dir, slug+".md")
 	baseHTMLPath := filepath.Join(dir, slug+".html")
-
 	markdownPath = baseMarkdownPath
 	htmlPath = baseHTMLPath
 

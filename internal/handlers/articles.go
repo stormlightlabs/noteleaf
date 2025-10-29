@@ -14,8 +14,17 @@ import (
 	"github.com/stormlightlabs/noteleaf/internal/repo"
 	"github.com/stormlightlabs/noteleaf/internal/store"
 	"github.com/stormlightlabs/noteleaf/internal/ui"
-	"github.com/stormlightlabs/noteleaf/internal/utils"
 )
+
+const (
+	articleUserAgent    = "curl/8.4.0"
+	articleAcceptHeader = "*/*"
+	articleLangHeader   = "en-US,en;q=0.8"
+)
+
+type headerRoundTripper struct {
+	rt http.RoundTripper
+}
 
 // ArticleHandler handles all article-related commands
 type ArticleHandler struct {
@@ -38,8 +47,7 @@ func NewArticleHandler() (*ArticleHandler, error) {
 	}
 
 	repos := repo.NewRepositories(db.DB)
-
-	parser, err := articles.NewArticleParser(http.DefaultClient)
+	parser, err := articles.NewArticleParser(newArticleHTTPClient())
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize article parser: %w", err)
 	}
@@ -52,6 +60,46 @@ func NewArticleHandler() (*ArticleHandler, error) {
 	}, nil
 }
 
+func newArticleHTTPClient() *http.Client {
+	baseTransport := http.DefaultTransport
+
+	if transport, ok := http.DefaultTransport.(*http.Transport); ok {
+		baseTransport = transport.Clone()
+	}
+
+	return &http.Client{
+		Timeout:   30 * time.Second,
+		Transport: &headerRoundTripper{rt: baseTransport},
+	}
+}
+
+func (h *headerRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	if h.rt == nil {
+		h.rt = http.DefaultTransport
+	}
+
+	clone := req.Clone(req.Context())
+	clone.Header = req.Header.Clone()
+
+	if clone.Header.Get("User-Agent") == "" {
+		clone.Header.Set("User-Agent", articleUserAgent)
+	}
+
+	if clone.Header.Get("Accept") == "" {
+		clone.Header.Set("Accept", articleAcceptHeader)
+	}
+
+	if clone.Header.Get("Accept-Language") == "" {
+		clone.Header.Set("Accept-Language", articleLangHeader)
+	}
+
+	if clone.Header.Get("Connection") == "" {
+		clone.Header.Set("Connection", "keep-alive")
+	}
+
+	return h.rt.RoundTrip(clone)
+}
+
 // Close cleans up resources
 func (h *ArticleHandler) Close() error {
 	if h.db != nil {
@@ -62,16 +110,13 @@ func (h *ArticleHandler) Close() error {
 
 // Add handles adding an article from a URL
 func (h *ArticleHandler) Add(ctx context.Context, url string) error {
-	logger := utils.GetLogger()
-
 	existing, err := h.repos.Articles.GetByURL(ctx, url)
 	if err == nil {
-		fmt.Printf("Article already exists: %s (ID: %d)\n", ui.TitleColorStyle.Render(existing.Title), existing.ID)
+		ui.Warningln("Article already exists: %s (ID: %d)", ui.TitleColorStyle.Render(existing.Title), existing.ID)
 		return nil
 	}
 
-	logger.Info("Parsing article", "url", url)
-	fmt.Printf("Parsing article from: %s\n", url)
+	ui.Infoln("Parsing article from: %s", url)
 
 	dir, err := h.getStorageDirectory()
 	if err != nil {
@@ -106,19 +151,17 @@ func (h *ArticleHandler) Add(ctx context.Context, url string) error {
 		return fmt.Errorf("failed to save article to database: %w", err)
 	}
 
-	fmt.Printf("Article saved successfully!\n")
-	fmt.Printf("ID: %d\n", id)
-	fmt.Printf("Title: %s\n", ui.TitleColorStyle.Render(article.Title))
+	ui.Infoln("Article saved successfully!")
+	ui.Infoln("ID: %d", id)
+	ui.Infoln("Title: %s", ui.TitleColorStyle.Render(article.Title))
 	if article.Author != "" {
-		fmt.Printf("Author: %s\n", ui.HeaderColorStyle.Render(article.Author))
+		ui.Infoln("Author: %s", ui.HeaderColorStyle.Render(article.Author))
 	}
 	if article.Date != "" {
-		fmt.Printf("Date: %s\n", article.Date)
+		ui.Infoln("Date: %s", article.Date)
 	}
-	fmt.Printf("Markdown: %s\n", article.MarkdownPath)
-	fmt.Printf("HTML: %s\n", article.HTMLPath)
-
-	logger.Info("Article saved", "id", id, "title", article.Title)
+	ui.Infoln("Markdown: %s", article.MarkdownPath)
+	ui.Infoln("HTML: %s", article.HTMLPath)
 
 	return nil
 }
@@ -137,75 +180,73 @@ func (h *ArticleHandler) List(ctx context.Context, query string, author string, 
 	}
 
 	if len(articles) == 0 {
-		fmt.Println("No articles found.")
+		ui.Warningln("No articles found.")
 		return nil
 	}
 
-	fmt.Printf("Found %d article(s):\n\n", len(articles))
-
+	ui.Infoln("Found %d article(s):\n", len(articles))
 	for _, article := range articles {
-		fmt.Printf("ID: %d\n", article.ID)
-		fmt.Printf("Title: %s\n", ui.TitleColorStyle.Render(article.Title))
+		ui.Infoln("ID: %d", article.ID)
+		ui.Infoln("Title: %s", ui.TitleColorStyle.Render(article.Title))
 		if article.Author != "" {
-			fmt.Printf("Author: %s\n", ui.HeaderColorStyle.Render(article.Author))
+			ui.Infoln("Author: %s", ui.HeaderColorStyle.Render(article.Author))
 		}
 		if article.Date != "" {
-			fmt.Printf("Date: %s\n", article.Date)
+			ui.Infoln("Date: %s", article.Date)
 		}
-		fmt.Printf("URL: %s\n", article.URL)
-		fmt.Printf("Added: %s\n", article.Created.Format("2006-01-02 15:04:05"))
-		fmt.Println("---")
+		ui.Infoln("URL: %s", article.URL)
+		ui.Infoln("Added: %s", article.Created.Format("2006-01-02 15:04:05"))
+		ui.Plainln("---")
 	}
-
 	return nil
 }
 
 // View handles viewing an article by ID
 func (h *ArticleHandler) View(ctx context.Context, id int64) error {
-
 	article, err := h.repos.Articles.Get(ctx, id)
 	if err != nil {
 		return fmt.Errorf("failed to get article: %w", err)
 	}
 
-	fmt.Printf("Title: %s\n", ui.TitleColorStyle.Render(article.Title))
+	ui.Infoln("Title: %s", ui.TitleColorStyle.Render(article.Title))
 	if article.Author != "" {
-		fmt.Printf("Author: %s\n", ui.HeaderColorStyle.Render(article.Author))
+		ui.Infoln("Author: %s", ui.HeaderColorStyle.Render(article.Author))
 	}
 	if article.Date != "" {
-		fmt.Printf("Date: %s\n", article.Date)
+		ui.Infoln("Date: %s", article.Date)
 	}
-	fmt.Printf("URL: %s\n", article.URL)
-	fmt.Printf("Added: %s\n", article.Created.Format("2006-01-02 15:04:05"))
-	fmt.Printf("Modified: %s\n", article.Modified.Format("2006-01-02 15:04:05"))
-	fmt.Println()
+	ui.Infoln("URL: %s", article.URL)
+	ui.Infoln("Added: %s", article.Created.Format("2006-01-02 15:04:05"))
+	ui.Infoln("Modified: %s", article.Modified.Format("2006-01-02 15:04:05"))
+	ui.Newline()
 
-	fmt.Printf("Markdown file: %s", article.MarkdownPath)
+	ui.Info("Markdown file: %s", article.MarkdownPath)
 	if _, err := os.Stat(article.MarkdownPath); os.IsNotExist(err) {
-		fmt.Printf(" (file not found)")
+		ui.Warning(" (file not found)")
 	}
-	fmt.Println()
 
-	fmt.Printf("HTML file: %s", article.HTMLPath)
+	ui.Newline()
+
+	ui.Info("HTML file: %s", article.HTMLPath)
 	if _, err := os.Stat(article.HTMLPath); os.IsNotExist(err) {
-		fmt.Printf(" (file not found)")
+		ui.Warning(" (file not found)")
 	}
-	fmt.Println()
+	ui.Newline()
 
 	if _, err := os.Stat(article.MarkdownPath); err == nil {
-		fmt.Printf("\n%s\n", ui.HeaderColorStyle.Render("--- Content Preview ---"))
+		ui.Headerln("--- Content Preview ---")
 		content, err := os.ReadFile(article.MarkdownPath)
 		if err == nil {
 			lines := strings.Split(string(content), "\n")
 			previewLines := min(len(lines), 20)
 
 			for i := range previewLines {
-				fmt.Println(lines[i])
+				ui.Plainln("%v", lines[i])
 			}
 
 			if len(lines) > previewLines {
-				fmt.Printf("\n... (%d more lines)\n", len(lines)-previewLines)
-				fmt.Printf("Read full content: %s\n", article.MarkdownPath)
+				ui.Plainln("\n... (%d more lines)", len(lines)-previewLines)
+				ui.Plainln("Read full content: %s", article.MarkdownPath)
 			}
 		}
 	}
@@ -227,18 +268,17 @@ func (h *ArticleHandler) Remove(ctx context.Context, id int64) error {
 
 	if _, err := os.Stat(article.MarkdownPath); err == nil {
 		if rmErr := os.Remove(article.MarkdownPath); rmErr != nil {
-			fmt.Printf("Warning: failed to remove markdown file: %v\n", rmErr)
+			ui.Warningln("Warning: failed to remove markdown file: %v", rmErr)
 		}
 	}
 
 	if _, err := os.Stat(article.HTMLPath); err == nil {
 		if rmErr := os.Remove(article.HTMLPath); rmErr != nil {
-			fmt.Printf("Warning: failed to remove HTML file: %v\n", rmErr)
+			ui.Warningln("Warning: failed to remove HTML file: %v", rmErr)
 		}
 	}
 
-	fmt.Printf("Article removed: %s (ID: %d)\n", ui.TitleColorStyle.Render(article.Title), id)
-
+	ui.Titleln("Article removed: %s (ID: %d)", article.Title, id)
 	return nil
 }
 
@@ -246,23 +286,23 @@ func (h *ArticleHandler) Remove(ctx context.Context, id int64) error {
 func (h *ArticleHandler) Help() error {
 	domains := h.parser.GetSupportedDomains()
 
-	fmt.Println()
+	ui.Newline()
 
 	if len(domains) > 0 {
-		fmt.Printf("%s\n", ui.HeaderColorStyle.Render(fmt.Sprintf("Supported sites (%d):", len(domains))))
+		ui.Headerln("Supported sites (%d):", len(domains))
 		for _, domain := range domains {
-			fmt.Printf("  - %s\n", domain)
+			ui.Plainln("  - %s", domain)
 		}
 	} else {
-		fmt.Println("No parsing rules loaded.")
+		ui.Plainln("No parsing rules loaded.")
 	}
 
-	fmt.Println()
+	ui.Newline()
 	dir, err := h.getStorageDirectory()
 	if err != nil {
 		return fmt.Errorf("failed to get storage directory: %w", err)
 	}
-	fmt.Printf("%s %s\n", ui.HeaderColorStyle.Render("Storage directory:"), dir)
+	ui.Headerln("%s %s", ui.HeaderColorStyle.Render("Storage directory:"), dir)
 
 	return nil
 }
@@ -293,16 +333,13 @@ func (h *ArticleHandler) Read(ctx context.Context, id int64) error {
 }
 
 func (h *ArticleHandler) getStorageDirectory() (string, error) {
-	// Check config first
 	if h.config.ArticlesDir != "" {
 		return h.config.ArticlesDir, nil
 	}
 
-	// Fall back to data directory
 	dataDir, err := store.GetDataDir()
 	if err != nil {
 		return "", err
 	}
-
 	return filepath.Join(dataDir, "articles"), nil
 }

@@ -62,7 +62,6 @@ func (h *SeedHandler) Seed(ctx context.Context, force bool) error {
 
 	fmt.Println("Seeding database with test data...")
 
-	// Seed tasks
 	tasks := []struct {
 		description string
 		project     string
@@ -82,7 +81,6 @@ func (h *SeedHandler) Seed(ctx context.Context, force bool) error {
 		}
 	}
 
-	// Seed books
 	books := []struct {
 		title    string
 		author   string
@@ -103,10 +101,10 @@ func (h *SeedHandler) Seed(ctx context.Context, force bool) error {
 	}
 
 	fmt.Printf("Successfully seeded database with %d tasks and %d books\n", len(tasks), len(books))
-	fmt.Printf("\n%s\n", ui.Info.Render("Example commands to try:"))
-	fmt.Printf("  %s\n", ui.Success.Render("noteleaf todo list"))
-	fmt.Printf("  %s\n", ui.Success.Render("noteleaf media book list"))
-	fmt.Printf("  %s\n", ui.Success.Render("noteleaf todo view 1"))
+	fmt.Printf("\n%s\n", ui.InfoStyle.Render("Example commands to try:"))
+	fmt.Printf("  %s\n", ui.SuccessStyle.Render("noteleaf todo list"))
+	fmt.Printf("  %s\n", ui.SuccessStyle.Render("noteleaf media book list"))
+	fmt.Printf("  %s\n", ui.SuccessStyle.Render("noteleaf todo view 1"))
 
 	return nil
 }
@@ -131,7 +129,6 @@ func (h *SeedHandler) clearAllData() error {
 }
 
 func (h *SeedHandler) seedTask(description, project, priority, status string) error {
-	// Generate a simple UUID for the task (required field)
 	uuid := h.generateSimpleUUID()
 	query := `INSERT INTO tasks (uuid, description, project, priority, status, entry, modified)
 			  VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))`
@@ -149,7 +146,6 @@ func (h *SeedHandler) seedBook(title, author, status string, progress int) error
 // generateSimpleUUID creates a simple UUID for seeding (not cryptographically secure, but sufficient for test data)
 func (h *SeedHandler) generateSimpleUUID() string {
 	now := time.Now()
-	// Add random component to avoid collisions during rapid seeding
 	randomNum := rand.Intn(10000)
 	return fmt.Sprintf("seed-task-%d-%d-%d", now.Unix(), now.UnixNano()%1000000, randomNum)
 }

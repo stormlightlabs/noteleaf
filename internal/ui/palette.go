@@ -8,34 +8,14 @@ import (
 	lipglossv2 "github.com/charmbracelet/lipgloss/v2"
 )
 
-var PrimaryColors []Key = []Key{
-	Guac,
-	Julep,
-	Bok,
-	Pickle,
-	NeueGuac,
-}
-
-var SecondaryColors []Key = []Key{
-	Malibu,
-	Sardine,
-	Lichen,
-}
-
-var TertiaryColors []Key = []Key{
-	Violet,
-	Mauve,
-	Plum,
-	Orchid,
-	Charple,
-	Hazy,
-}
-
-var ProvisionalColors []Key = []Key{NeueGuac, NeueZinc}
-
-var AdditionColors []Key = []Key{Pickle, Gator, Spinach}
-
-var DeletionColors []Key = []Key{Pom, Steak, Toast}
+var (
+	PrimaryColors     = []Key{Guac, Julep, Bok, Pickle, NeueGuac}
+	SecondaryColors   = []Key{Malibu, Sardine, Lichen}
+	TertiaryColors    = []Key{Violet, Mauve, Plum, Orchid, Charple, Hazy}
+	ProvisionalColors = []Key{NeueGuac, NeueZinc}
+	AdditionColors    = []Key{Pickle, Gator, Spinach}
+	DeletionColors    = []Key{Pom, Steak, Toast}
+)
 
 var NoteleafColorScheme fang.ColorSchemeFunc = noteleafColorScheme
 
@@ -73,88 +53,46 @@ func NewPalette(isDark bool) *Palette {
 }
 
 var (
-	Success = lipgloss.NewStyle().
-		Foreground(lipgloss.Color(Julep.Hex())).
-		Bold(true)
+	ColorPrimary = Thunder.Hex() // Blue
+	ColorAccent  = Cumin.Hex()   // Yellow/Gold
+	ColorError   = Paprika.Hex() // Red/Pink
+	ColorText    = Salt.Hex()    // Light text
+	ColorBG      = Pepper.Hex()  // Dark background
 
-	Error = lipgloss.NewStyle().
-		Foreground(lipgloss.Color(Cherry.Hex())).
-		Bold(true)
+	PrimaryStyle      = newStyle().Foreground(lipgloss.Color(ColorPrimary))
+	AccentStyle       = newStyle().Foreground(lipgloss.Color(ColorAccent))
+	ErrorStyle        = newStyle().Foreground(lipgloss.Color(ColorError))
+	TextStyle         = newStyle().Foreground(lipgloss.Color(ColorText))
+	TitleStyle        = newPBoldStyle(0, 1).Foreground(lipgloss.Color(ColorAccent))
+	SubtitleStyle     = newEmStyle().Foreground(lipgloss.Color(ColorPrimary))
+	SuccessStyle      = newBoldStyle().Foreground(lipgloss.Color(ColorPrimary))
+	WarningStyle      = newBoldStyle().Foreground(lipgloss.Color(ColorAccent))
+	InfoStyle         = newStyle().Foreground(lipgloss.Color(ColorText))
+	BoxStyle          = newPStyle(1, 2).Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color(ColorPrimary))
+	ErrorBoxStyle     = newPStyle(1, 2).Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color(ColorError))
+	ListItemStyle     = newStyle().Foreground(lipgloss.Color(ColorText)).PaddingLeft(2)
+	SelectedItemStyle = newBoldStyle().Foreground(lipgloss.Color(ColorAccent)).PaddingLeft(2)
+	HeaderStyle       = newPBoldStyle(0, 1).Foreground(lipgloss.Color(ColorPrimary))
+	CellStyle         = newPStyle(0, 1).Foreground(lipgloss.Color(ColorText))
 
-	Info = lipgloss.NewStyle().
-		Foreground(lipgloss.Color(Malibu.Hex()))
+	TaskTitleStyle = newBoldStyle().Foreground(lipgloss.Color(Salt.Hex()))
+	TaskIDStyle    = newStyle().Foreground(lipgloss.Color(Squid.Hex())).Width(8)
 
-	Warning = lipgloss.NewStyle().
-		Foreground(lipgloss.Color(Citron.Hex())).
-		Bold(true)
+	StatusPending   = newStyle().Foreground(lipgloss.Color(Citron.Hex()))
+	StatusCompleted = newStyle().Foreground(lipgloss.Color(Julep.Hex()))
 
-	Path = lipgloss.NewStyle().
-		Foreground(lipgloss.Color(Mustard.Hex())).
-		Italic(true)
-)
+	PriorityHigh   = newBoldStyle().Foreground(lipgloss.Color(Cherry.Hex()))
+	PriorityMedium = newStyle().Foreground(lipgloss.Color(Citron.Hex()))
+	PriorityLow    = newStyle().Foreground(lipgloss.Color(Squid.Hex()))
 
-var (
-	TaskTitle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(Salt.Hex())).
-			Bold(true)
+	MovieStyle = newBoldStyle().Foreground(lipgloss.Color(Coral.Hex()))
+	TVStyle    = newBoldStyle().Foreground(lipgloss.Color(Violet.Hex()))
+	BookStyle  = newBoldStyle().Foreground(lipgloss.Color(Guac.Hex()))
+	MusicStyle = newBoldStyle().Foreground(lipgloss.Color(Lichen.Hex()))
 
-	TaskID = lipgloss.NewStyle().
-		Foreground(lipgloss.Color(Squid.Hex())).
-		Width(8)
-)
-
-var (
-	StatusPending = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(Citron.Hex()))
-
-	StatusCompleted = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(Julep.Hex()))
-)
-
-var (
-	PriorityHigh = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(Cherry.Hex())).
-			Bold(true)
-
-	PriorityMedium = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(Citron.Hex()))
-
-	PriorityLow = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(Squid.Hex()))
-)
-
-var (
-	MovieStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(Coral.Hex())).
-			Bold(true)
-
-	TVStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color(Violet.Hex())).
-		Bold(true)
-
-	BookStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(Guac.Hex())).
-			Bold(true)
-
-	MusicStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(Lichen.Hex())).
-			Bold(true)
-)
-
-// Table and UI styles
-var (
-	TableStyle = lipgloss.NewStyle().
-			BorderStyle(lipgloss.NormalBorder()).
-			BorderForeground(lipgloss.Color(Smoke.Hex()))
-
-	SelectedStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(Salt.Hex())).
-			Background(lipgloss.Color(Squid.Hex())).
-			Bold(true)
-
-	HeaderStyle = lipgloss.NewStyle().
-			BorderStyle(lipgloss.NormalBorder()).
-			BorderForeground(lipgloss.Color(Smoke.Hex())).
-			BorderBottom(true).
-			Bold(false)
+	TableStyle         = newStyle().BorderStyle(lipgloss.NormalBorder()).BorderForeground(lipgloss.Color(Smoke.Hex()))
+	SelectedStyle      = newBoldStyle().Foreground(lipgloss.Color(Salt.Hex())).Background(lipgloss.Color(Squid.Hex()))
+	TitleColorStyle    = newBoldStyle().Foreground(lipgloss.Color("212"))
+	SelectedColorStyle = newBoldStyle().Foreground(lipgloss.Color("0")).Background(lipgloss.Color("212"))
+	HeaderColorStyle   = newBoldStyle().Foreground(lipgloss.Color("240"))
 )

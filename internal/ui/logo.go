@@ -1,4 +1,6 @@
 // See https://patorjk.com/software/taag/
+//
+// NOTE: these aren't used anymore but are left in because they're cool
 package ui
 
 import (
@@ -78,7 +80,6 @@ func (l Logo) String() string {
 }
 
 // Colored returns a colored version of the logo using lipgloss with vertical spiral design
-//
 // Creates a vertical spiral effect by coloring character by character:
 //
 //	Combine line position and character position & use modulo to build wave-like transitions

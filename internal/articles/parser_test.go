@@ -218,8 +218,9 @@ body: //article
 			if err == nil {
 				t.Error("Expected error when no title can be extracted")
 			}
-			if !strings.Contains(err.Error(), "could not extract title") {
-				t.Errorf("Expected 'could not extract title' error, got %v", err)
+			if !strings.Contains(err.Error(), "could not extract title") &&
+				!strings.Contains(err.Error(), "could not extract body content") {
+				t.Errorf("Expected title or body extraction error, got %v", err)
 			}
 		})
 
@@ -229,8 +230,10 @@ body: //article
 			<body>
 				<h1 id="firstHeading">Test Article Title</h1>
 				<div id="bodyContent">
+					<style>.mw-parser-output .hatnote{font-style:italic;}</style>
 					<p>This is the main content of the article.</p>
 					<div class="noprint">This should be stripped</div>
+					<div class="editsection">Edit this section</div>
 					<p>More content here.</p>
 				</div>
 			</body>
@@ -253,6 +256,12 @@ body: //article
 			if strings.Contains(markdown, "This should be stripped") {
 				t.Error("Expected stripped content to be removed from markdown")
 			}
+			if strings.Contains(markdown, ".mw-parser-output") {
+				t.Error("Expected style content to be removed from markdown")
+			}
+			if strings.Contains(markdown, "Edit this section") {
+				t.Error("Expected edit section markers to be removed from markdown")
+			}
 		})
 	})
 
@@ -265,7 +274,6 @@ body: //article
 				w.WriteHeader(http.StatusOK)
 				w.Write([]byte("<html><head><title>Test</title></head><body><p>Content</p></body></html>"))
 			default:
-				// Return Wikipedia-like structure for localhost rule
 				w.WriteHeader(http.StatusOK)
 				w.Write([]byte(`<html>
 					<head><title>Test Article</title></head>
@@ -555,11 +563,6 @@ func TestCreateArticleFromURL(t *testing.T) {
 		}
 	})
 
-	t.Run("fails with invalid directory", func(t *testing.T) {
-		// Skip this test as it would require network access to test with real URLs
-		t.Skip("Skipping invalid directory test - requires network access")
-	})
-
 	t.Run("fails with malformed HTML", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
@@ -584,8 +587,10 @@ func TestCreateArticleFromURL(t *testing.T) {
 		if err == nil {
 			t.Error("Expected error for malformed HTML")
 		}
-		if !strings.Contains(err.Error(), "failed to parse HTML") && !strings.Contains(err.Error(), "could not extract title") {
-			t.Errorf("Expected HTML parsing or title extraction error, got %v", err)
+		if !strings.Contains(err.Error(), "failed to parse HTML") &&
+			!strings.Contains(err.Error(), "could not extract title") &&
+			!strings.Contains(err.Error(), "could not extract body content") {
+			t.Errorf("Expected HTML parsing or extraction error, got %v", err)
 		}
 	})
 
@@ -599,7 +604,7 @@ func TestCreateArticleFromURL(t *testing.T) {
 						<p>Content without proper title</p>
 					</div>
 				</body>
-			</html>`)) // No h1 with id="firstHeading"
+			</html>`))
 		}))
 		defer server.Close()
 
@@ -664,7 +669,6 @@ func TestCreateArticleFromURL(t *testing.T) {
 			t.Fatalf("Failed to save article: %v", err)
 		}
 
-		// Test that it creates a proper models.Article structure (simulating CreateArticleFromURL)
 		article := &models.Article{
 			URL:          server.URL,
 			Title:        content.Title,
@@ -779,7 +783,6 @@ func TestCreateArticleFromURL(t *testing.T) {
 			t.Fatalf("Failed to save article: %v", err)
 		}
 
-		// Verify markdown contains all metadata
 		mdContent, err := os.ReadFile(mdPath)
 		if err != nil {
 			t.Fatalf("Failed to read markdown file: %v", err)
