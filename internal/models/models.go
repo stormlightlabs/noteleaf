@@ -165,14 +165,18 @@ type Book struct {
 
 // Note represents a markdown note
 type Note struct {
-	ID       int64     `json:"id"`
-	Title    string    `json:"title"`
-	Content  string    `json:"content"`
-	Tags     []string  `json:"tags,omitempty"`
-	Archived bool      `json:"archived"`
-	Created  time.Time `json:"created"`
-	Modified time.Time `json:"modified"`
-	FilePath string    `json:"file_path,omitempty"`
+	ID          int64      `json:"id"`
+	Title       string     `json:"title"`
+	Content     string     `json:"content"`
+	Tags        []string   `json:"tags,omitempty"`
+	Archived    bool       `json:"archived"`
+	Created     time.Time  `json:"created"`
+	Modified    time.Time  `json:"modified"`
+	FilePath    string     `json:"file_path,omitempty"`
+	LeafletRKey *string    `json:"leaflet_rkey,omitempty"` // Leaflet record key
+	LeafletCID  *string    `json:"leaflet_cid,omitempty"`  // Leaflet content identifier
+	PublishedAt *time.Time `json:"published_at,omitempty"` // Publication timestamp
+	IsDraft     bool       `json:"is_draft"`               // Draft vs published status
 }
 
 // Album represents a music album
@@ -261,8 +265,7 @@ func (t *Task) IsPending() bool { return t.Status == "pending" }
 func (t *Task) IsDeleted() bool { return t.Status == "deleted" }
 
 // HasPriority returns true if the task has a priority set
-func (t *Task) HasPriority() bool { return t.Priority != "" }
-
+func (t *Task) HasPriority() bool  { return t.Priority != "" }
 func (t *Task) IsTodo() bool       { return t.Status == StatusTodo }
 func (t *Task) IsInProgress() bool { return t.Status == StatusInProgress }
 func (t *Task) IsBlocked() bool    { return t.Status == StatusBlocked }
@@ -512,6 +515,16 @@ func (n *Note) UnmarshalTags(data string) error {
 // IsArchived returns true if the note is archived
 func (n *Note) IsArchived() bool {
 	return n.Archived
+}
+
+// HasLeafletAssociation returns true if the note is associated with a leaflet document
+func (n *Note) HasLeafletAssociation() bool {
+	return n.LeafletRKey != nil
+}
+
+// IsPublished returns true if the note is published on leaflet (not a draft)
+func (n *Note) IsPublished() bool {
+	return n.HasLeafletAssociation() && !n.IsDraft
 }
 
 func (n *Note) GetID() int64                { return n.ID }

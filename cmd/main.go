@@ -17,13 +17,14 @@ import (
 )
 
 var (
-	newTaskHandler    = handlers.NewTaskHandler
-	newMovieHandler   = handlers.NewMovieHandler
-	newTVHandler      = handlers.NewTVHandler
-	newNoteHandler    = handlers.NewNoteHandler
-	newBookHandler    = handlers.NewBookHandler
-	newArticleHandler = handlers.NewArticleHandler
-	exc               = fang.Execute
+	newTaskHandler        = handlers.NewTaskHandler
+	newMovieHandler       = handlers.NewMovieHandler
+	newTVHandler          = handlers.NewTVHandler
+	newNoteHandler        = handlers.NewNoteHandler
+	newBookHandler        = handlers.NewBookHandler
+	newArticleHandler     = handlers.NewArticleHandler
+	newPublicationHandler = handlers.NewPublicationHandler
+	exc                   = fang.Execute
 )
 
 // App represents the main CLI application
@@ -206,10 +207,17 @@ func run() int {
 		return 1
 	}
 
+	publicationHandler, err := newPublicationHandler()
+	if err != nil {
+		log.Error("failed to create publication handler", "err", err)
+		return 1
+	}
+
 	root := rootCmd()
 
 	coreGroups := []CommandGroup{
 		NewTaskCommand(taskHandler), NewNoteCommand(noteHandler), NewArticleCommand(articleHandler),
+		NewPublicationCommand(publicationHandler),
 	}
 
 	for _, group := range coreGroups {

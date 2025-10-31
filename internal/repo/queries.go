@@ -1,10 +1,10 @@
 package repo
 
 const (
-	noteColumns     = "id, title, content, tags, archived, created, modified, file_path"
+	noteColumns     = "id, title, content, tags, archived, created, modified, file_path, leaflet_rkey, leaflet_cid, published_at, is_draft"
 	queryNoteByID   = "SELECT " + noteColumns + " FROM notes WHERE id = ?"
-	queryNoteInsert = `INSERT INTO notes (title, content, tags, archived, created, modified, file_path) VALUES (?, ?, ?, ?, ?, ?, ?)`
-	queryNoteUpdate = `UPDATE notes SET title = ?, content = ?, tags = ?, archived = ?, modified = ?, file_path = ? WHERE id = ?`
+	queryNoteInsert = `INSERT INTO notes (title, content, tags, archived, created, modified, file_path, leaflet_rkey, leaflet_cid, published_at, is_draft) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	queryNoteUpdate = `UPDATE notes SET title = ?, content = ?, tags = ?, archived = ?, modified = ?, file_path = ?, leaflet_rkey = ?, leaflet_cid = ?, published_at = ?, is_draft = ? WHERE id = ?`
 	queryNoteDelete = "DELETE FROM notes WHERE id = ?"
 	queryNotesList  = "SELECT " + noteColumns + " FROM notes"
 )

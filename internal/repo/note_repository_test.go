@@ -3,6 +3,7 @@ package repo
 import (
 	"context"
 	"testing"
+	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stormlightlabs/noteleaf/internal/models"
@@ -513,6 +514,119 @@ func TestNoteRepository(t *testing.T) {
 			notes, err := repo.List(ctx, NoteListOptions{Title: "NonexistentTitle"})
 			shared.AssertNoError(t, err, "Should not error when no notes found")
 			shared.AssertEqual(t, 0, len(notes), "Expected empty result set")
+		})
+	})
+
+	t.Run("Leaflet Methods", func(t *testing.T) {
+		db := CreateTestDB(t)
+		repo := NewNoteRepository(db)
+		ctx := context.Background()
+
+		rkey1 := "rkey-published-1"
+		rkey2 := "rkey-draft-1"
+		rkey3 := "rkey-published-2"
+		pubTime := time.Now()
+
+		publishedNote1 := &models.Note{
+			Title:       "Published Note 1",
+			Content:     "Content 1",
+			LeafletRKey: &rkey1,
+			IsDraft:     false,
+			PublishedAt: &pubTime,
+		}
+		_, err := repo.Create(ctx, publishedNote1)
+		shared.AssertNoError(t, err, "create published note 1")
+
+		draftNote := &models.Note{
+			Title:       "Draft Note",
+			Content:     "Draft content",
+			LeafletRKey: &rkey2,
+			IsDraft:     true,
+		}
+		_, err = repo.Create(ctx, draftNote)
+		shared.AssertNoError(t, err, "create draft note")
+
+		publishedNote2 := &models.Note{
+			Title:       "Published Note 2",
+			Content:     "Content 2",
+			LeafletRKey: &rkey3,
+			IsDraft:     false,
+			PublishedAt: &pubTime,
+		}
+		_, err = repo.Create(ctx, publishedNote2)
+		shared.AssertNoError(t, err, "create published note 2")
+
+		regularNote := &models.Note{
+			Title:   "Regular Note",
+			Content: "No leaflet association",
+		}
+		_, err = repo.Create(ctx, regularNote)
+		shared.AssertNoError(t, err, "create regular note")
+
+		t.Run("GetByLeafletRKey finds note by rkey", func(t *testing.T) {
+			note, err := repo.GetByLeafletRKey(ctx, rkey1)
+			shared.AssertNoError(t, err, "get by leaflet rkey")
+			shared.AssertEqual(t, "Published Note 1", note.Title, "title should match")
+			shared.AssertNotNil(t, note.LeafletRKey, "leaflet rkey should be set")
+			shared.AssertEqual(t, rkey1, *note.LeafletRKey, "rkey should match")
+		})
+
+		t.Run("GetByLeafletRKey returns error for non-existent rkey", func(t *testing.T) {
+			_, err := repo.GetByLeafletRKey(ctx, "non-existent-rkey")
+			shared.AssertError(t, err, "should error for non-existent rkey")
+		})
+
+		t.Run("ListPublished returns only published notes", func(t *testing.T) {
+			notes, err := repo.ListPublished(ctx)
+			shared.AssertNoError(t, err, "list published")
+			shared.AssertEqual(t, 2, len(notes), "should have 2 published notes")
+
+			for _, note := range notes {
+				shared.AssertFalse(t, note.IsDraft, "published notes should not be drafts")
+				shared.AssertNotNil(t, note.LeafletRKey, "should have leaflet rkey")
+			}
+		})
+
+		t.Run("ListDrafts returns only draft notes", func(t *testing.T) {
+			notes, err := repo.ListDrafts(ctx)
+			shared.AssertNoError(t, err, "list drafts")
+			shared.AssertEqual(t, 1, len(notes), "should have 1 draft note")
+
+			shared.AssertTrue(t, notes[0].IsDraft, "should be draft")
+			shared.AssertEqual(t, "Draft Note", notes[0].Title, "title should match")
+			shared.AssertNotNil(t, notes[0].LeafletRKey, "should have leaflet rkey")
+		})
+
+		t.Run("GetLeafletNotes returns all notes with leaflet association", func(t *testing.T) {
+			notes, err := repo.GetLeafletNotes(ctx)
+			shared.AssertNoError(t, err, "get leaflet notes")
+			shared.AssertEqual(t, 3, len(notes), "should have 3 leaflet notes")
+
+			for _, note := range notes {
+				shared.AssertNotNil(t, note.LeafletRKey, "all should have leaflet rkey")
+			}
+		})
+
+		t.Run("Context Cancellation", func(t *testing.T) {
+			t.Run("GetByLeafletRKey with cancelled context", func(t *testing.T) {
+				_, err := repo.GetByLeafletRKey(NewCanceledContext(), rkey1)
+				AssertCancelledContext(t, err)
+			})
+
+			t.Run("ListPublished with cancelled context", func(t *testing.T) {
+				_, err := repo.ListPublished(NewCanceledContext())
+				AssertCancelledContext(t, err)
+			})
+
+			t.Run("ListDrafts with cancelled context", func(t *testing.T) {
+				_, err := repo.ListDrafts(NewCanceledContext())
+				AssertCancelledContext(t, err)
+			})
+
+			t.Run("GetLeafletNotes with cancelled context", func(t *testing.T) {
+				_, err := repo.GetLeafletNotes(NewCanceledContext())
+				AssertCancelledContext(t, err)
+			})
 		})
 	})
 }

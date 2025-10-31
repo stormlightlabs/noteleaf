@@ -633,6 +633,95 @@ func TestModels(t *testing.T) {
 				t.Error("Expected nil tags for empty string")
 			}
 		})
+
+		t.Run("Leaflet Association Methods", func(t *testing.T) {
+			t.Run("has no leaflet association by default", func(t *testing.T) {
+				note := &Note{}
+				if note.HasLeafletAssociation() {
+					t.Error("Note with nil leaflet_rkey should not have association")
+				}
+			})
+
+			t.Run("has leaflet association when rkey is set", func(t *testing.T) {
+				rkey := "test-rkey-123"
+				note := &Note{LeafletRKey: &rkey}
+
+				if !note.HasLeafletAssociation() {
+					t.Error("Note with leaflet_rkey should have association")
+				}
+			})
+
+			t.Run("is not published by default", func(t *testing.T) {
+				note := &Note{IsDraft: true}
+				if note.IsPublished() {
+					t.Error("Draft note should not be published")
+				}
+			})
+
+			t.Run("is published when has association and not draft", func(t *testing.T) {
+				rkey := "published-rkey"
+				note := &Note{
+					LeafletRKey: &rkey,
+					IsDraft:     false,
+				}
+				if !note.IsPublished() {
+					t.Error("Note with leaflet association and not draft should be published")
+				}
+			})
+
+			t.Run("tracks publication metadata", func(t *testing.T) {
+				rkey := "test-rkey"
+				cid := "test-cid"
+				pubTime := time.Now()
+
+				note := &Note{
+					Title:       "Test Note",
+					Content:     "Test content",
+					LeafletRKey: &rkey,
+					LeafletCID:  &cid,
+					PublishedAt: &pubTime,
+					IsDraft:     false,
+				}
+
+				if !note.HasLeafletAssociation() {
+					t.Error("Note should have leaflet association")
+				}
+
+				if !note.IsPublished() {
+					t.Error("Note should be published")
+				}
+
+				if note.LeafletRKey == nil || *note.LeafletRKey != rkey {
+					t.Errorf("Expected rkey %s, got %v", rkey, note.LeafletRKey)
+				}
+
+				if note.LeafletCID == nil || *note.LeafletCID != cid {
+					t.Errorf("Expected cid %s, got %v", cid, note.LeafletCID)
+				}
+
+				if note.PublishedAt == nil || !note.PublishedAt.Equal(pubTime) {
+					t.Errorf("Expected published_at %v, got %v", pubTime, note.PublishedAt)
+				}
+			})
+
+			t.Run("handles draft status", func(t *testing.T) {
+				rkey := "draft-rkey"
+				note := &Note{
+					Title:       "Draft Note",
+					Content:     "Draft content",
+					LeafletRKey: &rkey,
+					IsDraft:     true,
+				}
+
+				if !note.HasLeafletAssociation() {
+					t.Error("Draft should still have leaflet association")
+				}
+
+				if note.IsPublished() {
+					t.Error("Draft should not be published")
+				}
+			})
+		})
 	})
 
 	t.Run("Album Model", func(t *testing.T) {

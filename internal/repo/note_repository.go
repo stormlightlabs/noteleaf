@@ -39,7 +39,8 @@ func (r *NoteRepository) scanNote(s scanner) (*models.Note, error) {
 	var note models.Note
 	var tags string
 	err := s.Scan(&note.ID, &note.Title, &note.Content, &tags, &note.Archived,
-		&note.Created, &note.Modified, &note.FilePath)
+		&note.Created, &note.Modified, &note.FilePath, &note.LeafletRKey,
+		&note.LeafletCID, &note.PublishedAt, &note.IsDraft)
 	if err != nil {
 		return nil, err
 	}
@@ -98,7 +99,8 @@ func (r *NoteRepository) Create(ctx context.Context, note *models.Note) (int64, 
 	}
 
 	result, err := r.db.ExecContext(ctx, queryNoteInsert,
-		note.Title, note.Content, tags, note.Archived, note.Created, note.Modified, note.FilePath)
+		note.Title, note.Content, tags, note.Archived, note.Created, note.Modified, note.FilePath,
+		note.LeafletRKey, note.LeafletCID, note.PublishedAt, note.IsDraft)
 	if err != nil {
 		return 0, fmt.Errorf("failed to insert note: %w", err)
 	}
@@ -131,7 +133,8 @@ func (r *NoteRepository) Update(ctx context.Context, note *models.Note) error {
 	}
 
 	result, err := r.db.ExecContext(ctx, queryNoteUpdate,
-		note.Title, note.Content, tags, note.Archived, note.Modified, note.FilePath, note.ID)
+		note.Title, note.Content, tags, note.Archived, note.Modified, note.FilePath,
+		note.LeafletRKey, note.LeafletCID, note.PublishedAt, note.IsDraft, note.ID)
 	if err != nil {
 		return fmt.Errorf("failed to update note: %w", err)
 	}
@@ -305,4 +308,28 @@ func (r *NoteRepository) GetByTags(ctx context.Context, tags []string) ([]*model
 	}
 	query, args := r.buildTagsQuery(tags)
 	return r.queryMany(ctx, query, args...)
+}
+
+// GetByLeafletRKey returns a note by its leaflet record key
+func (r *NoteRepository) GetByLeafletRKey(ctx context.Context, rkey string) (*models.Note, error) {
+	query := "SELECT " + noteColumns + " FROM notes WHERE leaflet_rkey = ?"
+	return r.queryOne(ctx, query, rkey)
+}
+
+// ListPublished returns all published leaflet notes (not drafts)
+func (r *NoteRepository) ListPublished(ctx context.Context) ([]*models.Note, error) {
+	query := "SELECT " + noteColumns + " FROM notes WHERE leaflet_rkey IS NOT NULL AND is_draft = false ORDER BY published_at DESC"
+	return r.queryMany(ctx, query)
+}
+
+// ListDrafts returns all draft leaflet notes
+func (r *NoteRepository) ListDrafts(ctx context.Context) ([]*models.Note, error) {
+	query := "SELECT " + noteColumns + " FROM notes WHERE leaflet_rkey IS NOT NULL AND is_draft = true ORDER BY modified DESC"
+	return r.queryMany(ctx, query)
+}
+
+// GetLeafletNotes returns all notes with leaflet association (both published and drafts)
+func (r *NoteRepository) GetLeafletNotes(ctx context.Context) ([]*models.Note, error) {
+	query := "SELECT " + noteColumns + " FROM notes WHERE leaflet_rkey IS NOT NULL ORDER BY modified DESC"
+	return r.queryMany(ctx, query)
 }
