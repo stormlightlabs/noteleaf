@@ -1,9 +1,3 @@
-// TODO: Store credentials securely in [PublicationHandler.Auth]
-// Options:
-//  1. Use system keyring (go-keyring)
-//  2. Store encrypted in config file
-//  3. Store in environment variables
-//
 // TODO: Implement document processing
 // For each document:
 //  1. Check if note with this leaflet_rkey exists
@@ -28,6 +22,7 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/stormlightlabs/noteleaf/internal/repo"
 	"github.com/stormlightlabs/noteleaf/internal/services"
@@ -56,6 +51,13 @@ func NewPublicationHandler() (*PublicationHandler, error) {
 
 	repos := repo.NewRepositories(db.DB)
 	atproto := services.NewATProtoService()
+
+	if config.ATProtoDID != "" && config.ATProtoAccessJWT != "" && config.ATProtoRefreshJWT != "" {
+		session, err := sessionFromConfig(config)
+		if err == nil {
+			_ = atproto.RestoreSession(session)
+		}
+	}
 
 	return &PublicationHandler{
 		db:      db,
@@ -94,8 +96,24 @@ func (h *PublicationHandler) Auth(ctx context.Context, handle, password string) 
 		return fmt.Errorf("authentication failed: %w", err)
 	}
 
+	session, err := h.atproto.GetSession()
+	if err != nil {
+		return fmt.Errorf("failed to get session after authentication: %w", err)
+	}
+
+	h.config.ATProtoDID = session.DID
+	h.config.ATProtoHandle = session.Handle
+	h.config.ATProtoAccessJWT = session.AccessJWT
+	h.config.ATProtoRefreshJWT = session.RefreshJWT
+	h.config.ATProtoPDSURL = session.PDSURL
+	h.config.ATProtoExpiresAt = session.ExpiresAt.Format("2006-01-02T15:04:05Z07:00")
+
+	if err := store.SaveConfig(h.config); err != nil {
+		return fmt.Errorf("authentication successful but failed to save credentials: %w", err)
+	}
+
 	fmt.Println("✓ Authentication successful!")
-	fmt.Println("TODO: Implement persistent credential storage")
+	fmt.Println("✓ Credentials saved")
 	return nil
 }
 
@@ -105,8 +123,7 @@ func (h *PublicationHandler) Pull(ctx context.Context) error {
 	return nil
 }
 
-// List displays notes with leaflet publication metadata, showing all notes that
-// have been pulled from or pushed to leaflet
+// List displays notes with leaflet publication metadata, showing all notes that have been pulled from or pushed to leaflet
 func (h *PublicationHandler) List(ctx context.Context, filter string) error {
 	fmt.Println("TODO: Implement leaflet document listing")
 	return nil
@@ -122,4 +139,33 @@ func (h *PublicationHandler) GetAuthStatus() string {
 		return "Authenticated (session details unavailable)"
 	}
 	return "Not authenticated"
+}
+
+// sessionFromConfig converts config AT Protocol fields to a Session
+func sessionFromConfig(config *store.Config) (*services.Session, error) {
+	if config.ATProtoDID == "" || config.ATProtoAccessJWT == "" || config.ATProtoRefreshJWT == "" {
+		return nil, fmt.Errorf("incomplete session data in config")
+	}
+
+	var expiresAt time.Time
+	if config.ATProtoExpiresAt != "" {
+		parsed, err := time.Parse("2006-01-02T15:04:05Z07:00", config.ATProtoExpiresAt)
+		if err != nil {
+			expiresAt = time.Now().Add(-1 * time.Hour)
+		} else {
+			expiresAt = parsed
+		}
+	} else {
+		expiresAt = time.Now().Add(-1 * time.Hour)
+	}
+
+	return &services.Session{
+		DID:           config.ATProtoDID,
+		Handle:        config.ATProtoHandle,
+		AccessJWT:     config.ATProtoAccessJWT,
+		RefreshJWT:    config.ATProtoRefreshJWT,
+		PDSURL:        config.ATProtoPDSURL,
+		ExpiresAt:     expiresAt,
+		Authenticated: true,
+	}, nil
 }

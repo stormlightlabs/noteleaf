@@ -26,6 +26,13 @@ type Config struct {
 	ExportFormat    string `toml:"export_format"`
 	MovieAPIKey     string `toml:"movie_api_key,omitempty"`
 	BookAPIKey      string `toml:"book_api_key,omitempty"`
+
+	ATProtoDID        string `toml:"atproto_did,omitempty"`
+	ATProtoHandle     string `toml:"atproto_handle,omitempty"`
+	ATProtoAccessJWT  string `toml:"atproto_access_jwt,omitempty"`
+	ATProtoRefreshJWT string `toml:"atproto_refresh_jwt,omitempty"`
+	ATProtoPDSURL     string `toml:"atproto_pds_url,omitempty"`
+	ATProtoExpiresAt  string `toml:"atproto_expires_at,omitempty"` // ISO8601 timestamp
 }
 
 // DefaultConfig returns a configuration with sensible defaults

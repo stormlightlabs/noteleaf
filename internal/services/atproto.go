@@ -1,14 +1,3 @@
-// TODO: Implement authentication using indigo's xrpc client:
-//  1. Create session via com.atproto.server.createSession
-//  2. Store session tokens
-//  3. Handle token refresh
-//
-// TODO: Implement authentication
-//  1. Create XRPC client
-//  2. Call com.atproto.server.createSession
-//  3. Parse response and store session
-//  4. Resolve PDS URL from DID
-//
 // TODO: Implement document fetching:
 //  1. Call com.atproto.sync.getRepo to get repository CAR file
 //  2. Parse CAR (Content Addressable aRchive) format
@@ -36,6 +25,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/bluesky-social/indigo/api/atproto"
+	"github.com/bluesky-social/indigo/xrpc"
 	"github.com/stormlightlabs/noteleaf/internal/public"
 )
 
@@ -70,14 +61,17 @@ type ATProtoService struct {
 	password string
 	session  *Session
 	pdsURL   string // Personal Data Server URL
-	// TODO: wrap AT Protocol client from indigo package
-	// client    *xrpc.Client
+	client   *xrpc.Client
 }
 
 // NewATProtoService creates a new AT Protocol service
 func NewATProtoService() *ATProtoService {
+	pdsURL := "https://bsky.social"
 	return &ATProtoService{
-		pdsURL: "https://bsky.social",
+		pdsURL: pdsURL,
+		client: &xrpc.Client{
+			Host: pdsURL,
+		},
 	}
 }
 
@@ -89,14 +83,37 @@ func (s *ATProtoService) Authenticate(ctx context.Context, handle, password stri
 
 	s.handle = handle
 	s.password = password
-	s.session = &Session{
-		Handle: handle,
-		// TODO: Set to true once auth is implemented
-		Authenticated: false,
-		PDSURL:        s.pdsURL,
+
+	input := &atproto.ServerCreateSession_Input{
+		Identifier: handle,
+		Password:   password,
 	}
 
-	return fmt.Errorf("TODO: implement com.atproto.server.createSession")
+	output, err := atproto.ServerCreateSession(ctx, s.client, input)
+	if err != nil {
+		return fmt.Errorf("failed to create session: %w", err)
+	}
+
+	expiresAt := time.Now().Add(2 * time.Hour)
+
+	s.session = &Session{
+		DID:           output.Did,
+		Handle:        output.Handle,
+		AccessJWT:     output.AccessJwt,
+		RefreshJWT:    output.RefreshJwt,
+		PDSURL:        s.pdsURL,
+		ExpiresAt:     expiresAt,
+		Authenticated: true,
+	}
+
+	s.client.Auth = &xrpc.AuthInfo{
+		AccessJwt:  output.AccessJwt,
+		RefreshJwt: output.RefreshJwt,
+		Handle:     output.Handle,
+		Did:        output.Did,
+	}
+
+	return nil
 }
 
 // GetSession returns the current session information
@@ -110,6 +127,63 @@ func (s *ATProtoService) GetSession() (*Session, error) {
 // IsAuthenticated checks if the service has a valid session
 func (s *ATProtoService) IsAuthenticated() bool {
 	return s.session != nil && s.session.Authenticated
+}
+
+// RestoreSession restores a previously authenticated session from stored credentials
+func (s *ATProtoService) RestoreSession(session *Session) error {
+	if session == nil {
+		return fmt.Errorf("session cannot be nil")
+	}
+
+	if session.DID == "" || session.AccessJWT == "" || session.RefreshJWT == "" {
+		return fmt.Errorf("session missing required fields (DID, AccessJWT, RefreshJWT)")
+	}
+
+	s.session = session
+
+	s.client.Auth = &xrpc.AuthInfo{
+		AccessJwt:  session.AccessJWT,
+		RefreshJwt: session.RefreshJWT,
+		Handle:     session.Handle,
+		Did:        session.DID,
+	}
+
+	if session.PDSURL != "" {
+		s.pdsURL = session.PDSURL
+		s.client.Host = session.PDSURL
+	}
+
+	return nil
+}
+
+// RefreshToken refreshes the access token using the refresh token
+func (s *ATProtoService) RefreshToken(ctx context.Context) error {
+	if s.session == nil || s.session.RefreshJWT == "" {
+		return fmt.Errorf("no session available to refresh")
+	}
+
+	s.client.Auth = &xrpc.AuthInfo{
+		AccessJwt:  s.session.AccessJWT,
+		RefreshJwt: s.session.RefreshJWT,
+		Handle:     s.session.Handle,
+		Did:        s.session.DID,
+	}
+
+	output, err := atproto.ServerRefreshSession(ctx, s.client)
+	if err != nil {
+		return fmt.Errorf("failed to refresh session: %w", err)
+	}
+
+	expiresAt := time.Now().Add(2 * time.Hour)
+	s.session.AccessJWT = output.AccessJwt
+	s.session.RefreshJWT = output.RefreshJwt
+	s.session.ExpiresAt = expiresAt
+	s.session.Authenticated = true
+
+	s.client.Auth.AccessJwt = output.AccessJwt
+	s.client.Auth.RefreshJwt = output.RefreshJwt
+
+	return nil
 }
 
 // PullDocuments fetches all leaflet documents from the user's repository

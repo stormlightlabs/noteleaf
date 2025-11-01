@@ -1,6 +1,3 @@
-// TODO: implement prompt for password
-//
-//	See: https://github.com/charmbracelet/bubbletea/blob/main/examples/textinputs/main.go
 package main
 
 import (
@@ -8,6 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/stormlightlabs/noteleaf/internal/handlers"
+	"github.com/stormlightlabs/noteleaf/internal/ui"
 )
 
 // PublicationCommand implements [CommandGroup] for leaflet publication commands
@@ -52,7 +50,7 @@ For the password, use an app password (not your main password):
 2. Create a new app password named "noteleaf"
 3. Use that password here
 
-The password will be prompted securely if not provided via flag.`,
+If credentials are not provided via flags, use the interactive input.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var handle string
@@ -62,19 +60,26 @@ The password will be prompted securely if not provided via flag.`,
 
 			password, _ := cmd.Flags().GetString("password")
 
-			if handle == "" {
-				return fmt.Errorf("handle is required")
+			if handle != "" && password != "" {
+				defer c.handler.Close()
+				return c.handler.Auth(cmd.Context(), handle, password)
 			}
 
-			if password == "" {
-				return fmt.Errorf("password is required (use --password flag)")
+			form := ui.NewAuthForm(handle, ui.AuthFormOptions{})
+			result, err := form.Run()
+			if err != nil {
+				return fmt.Errorf("failed to display auth form: %w", err)
+			}
+
+			if result.Canceled {
+				return fmt.Errorf("authentication canceled")
 			}
 
 			defer c.handler.Close()
-			return c.handler.Auth(cmd.Context(), handle, password)
+			return c.handler.Auth(cmd.Context(), result.Handle, result.Password)
 		},
 	}
-	authCmd.Flags().StringP("password", "p", "", "App password (will be prompted if not provided)")
+	authCmd.Flags().StringP("password", "p", "", "App password (will prompt if not provided)")
 	root.AddCommand(authCmd)
 
 	pullCmd := &cobra.Command{
@@ -96,7 +101,6 @@ Notes are matched by their leaflet record key (rkey) stored in the database.`,
 	}
 	root.AddCommand(pullCmd)
 
-	// List command
 	listCmd := &cobra.Command{
 		Use:     "list [--published|--draft|--all]",
 		Short:   "List notes synced with leaflet",
