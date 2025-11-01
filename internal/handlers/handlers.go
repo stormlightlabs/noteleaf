@@ -6,10 +6,20 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"github.com/stormlightlabs/noteleaf/internal/store"
 	"github.com/stormlightlabs/noteleaf/internal/utils"
 )
+
+// ParseID converts a string ID to int64
+func ParseID(id string, itemType string) (int64, error) {
+	itemID, err := strconv.ParseInt(id, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid %s ID: %s", itemType, id)
+	}
+	return itemID, nil
+}
 
 // Setup initializes the application database and configuration
 func Setup(ctx context.Context, args []string) error {

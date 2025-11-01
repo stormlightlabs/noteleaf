@@ -9,15 +9,6 @@ import (
 	"github.com/stormlightlabs/noteleaf/internal/handlers"
 )
 
-func parseID(k string, args []string) (int64, error) {
-	id, err := strconv.ParseInt(args[0], 10, 64)
-	if err != nil {
-		return id, fmt.Errorf("invalid %v ID: %s", k, args[0])
-	}
-
-	return id, err
-}
-
 // CommandGroup represents a group of related CLI commands
 type CommandGroup interface {
 	Create() *cobra.Command
@@ -203,7 +194,7 @@ shows queued shows only.`,
 
 Updates episode tracking and completion status. Can mark individual episodes
 or complete seasons/series depending on ID format.`,
-		Args:    cobra.ExactArgs(1),
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return c.handler.MarkWatched(cmd.Context(), args[0])
 		},
@@ -328,7 +319,7 @@ for books not yet started. Default shows queued books only.`,
 Specify a percentage value between 0 and 100 to indicate how far you've
 progressed through the book. Automatically updates status to 'reading' if not
 already set.`,
-		Args:  cobra.ExactArgs(2),
+		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			progress, err := strconv.Atoi(args[1])
 			if err != nil {
@@ -345,7 +336,7 @@ already set.`,
 
 Valid statuses are: queued (not started), reading (in progress), finished
 (completed), or removed (no longer tracking).`,
-		Args:  cobra.ExactArgs(2),
+		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return c.handler.UpdateStatus(cmd.Context(), args[0], args[1])
 		},
@@ -359,7 +350,7 @@ type NoteCommand struct {
 	handler *handlers.NoteHandler
 }
 
-// NewNoteCommand creates a new NoteCommand with the given handler
+// NewNoteCommand creates a new [NoteCommand] with the given handler
 func NewNoteCommand(handler *handlers.NoteHandler) *NoteCommand {
 	return &NoteCommand{handler: handler}
 }
@@ -445,9 +436,9 @@ Examples:
 
 Shows the note with syntax highlighting, proper formatting, and metadata.
 Useful for quick viewing without opening an editor.`,
-		Args:    cobra.ExactArgs(1),
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if noteID, err := parseID("note", args); err != nil {
+			if noteID, err := handlers.ParseID(args[0], "note"); err != nil {
 				return err
 			} else {
 				defer c.handler.Close()
@@ -464,9 +455,9 @@ Useful for quick viewing without opening an editor.`,
 Uses the editor specified in your noteleaf configuration or the EDITOR
 environment variable. Changes are automatically saved when you close the
 editor.`,
-		Args:  cobra.ExactArgs(1),
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if noteID, err := parseID("note", args); err != nil {
+			if noteID, err := handlers.ParseID(args[0], "note"); err != nil {
 				return err
 			} else {
 				defer c.handler.Close()
@@ -483,9 +474,9 @@ editor.`,
 
 Removes both the markdown file and database metadata. This operation cannot be
 undone. You will be prompted for confirmation before deletion.`,
-		Args:    cobra.ExactArgs(1),
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if noteID, err := parseID("note", args); err != nil {
+			if noteID, err := handlers.ParseID(args[0], "note"); err != nil {
 				return err
 			} else {
 				defer c.handler.Close()
@@ -566,9 +557,9 @@ Use query to filter by title, or use flags for more specific filtering.`,
 
 Shows article title, author, publication date, URL, and a brief content
 preview. Use 'read' command to view the full article content.`,
-		Args:    cobra.ExactArgs(1),
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if articleID, err := parseID("article", args); err != nil {
+			if articleID, err := handlers.ParseID(args[0], "article"); err != nil {
 				return err
 			} else {
 				defer c.handler.Close()
@@ -586,7 +577,7 @@ preview. Use 'read' command to view the full article content.`,
 This displays the complete article content using syntax highlighting and proper formatting.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if articleID, err := parseID("article", args); err != nil {
+			if articleID, err := handlers.ParseID(args[0], "article"); err != nil {
 				return err
 			} else {
 				defer c.handler.Close()
@@ -604,9 +595,9 @@ This displays the complete article content using syntax highlighting and proper 
 
 Removes the article metadata from the database and deletes associated markdown
 and HTML files. This operation cannot be undone.`,
-		Args:    cobra.ExactArgs(1),
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if articleID, err := parseID("article", args); err != nil {
+			if articleID, err := handlers.ParseID(args[0], "article"); err != nil {
 				return err
 			} else {
 				defer c.handler.Close()
