@@ -1,13 +1,18 @@
 title: //h1[@id='firstHeading']
 body: //div[@id = 'bodyContent']
 strip_id_or_class: editsection
+strip_id_or_class: mw-editsection
 #strip_id_or_class: toc
 strip_id_or_class: vertical-navbox
+strip_id_or_class: navbox
 strip: //*[@id='toc']
 strip: //div[@id='catlinks']
 strip: //div[@id='jump-to-nav']
 strip: //div[@class='thumbcaption']//div[@class='magnify']
 strip: //table[@class='navbox']
+strip: //table[contains(@class, 'navbox')]
+strip: //div[contains(@class, 'navbox')]
+strip: //*[@role='navigation']
 #strip: //table[contains(@class, 'infobox')]
 strip: //div[@class='dablink']
 strip: //div[@id='contentSub']
@@ -15,6 +20,13 @@ strip: //table[contains(@class, 'metadata')]
 strip: //*[contains(@class, 'noprint')]
 strip: //span[@class='noexcerpt']
 strip: //math
+strip: //div[@id='footer']
+strip: //div[@id='footer-info']
+strip: //*[contains(@class, 'footer')]
+strip: //span[@class='mw-editsection']
+strip: //*[contains(@class, 'mw-editsection')]
+strip: //*[@id='External_links']//following-sibling::*
+strip: //*[@id='See_also']//following-sibling::*
 
 http_header(user-agent): Mozilla/5.2
 

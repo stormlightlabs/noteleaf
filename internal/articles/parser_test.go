@@ -263,6 +263,77 @@ body: //article
 				t.Error("Expected edit section markers to be removed from markdown")
 			}
 		})
+
+		t.Run("strips Wikipedia navigation boxes and metadata", func(t *testing.T) {
+			htmlContent := `<html>
+			<head><title>Test Navigation Article</title></head>
+			<body>
+				<h1 id="firstHeading">Test Navigation Article</h1>
+				<div id="bodyContent">
+					<p>Main article content goes here.</p>
+					<h2>Section One<span class="mw-editsection">[edit]</span></h2>
+					<p>Section content.</p>
+					<table class="navbox" role="navigation">
+						<tr><td>Navigation item 1</td></tr>
+						<tr><td>Navigation item 2</td></tr>
+					</table>
+					<div class="navbox">
+						<p>Another navigation box</p>
+					</div>
+					<table class="vertical-navbox">
+						<tr><td>Vertical nav item</td></tr>
+					</table>
+					<p>More article content.</p>
+					<div role="navigation">
+						<p>Navigation content</p>
+					</div>
+					<div id="catlinks">
+						<p>Categories: Test Category</p>
+					</div>
+					<div id="footer">
+						<p>Retrieved from Wikipedia</p>
+					</div>
+				</div>
+			</body>
+		</html>`
+
+			markdown, err := parser.Convert(htmlContent, ".wikipedia.org", "https://en.wikipedia.org/wiki/Test_Navigation")
+			if err != nil {
+				t.Fatalf("Expected no error, got %v", err)
+			}
+
+			if !strings.Contains(markdown, "Main article content") {
+				t.Error("Expected markdown to contain main article content")
+			}
+			if !strings.Contains(markdown, "Section content") {
+				t.Error("Expected markdown to contain section content")
+			}
+			if !strings.Contains(markdown, "More article content") {
+				t.Error("Expected markdown to contain additional content")
+			}
+
+			if strings.Contains(markdown, "Navigation item") {
+				t.Error("Expected navbox table content to be stripped")
+			}
+			if strings.Contains(markdown, "Another navigation box") {
+				t.Error("Expected navbox div content to be stripped")
+			}
+			if strings.Contains(markdown, "Vertical nav item") {
+				t.Error("Expected vertical-navbox content to be stripped")
+			}
+			if strings.Contains(markdown, "[edit]") {
+				t.Error("Expected edit section markers to be stripped")
+			}
+			if strings.Contains(markdown, "Navigation content") {
+				t.Error("Expected role=navigation content to be stripped")
+			}
+			if strings.Contains(markdown, "Categories:") {
+				t.Error("Expected category links to be stripped")
+			}
+			if strings.Contains(markdown, "Retrieved from") {
+				t.Error("Expected footer content to be stripped")
+			}
+		})
 	})
 
 	t.Run("ParseURL", func(t *testing.T) {
