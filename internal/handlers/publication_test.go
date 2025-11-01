@@ -2,9 +2,12 @@ package handlers
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/stormlightlabs/noteleaf/internal/models"
+	"github.com/stormlightlabs/noteleaf/internal/public"
 	"github.com/stormlightlabs/noteleaf/internal/services"
 	"github.com/stormlightlabs/noteleaf/internal/store"
 )
@@ -280,6 +283,342 @@ func TestPublicationHandler(t *testing.T) {
 			if err != nil {
 				t.Errorf("Expected no error on close, got %v", err)
 			}
+		})
+	})
+
+	t.Run("documentToMarkdown", func(t *testing.T) {
+		t.Run("converts simple document with text blocks", func(t *testing.T) {
+			doc := services.DocumentWithMeta{
+				Document: public.Document{
+					Pages: []public.LinearDocument{
+						{
+							Blocks: []public.BlockWrap{
+								{
+									Type: "pub.leaflet.pages.linearDocument#block",
+									Block: public.TextBlock{
+										Type:      "pub.leaflet.pages.linearDocument#textBlock",
+										Plaintext: "Hello world",
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			markdown, err := documentToMarkdown(doc)
+			if err != nil {
+				t.Fatalf("Expected no error, got %v", err)
+			}
+
+			if markdown != "Hello world" {
+				t.Errorf("Expected 'Hello world', got '%s'", markdown)
+			}
+		})
+
+		t.Run("converts document with headers", func(t *testing.T) {
+			doc := services.DocumentWithMeta{
+				Document: public.Document{
+					Pages: []public.LinearDocument{
+						{
+							Blocks: []public.BlockWrap{
+								{
+									Type: "pub.leaflet.pages.linearDocument#block",
+									Block: public.HeaderBlock{
+										Type:      "pub.leaflet.pages.linearDocument#headerBlock",
+										Level:     1,
+										Plaintext: "Main Title",
+									},
+								},
+								{
+									Type: "pub.leaflet.pages.linearDocument#block",
+									Block: public.TextBlock{
+										Type:      "pub.leaflet.pages.linearDocument#textBlock",
+										Plaintext: "Content here",
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			markdown, err := documentToMarkdown(doc)
+			if err != nil {
+				t.Fatalf("Expected no error, got %v", err)
+			}
+
+			expected := "# Main Title\n\nContent here"
+			if markdown != expected {
+				t.Errorf("Expected '%s', got '%s'", expected, markdown)
+			}
+		})
+
+		t.Run("converts document with code blocks", func(t *testing.T) {
+			doc := services.DocumentWithMeta{
+				Document: public.Document{
+					Pages: []public.LinearDocument{
+						{
+							Blocks: []public.BlockWrap{
+								{
+									Type: "pub.leaflet.pages.linearDocument#block",
+									Block: public.CodeBlock{
+										Type:      "pub.leaflet.pages.linearDocument#codeBlock",
+										Plaintext: "fmt.Println(\"hello\")",
+										Language:  "go",
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			markdown, err := documentToMarkdown(doc)
+			if err != nil {
+				t.Fatalf("Expected no error, got %v", err)
+			}
+
+			expected := "```go\nfmt.Println(\"hello\")\n```"
+			if markdown != expected {
+				t.Errorf("Expected '%s', got '%s'", expected, markdown)
+			}
+		})
+
+		t.Run("converts document with multiple pages", func(t *testing.T) {
+			doc := services.DocumentWithMeta{
+				Document: public.Document{
+					Pages: []public.LinearDocument{
+						{
+							Blocks: []public.BlockWrap{
+								{
+									Type: "pub.leaflet.pages.linearDocument#block",
+									Block: public.TextBlock{
+										Type:      "pub.leaflet.pages.linearDocument#textBlock",
+										Plaintext: "Page one",
+									},
+								},
+							},
+						},
+						{
+							Blocks: []public.BlockWrap{
+								{
+									Type: "pub.leaflet.pages.linearDocument#block",
+									Block: public.TextBlock{
+										Type:      "pub.leaflet.pages.linearDocument#textBlock",
+										Plaintext: "Page two",
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			markdown, err := documentToMarkdown(doc)
+			if err != nil {
+				t.Fatalf("Expected no error, got %v", err)
+			}
+
+			expected := "Page one\n\nPage two"
+			if markdown != expected {
+				t.Errorf("Expected '%s', got '%s'", expected, markdown)
+			}
+		})
+
+		t.Run("handles empty document", func(t *testing.T) {
+			doc := services.DocumentWithMeta{
+				Document: public.Document{
+					Pages: []public.LinearDocument{},
+				},
+			}
+
+			markdown, err := documentToMarkdown(doc)
+			if err != nil {
+				t.Fatalf("Expected no error, got %v", err)
+			}
+
+			if markdown != "" {
+				t.Errorf("Expected empty string, got '%s'", markdown)
+			}
+		})
+	})
+
+	t.Run("Pull", func(t *testing.T) {
+		t.Run("returns error when not authenticated", func(t *testing.T) {
+			suite := NewHandlerTestSuite(t)
+			defer suite.Cleanup()
+
+			handler := CreateHandler(t, NewPublicationHandler)
+			ctx := context.Background()
+
+			err := handler.Pull(ctx)
+			if err == nil {
+				t.Error("Expected error when not authenticated")
+			}
+
+			expectedMsg := "not authenticated"
+			if err != nil && !strings.Contains(err.Error(), expectedMsg) {
+				t.Errorf("Expected error message to contain '%s', got '%s'", expectedMsg, err.Error())
+			}
+		})
+	})
+
+	t.Run("List", func(t *testing.T) {
+		t.Run("lists all leaflet notes", func(t *testing.T) {
+			suite := NewHandlerTestSuite(t)
+			defer suite.Cleanup()
+
+			handler := CreateHandler(t, NewPublicationHandler)
+			ctx := context.Background()
+
+			rkey1 := "test_rkey_1"
+			cid1 := "test_cid_1"
+			publishedAt := time.Now()
+
+			note1 := &models.Note{
+				Title:       "Published Note",
+				Content:     "Content 1",
+				LeafletRKey: &rkey1,
+				LeafletCID:  &cid1,
+				PublishedAt: &publishedAt,
+				IsDraft:     false,
+			}
+
+			_, err := handler.repos.Notes.Create(ctx, note1)
+			suite.AssertNoError(err, "create published note")
+
+			rkey2 := "test_rkey_2"
+			cid2 := "test_cid_2"
+			note2 := &models.Note{
+				Title:       "Draft Note",
+				Content:     "Content 2",
+				LeafletRKey: &rkey2,
+				LeafletCID:  &cid2,
+				IsDraft:     true,
+			}
+
+			_, err = handler.repos.Notes.Create(ctx, note2)
+			suite.AssertNoError(err, "create draft note")
+
+			err = handler.List(ctx, "all")
+			suite.AssertNoError(err, "list all notes")
+
+			err = handler.List(ctx, "")
+			suite.AssertNoError(err, "list with empty filter")
+		})
+
+		t.Run("lists only published notes", func(t *testing.T) {
+			suite := NewHandlerTestSuite(t)
+			defer suite.Cleanup()
+
+			handler := CreateHandler(t, NewPublicationHandler)
+			ctx := context.Background()
+
+			rkey := "published_rkey"
+			cid := "published_cid"
+			publishedAt := time.Now()
+
+			note := &models.Note{
+				Title:       "Published Note",
+				Content:     "Content",
+				LeafletRKey: &rkey,
+				LeafletCID:  &cid,
+				PublishedAt: &publishedAt,
+				IsDraft:     false,
+			}
+
+			_, err := handler.repos.Notes.Create(ctx, note)
+			suite.AssertNoError(err, "create published note")
+
+			err = handler.List(ctx, "published")
+			suite.AssertNoError(err, "list published notes")
+		})
+
+		t.Run("lists only draft notes", func(t *testing.T) {
+			suite := NewHandlerTestSuite(t)
+			defer suite.Cleanup()
+
+			handler := CreateHandler(t, NewPublicationHandler)
+			ctx := context.Background()
+
+			rkey := "draft_rkey"
+			cid := "draft_cid"
+
+			note := &models.Note{
+				Title:       "Draft Note",
+				Content:     "Content",
+				LeafletRKey: &rkey,
+				LeafletCID:  &cid,
+				IsDraft:     true,
+			}
+
+			_, err := handler.repos.Notes.Create(ctx, note)
+			suite.AssertNoError(err, "create draft note")
+
+			err = handler.List(ctx, "draft")
+			suite.AssertNoError(err, "list draft notes")
+		})
+
+		t.Run("handles empty results gracefully", func(t *testing.T) {
+			suite := NewHandlerTestSuite(t)
+			defer suite.Cleanup()
+
+			handler := CreateHandler(t, NewPublicationHandler)
+			ctx := context.Background()
+
+			err := handler.List(ctx, "all")
+			suite.AssertNoError(err, "list with no notes")
+		})
+
+		t.Run("returns error for invalid filter", func(t *testing.T) {
+			suite := NewHandlerTestSuite(t)
+			defer suite.Cleanup()
+
+			handler := CreateHandler(t, NewPublicationHandler)
+			ctx := context.Background()
+
+			err := handler.List(ctx, "invalid_filter")
+			if err == nil {
+				t.Error("Expected error for invalid filter")
+			}
+
+			expectedMsg := "invalid filter"
+			if err != nil && !strings.Contains(err.Error(), expectedMsg) {
+				t.Errorf("Expected error message to contain '%s', got '%s'", expectedMsg, err.Error())
+			}
+		})
+
+		t.Run("only lists notes with leaflet metadata", func(t *testing.T) {
+			suite := NewHandlerTestSuite(t)
+			defer suite.Cleanup()
+
+			handler := CreateHandler(t, NewPublicationHandler)
+			ctx := context.Background()
+
+			regularNote := &models.Note{
+				Title:   "Regular Note",
+				Content: "No leaflet data",
+			}
+
+			_, err := handler.repos.Notes.Create(ctx, regularNote)
+			suite.AssertNoError(err, "create regular note")
+
+			rkey := "leaflet_rkey"
+			cid := "leaflet_cid"
+			leafletNote := &models.Note{
+				Title:       "Leaflet Note",
+				Content:     "Has leaflet data",
+				LeafletRKey: &rkey,
+				LeafletCID:  &cid,
+				IsDraft:     false,
+			}
+
+			_, err = handler.repos.Notes.Create(ctx, leafletNote)
+			suite.AssertNoError(err, "create leaflet note")
+
+			err = handler.List(ctx, "all")
+			suite.AssertNoError(err, "list all leaflet notes")
 		})
 	})
 }

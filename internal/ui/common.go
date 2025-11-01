@@ -19,6 +19,7 @@ func success(msg string) string      { return SuccessStyle.Render("✓ " + msg) 
 func errorMsg(msg string) string     { return ErrorStyle.Render("✗ " + msg) }
 func warning(msg string) string      { return WarningStyle.Render("⚠ " + msg) }
 func info(msg string) string         { return InfoStyle.Render("ℹ " + msg) }
+func infop(msg string) string        { return InfoStyle.Render(msg) }
 func title(msg string) string        { return TitleStyle.Render(msg) }
 func subtitle(msg string) string     { return SubtitleStyle.Render(msg) }
 func box(content string) string      { return BoxStyle.Render(content) }
@@ -63,6 +64,16 @@ func Info(format string, a ...any) {
 
 // Infoln prints a formatted info message with a newline
 func Infoln(format string, a ...any) {
+	fmt.Println(infop(fmt.Sprintf(format, a...)))
+}
+
+// Infop prints a formatted info message, sans icon
+func Infop(format string, a ...any) {
+	fmt.Print(infop(fmt.Sprintf(format, a...)))
+}
+
+// Infopln prints a formatted info message with a newline, sans icon
+func Infopln(format string, a ...any) {
 	fmt.Println(info(fmt.Sprintf(format, a...)))
 }
 

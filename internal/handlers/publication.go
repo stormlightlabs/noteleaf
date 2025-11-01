@@ -1,17 +1,7 @@
 // Package handlers provides command handlers for leaflet publication operations.
 //
-// Pull command:
-//  1. Authenticates with AT Protocol
-//  2. Fetches all pub.leaflet.document records
-//  3. Creates new notes for documents not seen before
-//  4. Updates existing notes (matched by leaflet_rkey)
-//  5. Shows summary of pulled documents
-//
-// List command:
-//  1. Query notes where leaflet_rkey IS NOT NULL
-//  2. Apply filter (published vs draft) - "all", "published", "draft", or empty (default: all)
-//  3. Static output (TUI viewing marked as TODO)
-//
+// TODO: Post (create 1)
+// TODO: Push (create or update - more than 1)
 // TODO: Add TUI viewing for document details
 package handlers
 
@@ -160,7 +150,7 @@ func (h *PublicationHandler) Pull(ctx context.Context) error {
 		if err == nil && existing != nil {
 			content, err := documentToMarkdown(doc)
 			if err != nil {
-				ui.Warningln("⚠ Skipping document %s: %v", doc.Document.Title, err)
+				ui.Warningln("Skipping document %s: %v", doc.Document.Title, err)
 				continue
 			}
 
@@ -177,7 +167,7 @@ func (h *PublicationHandler) Pull(ctx context.Context) error {
 			}
 
 			if err := h.repos.Notes.Update(ctx, existing); err != nil {
-				ui.Warningln("⚠ Failed to update note for document %s: %v", doc.Document.Title, err)
+				ui.Warningln("Failed to update note for document %s: %v", doc.Document.Title, err)
 				continue
 			}
 
@@ -186,7 +176,7 @@ func (h *PublicationHandler) Pull(ctx context.Context) error {
 		} else {
 			content, err := documentToMarkdown(doc)
 			if err != nil {
-				ui.Warningln("⚠ Skipping document %s: %v", doc.Document.Title, err)
+				ui.Warningln("Skipping document %s: %v", doc.Document.Title, err)
 				continue
 			}
 
@@ -207,7 +197,7 @@ func (h *PublicationHandler) Pull(ctx context.Context) error {
 
 			_, err = h.repos.Notes.Create(ctx, note)
 			if err != nil {
-				ui.Warningln("⚠ Failed to create note for document %s: %v", doc.Document.Title, err)
+				ui.Warningln("Failed to create note for document %s: %v", doc.Document.Title, err)
 				continue
 			}
 
