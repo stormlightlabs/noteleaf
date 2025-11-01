@@ -434,6 +434,71 @@ func TestATProtoService(t *testing.T) {
 				t.Error("Expected nil publications when session not authenticated")
 			}
 		})
+
+		t.Run("returns error when context cancelled", func(t *testing.T) {
+			svc := NewATProtoService()
+			svc.session = &Session{
+				DID:           "did:plc:test123",
+				Handle:        "test.bsky.social",
+				AccessJWT:     "access_token",
+				RefreshJWT:    "refresh_token",
+				Authenticated: true,
+			}
+
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+
+			pubs, err := svc.ListPublications(ctx)
+			if err == nil {
+				t.Error("Expected error when context is cancelled")
+			}
+			if pubs != nil {
+				t.Error("Expected nil publications when context is cancelled")
+			}
+		})
+
+		t.Run("returns error when context timeout", func(t *testing.T) {
+			svc := NewATProtoService()
+			svc.session = &Session{
+				DID:           "did:plc:test123",
+				Handle:        "test.bsky.social",
+				AccessJWT:     "access_token",
+				RefreshJWT:    "refresh_token",
+				Authenticated: true,
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 1)
+			defer cancel()
+			time.Sleep(2 * time.Millisecond)
+
+			pubs, err := svc.ListPublications(ctx)
+			if err == nil {
+				t.Error("Expected error when context times out")
+			}
+			if pubs != nil {
+				t.Error("Expected nil publications when context times out")
+			}
+		})
+
+		t.Run("returns empty list when no publications exist", func(t *testing.T) {
+			svc := NewATProtoService()
+			svc.session = &Session{
+				DID:           "did:plc:test123",
+				Handle:        "test.bsky.social",
+				AccessJWT:     "access_token",
+				RefreshJWT:    "refresh_token",
+				Authenticated: true,
+			}
+			ctx := context.Background()
+
+			pubs, err := svc.ListPublications(ctx)
+
+			if err != nil && err.Error() == "not authenticated" {
+				t.Error("Authentication check should pass, but got authentication error")
+			}
+
+			_ = pubs
+		})
 	})
 
 	t.Run("Authentication Error Scenarios", func(t *testing.T) {

@@ -1,16 +1,38 @@
-// TODO: Implement document fetching:
-//  1. Call com.atproto.sync.getRepo to get repository CAR file
-//  2. Parse CAR (Content Addressable aRchive) format
-//  3. Filter records by collection: pub.leaflet.document
-//  4. Extract documents and metadata
-//  5. Return as []DocumentWithMeta
+// Package services provides AT Protocol integration for leaflet.pub
 //
-// TODO: Implement publication listing:
-// 1. Query records with collection: pub.leaflet.publication
-// 2. Parse as public.Publication
-// 3. Return list
+// Document Flow:
+//   - Pull: Fetch pub.leaflet.document records from AT Protocol repository
+//   - Post: Create new pub.leaflet.document records in AT Protocol repository
+//   - Push: Update existing pub.leaflet.document records in AT Protocol repository
 //
-// TODO: Implement session clearing: close any open connections
+// Publishing Workflow (TODO):
+//  1. Post - Create new document:
+//     - Convert note to pub.leaflet.document format
+//     - Upload any embedded images as blobs
+//     - Create record with com.atproto.repo.createRecord
+//     - Store returned rkey and cid in note metadata
+//  2. Push - Update existing document:
+//     - Check if note has leaflet_rkey (indicates previously published)
+//     - Convert updated note to pub.leaflet.document format
+//     - Upload any new images as blobs
+//     - Update record with com.atproto.repo.putRecord
+//     - Update stored cid in note metadata
+//  3. Delete - Remove published document:
+//     - Use com.atproto.repo.deleteRecord with stored rkey
+//     - Clear leaflet metadata from note
+//
+// Blob Upload (TODO):
+//  1. Use com.atproto.repo.uploadBlob for images
+//  2. Returns blob reference with CID
+//  3. Include blob ref in ImageBlock structures
+//
+// Draft vs Published (TODO):
+//  1. Draft documents stored in collection: pub.leaflet.document.draft
+//  2. Published documents in: pub.leaflet.document
+//  3. Moving from draft to published requires:
+//     - Delete from draft collection
+//     - Create in published collection
+//     - Update note metadata with new rkey
 package services
 
 import (
@@ -250,7 +272,54 @@ func (s *ATProtoService) ListPublications(ctx context.Context) ([]PublicationWit
 	if !s.IsAuthenticated() {
 		return nil, fmt.Errorf("not authenticated")
 	}
-	return nil, fmt.Errorf("publication listing not yet implemented")
+
+	carBytes, err := atproto.SyncGetRepo(ctx, s.client, s.session.DID, "")
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch repository: %w", err)
+	}
+
+	r, err := repo.ReadRepoFromCar(ctx, bytes.NewReader(carBytes))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse CAR file: %w", err)
+	}
+
+	var publications []PublicationWithMeta
+	prefix := public.TypePublication
+
+	err = r.ForEach(ctx, prefix, func(k string, v cid.Cid) error {
+		_, recordBytes, err := r.GetRecordBytes(ctx, k)
+		if err != nil {
+			return fmt.Errorf("failed to get record bytes for %s: %w", k, err)
+		}
+
+		var pub public.Publication
+		if err := json.Unmarshal(*recordBytes, &pub); err != nil {
+			return fmt.Errorf("failed to unmarshal publication %s: %w", k, err)
+		}
+
+		parts := strings.Split(k, "/")
+		rkey := ""
+		if len(parts) > 0 {
+			rkey = parts[len(parts)-1]
+		}
+
+		uri := fmt.Sprintf("at://%s/%s", s.session.DID, k)
+
+		publications = append(publications, PublicationWithMeta{
+			Publication: pub,
+			RKey:        rkey,
+			CID:         v.String(),
+			URI:         uri,
+		})
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to iterate over publications: %w", err)
+	}
+
+	return publications, nil
 }
 
 // Close cleans up resources
