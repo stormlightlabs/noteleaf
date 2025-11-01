@@ -113,8 +113,8 @@ management for books, movies, and TV shows.`,
 	root.SetHelpCommand(&cobra.Command{Hidden: true})
 	cobra.EnableCommandSorting = false
 
-	root.AddGroup(&cobra.Group{ID: "core", Title: "Core Commands:"})
-	root.AddGroup(&cobra.Group{ID: "management", Title: "Management Commands:"})
+	root.AddGroup(&cobra.Group{ID: "core", Title: "Core:"})
+	root.AddGroup(&cobra.Group{ID: "management", Title: "Manage:"})
 	return root
 }
 
@@ -216,8 +216,10 @@ func run() int {
 	root := rootCmd()
 
 	coreGroups := []CommandGroup{
-		NewTaskCommand(taskHandler), NewNoteCommand(noteHandler), NewArticleCommand(articleHandler),
+		NewTaskCommand(taskHandler),
+		NewNoteCommand(noteHandler),
 		NewPublicationCommand(publicationHandler),
+		NewArticleCommand(articleHandler),
 	}
 
 	for _, group := range coreGroups {

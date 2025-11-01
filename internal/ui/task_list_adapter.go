@@ -1,3 +1,5 @@
+// TODO: Use glamour to render the markdown produced by [formatTaskForView]
+// TODO: remove the ID from the table
 package ui
 
 import (

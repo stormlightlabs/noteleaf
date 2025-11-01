@@ -1,3 +1,4 @@
+// TODO: add context field to table in [TaskHandler.listTasksInteractive]
 package handlers
 
 import (
@@ -191,7 +192,6 @@ func (h *TaskHandler) listTasksStatic(ctx context.Context, showAll bool, status,
 	return nil
 }
 
-// TODO: include context field
 func (h *TaskHandler) listTasksInteractive(ctx context.Context, showAll bool, status, priority, project, _ string) error {
 	taskTable := ui.NewTaskListFromTable(h.repos.Tasks, os.Stdout, os.Stdin, false, showAll, status, priority, project)
 	return taskTable.Browse(ctx)

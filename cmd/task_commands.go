@@ -29,13 +29,33 @@ tasks with parent/child relationships, task dependencies, recurring tasks, and
 time tracking. Tasks can be filtered by status, priority, project, or context.`,
 	}
 
+	root.AddGroup(
+		&cobra.Group{ID: "task-ops", Title: "Basic Operations"},
+		&cobra.Group{ID: "task-meta", Title: "Metadata"},
+		&cobra.Group{ID: "task-tracking", Title: "Tracking"},
+	)
+
 	for _, init := range []func(*handlers.TaskHandler) *cobra.Command{
-		addTaskCmd, listTaskCmd, viewTaskCmd, updateTaskCmd, editTaskCmd,
-		deleteTaskCmd, taskProjectsCmd, taskTagsCmd, taskContextsCmd,
-		taskCompleteCmd, taskStartCmd, taskStopCmd, timesheetViewCmd,
-		taskRecurCmd, taskDependCmd,
+		addTaskCmd, listTaskCmd, viewTaskCmd, updateTaskCmd, editTaskCmd, deleteTaskCmd,
 	} {
 		cmd := init(c.handler)
+		cmd.GroupID = "task-ops"
+		root.AddCommand(cmd)
+	}
+
+	for _, init := range []func(*handlers.TaskHandler) *cobra.Command{
+		taskProjectsCmd, taskTagsCmd, taskContextsCmd,
+	} {
+		cmd := init(c.handler)
+		cmd.GroupID = "task-meta"
+		root.AddCommand(cmd)
+	}
+
+	for _, init := range []func(*handlers.TaskHandler) *cobra.Command{
+		timesheetViewCmd, taskStartCmd, taskStopCmd, taskCompleteCmd, taskRecurCmd, taskDependCmd,
+	} {
+		cmd := init(c.handler)
+		cmd.GroupID = "task-tracking"
 		root.AddCommand(cmd)
 	}
 
@@ -57,7 +77,7 @@ completed in order.
 Examples:
   noteleaf todo add "Write documentation" --priority high --project docs
   noteleaf todo add "Weekly review" --recur "FREQ=WEEKLY" --due 2024-01-15`,
-		Args:    cobra.MinimumNArgs(1),
+		Args: cobra.MinimumNArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			description := strings.Join(args, " ")
 			priority, _ := c.Flags().GetString("priority")
@@ -125,7 +145,7 @@ func viewTaskCmd(handler *handlers.TaskHandler) *cobra.Command {
 Shows all task attributes including description, status, priority, project,
 context, tags, due date, creation time, and modification history. Use --json
 for machine-readable output or --no-metadata to show only the description.`,
-		Args:  cobra.ExactArgs(1),
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			format, _ := cmd.Flags().GetString("format")
 			jsonOutput, _ := cmd.Flags().GetBool("json")
@@ -153,7 +173,7 @@ dependencies. Multiple attributes can be updated in a single command.
 Examples:
   noteleaf todo update 123 --priority urgent --due tomorrow
   noteleaf todo update 456 --add-tag urgent --project website`,
-		Args:  cobra.ExactArgs(1),
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			taskID := args[0]
 			description, _ := cmd.Flags().GetString("description")
@@ -239,7 +259,7 @@ func taskStartCmd(h *handlers.TaskHandler) *cobra.Command {
 
 Records the start time for a work session. Only one task can be actively
 tracked at a time. Use --note to add a description of what you're working on.`,
-		Args:  cobra.ExactArgs(1),
+		Args: cobra.ExactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			taskID := args[0]
 			description, _ := c.Flags().GetString("note")
@@ -260,7 +280,7 @@ func taskStopCmd(h *handlers.TaskHandler) *cobra.Command {
 
 Records the end time and calculates duration for the current work session.
 Duration is added to the task's total time tracked.`,
-		Args:  cobra.ExactArgs(1),
+		Args: cobra.ExactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			taskID := args[0]
 			defer h.Close()
@@ -300,7 +320,7 @@ func editTaskCmd(h *handlers.TaskHandler) *cobra.Command {
 
 Provides a user-friendly interface with status picker and priority toggle.
 Easier than using multiple command-line flags for complex updates.`,
-		Args:    cobra.ExactArgs(1),
+		Args: cobra.ExactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			taskID := args[0]
 			defer h.Close()
@@ -317,7 +337,7 @@ func deleteTaskCmd(h *handlers.TaskHandler) *cobra.Command {
 
 This operation cannot be undone. Consider updating the task status to
 'deleted' instead if you want to preserve the record for historical purposes.`,
-		Args:  cobra.ExactArgs(1),
+		Args: cobra.ExactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			defer h.Close()
 			return h.Delete(c.Context(), args)
@@ -357,7 +377,7 @@ func taskCompleteCmd(h *handlers.TaskHandler) *cobra.Command {
 
 Sets the task status to 'completed' and records the completion time. For
 recurring tasks, generates the next instance based on the recurrence rule.`,
-		Args:    cobra.ExactArgs(1),
+		Args: cobra.ExactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			defer h.Close()
 			return h.Done(c.Context(), args)
@@ -388,7 +408,7 @@ automatically generated.
 Examples:
   noteleaf todo recur set 123 --rule "FREQ=DAILY"
   noteleaf todo recur set 456 --rule "FREQ=WEEKLY;BYDAY=MO" --until 2024-12-31`,
-		Args:  cobra.ExactArgs(1),
+		Args: cobra.ExactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			rule, _ := c.Flags().GetString("rule")
 			until, _ := c.Flags().GetString("until")
@@ -406,7 +426,7 @@ Examples:
 
 Converts a recurring task to a one-time task. Existing future instances are not
 affected.`,
-		Args:  cobra.ExactArgs(1),
+		Args: cobra.ExactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			defer h.Close()
 			return h.ClearRecur(c.Context(), args[0])
@@ -420,7 +440,7 @@ affected.`,
 
 Shows the RRULE pattern, next occurrence date, and recurrence end date if
 configured.`,
-		Args:  cobra.ExactArgs(1),
+		Args: cobra.ExactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			defer h.Close()
 			return h.ShowRecur(c.Context(), args[0])
@@ -449,7 +469,7 @@ begin. Useful for multi-step workflows and project management.`,
 
 The first task cannot be started until the second task is completed. Use task
 UUIDs to specify dependencies.`,
-		Args:  cobra.ExactArgs(2),
+		Args: cobra.ExactArgs(2),
 		RunE: func(c *cobra.Command, args []string) error {
 			defer h.Close()
 			return h.AddDep(c.Context(), args[0], args[1])
