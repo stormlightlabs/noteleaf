@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -1075,6 +1076,367 @@ func TestATProtoService(t *testing.T) {
 
 			if err != nil && err.Error() == "not authenticated" {
 				t.Error("Authentication check should pass, but got authentication error")
+			}
+		})
+	})
+
+	t.Run("Session Management Edge Cases", func(t *testing.T) {
+		t.Run("GetSession returns distinct error for nil session", func(t *testing.T) {
+			svc := NewATProtoService()
+
+			session, err := svc.GetSession()
+			if err == nil {
+				t.Error("Expected error when getting nil session")
+			}
+			if session != nil {
+				t.Error("Expected nil session when not authenticated")
+			}
+			expectedMsg := "not authenticated"
+			if !strings.Contains(err.Error(), expectedMsg) {
+				t.Errorf("Expected error message to contain '%s', got '%v'", expectedMsg, err)
+			}
+		})
+
+		t.Run("RestoreSession validates all required fields", func(t *testing.T) {
+			svc := NewATProtoService()
+
+			testCases := []struct {
+				name    string
+				session *Session
+			}{
+				{
+					name: "missing DID",
+					session: &Session{
+						DID:        "",
+						Handle:     "test.bsky.social",
+						AccessJWT:  "access",
+						RefreshJWT: "refresh",
+					},
+				},
+				{
+					name: "missing AccessJWT",
+					session: &Session{
+						DID:        "did:plc:test",
+						Handle:     "test.bsky.social",
+						AccessJWT:  "",
+						RefreshJWT: "refresh",
+					},
+				},
+				{
+					name: "missing RefreshJWT",
+					session: &Session{
+						DID:        "did:plc:test",
+						Handle:     "test.bsky.social",
+						AccessJWT:  "access",
+						RefreshJWT: "",
+					},
+				},
+			}
+
+			for _, tc := range testCases {
+				t.Run(tc.name, func(t *testing.T) {
+					err := svc.RestoreSession(tc.session)
+					if err == nil {
+						t.Errorf("Expected error for %s", tc.name)
+					}
+					if !strings.Contains(err.Error(), "session missing required fields") {
+						t.Errorf("Expected 'session missing required fields' error, got: %v", err)
+					}
+				})
+			}
+		})
+
+		t.Run("RestoreSession preserves empty PDSURL", func(t *testing.T) {
+			svc := NewATProtoService()
+			defaultPDSURL := svc.pdsURL
+
+			session := &Session{
+				DID:        "did:plc:test123",
+				Handle:     "test.bsky.social",
+				AccessJWT:  "access_token",
+				RefreshJWT: "refresh_token",
+				PDSURL:     "",
+			}
+
+			err := svc.RestoreSession(session)
+			if err != nil {
+				t.Errorf("Expected no error, got %v", err)
+			}
+
+			if svc.pdsURL != defaultPDSURL {
+				t.Errorf("Expected pdsURL to remain default when session PDSURL is empty, got '%s'", svc.pdsURL)
+			}
+		})
+	})
+
+	t.Run("PostDocument Validation", func(t *testing.T) {
+		t.Run("validates title before marshaling", func(t *testing.T) {
+			svc := NewATProtoService()
+			svc.session = &Session{
+				DID:           "did:plc:test123",
+				Handle:        "test.bsky.social",
+				AccessJWT:     "access_token",
+				RefreshJWT:    "refresh_token",
+				Authenticated: true,
+			}
+			ctx := context.Background()
+
+			doc := public.Document{
+				Title: "",
+			}
+
+			result, err := svc.PostDocument(ctx, doc, false)
+			if err == nil {
+				t.Error("Expected error when title is empty")
+			}
+			if result != nil {
+				t.Error("Expected nil result when validation fails")
+			}
+			if !strings.Contains(err.Error(), "document title is required") {
+				t.Errorf("Expected 'document title is required' error, got: %v", err)
+			}
+		})
+
+		t.Run("sets correct collection for draft", func(t *testing.T) {
+			svc := NewATProtoService()
+			svc.session = &Session{
+				DID:           "did:plc:test123",
+				Handle:        "test.bsky.social",
+				AccessJWT:     "access_token",
+				RefreshJWT:    "refresh_token",
+				Authenticated: true,
+			}
+			ctx := context.Background()
+
+			doc := public.Document{
+				Title: "Test Draft",
+			}
+
+			_, err := svc.PostDocument(ctx, doc, true)
+
+			if err != nil && strings.Contains(err.Error(), "document title is required") {
+				t.Error("Title validation should pass")
+			}
+		})
+
+		t.Run("sets correct collection for published", func(t *testing.T) {
+			svc := NewATProtoService()
+			svc.session = &Session{
+				DID:           "did:plc:test123",
+				Handle:        "test.bsky.social",
+				AccessJWT:     "access_token",
+				RefreshJWT:    "refresh_token",
+				Authenticated: true,
+			}
+			ctx := context.Background()
+
+			doc := public.Document{
+				Title: "Test Published",
+			}
+
+			_, err := svc.PostDocument(ctx, doc, false)
+
+			if err != nil && strings.Contains(err.Error(), "document title is required") {
+				t.Error("Title validation should pass")
+			}
+		})
+	})
+
+	t.Run("PatchDocument Validation", func(t *testing.T) {
+		t.Run("validates rkey before title", func(t *testing.T) {
+			svc := NewATProtoService()
+			svc.session = &Session{
+				DID:           "did:plc:test123",
+				Handle:        "test.bsky.social",
+				AccessJWT:     "access_token",
+				RefreshJWT:    "refresh_token",
+				Authenticated: true,
+			}
+			ctx := context.Background()
+
+			doc := public.Document{
+				Title: "Valid Title",
+			}
+
+			result, err := svc.PatchDocument(ctx, "", doc, false)
+			if err == nil {
+				t.Error("Expected error when rkey is empty")
+			}
+			if result != nil {
+				t.Error("Expected nil result when rkey validation fails")
+			}
+			if !strings.Contains(err.Error(), "rkey is required") {
+				t.Errorf("Expected 'rkey is required' error, got: %v", err)
+			}
+		})
+
+		t.Run("validates title after rkey", func(t *testing.T) {
+			svc := NewATProtoService()
+			svc.session = &Session{
+				DID:           "did:plc:test123",
+				Handle:        "test.bsky.social",
+				AccessJWT:     "access_token",
+				RefreshJWT:    "refresh_token",
+				Authenticated: true,
+			}
+			ctx := context.Background()
+
+			doc := public.Document{
+				Title: "",
+			}
+
+			result, err := svc.PatchDocument(ctx, "valid-rkey", doc, false)
+			if err == nil {
+				t.Error("Expected error when title is empty")
+			}
+			if result != nil {
+				t.Error("Expected nil result when title validation fails")
+			}
+			if !strings.Contains(err.Error(), "document title is required") {
+				t.Errorf("Expected 'document title is required' error, got: %v", err)
+			}
+		})
+
+		t.Run("sets correct collection for draft", func(t *testing.T) {
+			svc := NewATProtoService()
+			svc.session = &Session{
+				DID:           "did:plc:test123",
+				Handle:        "test.bsky.social",
+				AccessJWT:     "access_token",
+				RefreshJWT:    "refresh_token",
+				Authenticated: true,
+			}
+			ctx := context.Background()
+
+			doc := public.Document{
+				Title: "Test Draft",
+			}
+
+			_, err := svc.PatchDocument(ctx, "test-rkey", doc, true)
+
+			if err != nil && strings.Contains(err.Error(), "document title is required") {
+				t.Error("Title validation should pass")
+			}
+		})
+
+		t.Run("sets correct collection for published", func(t *testing.T) {
+			svc := NewATProtoService()
+			svc.session = &Session{
+				DID:           "did:plc:test123",
+				Handle:        "test.bsky.social",
+				AccessJWT:     "access_token",
+				RefreshJWT:    "refresh_token",
+				Authenticated: true,
+			}
+			ctx := context.Background()
+
+			doc := public.Document{
+				Title: "Test Published",
+			}
+
+			_, err := svc.PatchDocument(ctx, "test-rkey", doc, false)
+
+			if err != nil && strings.Contains(err.Error(), "document title is required") {
+				t.Error("Title validation should pass")
+			}
+		})
+	})
+
+	t.Run("DeleteDocument Validation", func(t *testing.T) {
+		t.Run("validates rkey before attempting delete", func(t *testing.T) {
+			svc := NewATProtoService()
+			svc.session = &Session{
+				DID:           "did:plc:test123",
+				Handle:        "test.bsky.social",
+				AccessJWT:     "access_token",
+				RefreshJWT:    "refresh_token",
+				Authenticated: true,
+			}
+			ctx := context.Background()
+
+			err := svc.DeleteDocument(ctx, "", false)
+			if err == nil {
+				t.Error("Expected error when rkey is empty")
+			}
+			if !strings.Contains(err.Error(), "rkey is required") {
+				t.Errorf("Expected 'rkey is required' error, got: %v", err)
+			}
+		})
+
+		t.Run("uses correct collection for draft", func(t *testing.T) {
+			svc := NewATProtoService()
+			svc.session = &Session{
+				DID:           "did:plc:test123",
+				Handle:        "test.bsky.social",
+				AccessJWT:     "access_token",
+				RefreshJWT:    "refresh_token",
+				Authenticated: true,
+			}
+			ctx := context.Background()
+
+			err := svc.DeleteDocument(ctx, "test-rkey", true)
+
+			if err != nil && strings.Contains(err.Error(), "rkey is required") {
+				t.Error("Rkey validation should pass")
+			}
+		})
+
+		t.Run("uses correct collection for published", func(t *testing.T) {
+			svc := NewATProtoService()
+			svc.session = &Session{
+				DID:           "did:plc:test123",
+				Handle:        "test.bsky.social",
+				AccessJWT:     "access_token",
+				RefreshJWT:    "refresh_token",
+				Authenticated: true,
+			}
+			ctx := context.Background()
+
+			err := svc.DeleteDocument(ctx, "test-rkey", false)
+
+			if err != nil && strings.Contains(err.Error(), "rkey is required") {
+				t.Error("Rkey validation should pass")
+			}
+		})
+	})
+
+	t.Run("Concurrent Operations", func(t *testing.T) {
+		t.Run("Close can be called multiple times", func(t *testing.T) {
+			svc := NewATProtoService()
+			svc.session = &Session{
+				Handle:        "test.bsky.social",
+				Authenticated: true,
+			}
+
+			err1 := svc.Close()
+			if err1 != nil {
+				t.Errorf("First close should succeed: %v", err1)
+			}
+
+			err2 := svc.Close()
+			if err2 != nil {
+				t.Errorf("Second close should succeed: %v", err2)
+			}
+		})
+
+		t.Run("IsAuthenticated after Close returns false", func(t *testing.T) {
+			svc := NewATProtoService()
+			svc.session = &Session{
+				Handle:        "test.bsky.social",
+				Authenticated: true,
+			}
+
+			if !svc.IsAuthenticated() {
+				t.Error("Expected IsAuthenticated to return true before close")
+			}
+
+			err := svc.Close()
+			if err != nil {
+				t.Errorf("Close failed: %v", err)
+			}
+
+			if svc.IsAuthenticated() {
+				t.Error("Expected IsAuthenticated to return false after close")
 			}
 		})
 	})
