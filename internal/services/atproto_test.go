@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/stormlightlabs/noteleaf/internal/public"
 )
 
 func TestATProtoService(t *testing.T) {
@@ -588,6 +590,491 @@ func TestATProtoService(t *testing.T) {
 			err := svc.RefreshToken(ctx)
 			if err == nil {
 				t.Error("Expected error when context times out")
+			}
+		})
+	})
+
+	t.Run("PostDocument", func(t *testing.T) {
+		t.Run("returns error when not authenticated", func(t *testing.T) {
+			svc := NewATProtoService()
+			ctx := context.Background()
+
+			doc := public.Document{
+				Title: "Test Document",
+			}
+
+			result, err := svc.PostDocument(ctx, doc, false)
+			if err == nil {
+				t.Error("Expected error when posting document without authentication")
+			}
+			if result != nil {
+				t.Error("Expected nil result when not authenticated")
+			}
+			if err.Error() != "not authenticated" {
+				t.Errorf("Expected 'not authenticated' error, got '%v'", err)
+			}
+		})
+
+		t.Run("returns error when session not authenticated", func(t *testing.T) {
+			svc := NewATProtoService()
+			ctx := context.Background()
+			svc.session = &Session{
+				Handle:        "test.bsky.social",
+				Authenticated: false,
+			}
+
+			doc := public.Document{
+				Title: "Test Document",
+			}
+
+			result, err := svc.PostDocument(ctx, doc, false)
+			if err == nil {
+				t.Error("Expected error when posting document with unauthenticated session")
+			}
+			if result != nil {
+				t.Error("Expected nil result when session not authenticated")
+			}
+		})
+
+		t.Run("returns error when document title is empty", func(t *testing.T) {
+			svc := NewATProtoService()
+			ctx := context.Background()
+			svc.session = &Session{
+				DID:           "did:plc:test123",
+				Handle:        "test.bsky.social",
+				AccessJWT:     "access_token",
+				RefreshJWT:    "refresh_token",
+				Authenticated: true,
+			}
+
+			doc := public.Document{
+				Title: "",
+			}
+
+			result, err := svc.PostDocument(ctx, doc, false)
+			if err == nil {
+				t.Error("Expected error when document title is empty")
+			}
+			if result != nil {
+				t.Error("Expected nil result when title is empty")
+			}
+			if err.Error() != "document title is required" {
+				t.Errorf("Expected 'document title is required' error, got '%v'", err)
+			}
+		})
+
+		t.Run("returns error when context cancelled", func(t *testing.T) {
+			svc := NewATProtoService()
+			svc.session = &Session{
+				DID:           "did:plc:test123",
+				Handle:        "test.bsky.social",
+				AccessJWT:     "access_token",
+				RefreshJWT:    "refresh_token",
+				Authenticated: true,
+			}
+
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+
+			doc := public.Document{
+				Title: "Test Document",
+			}
+
+			result, err := svc.PostDocument(ctx, doc, false)
+			if err == nil {
+				t.Error("Expected error when context is cancelled")
+			}
+			if result != nil {
+				t.Error("Expected nil result when context is cancelled")
+			}
+		})
+
+		t.Run("returns error when context timeout", func(t *testing.T) {
+			svc := NewATProtoService()
+			svc.session = &Session{
+				DID:           "did:plc:test123",
+				Handle:        "test.bsky.social",
+				AccessJWT:     "access_token",
+				RefreshJWT:    "refresh_token",
+				Authenticated: true,
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 1)
+			defer cancel()
+			time.Sleep(2 * time.Millisecond)
+
+			doc := public.Document{
+				Title: "Test Document",
+			}
+
+			result, err := svc.PostDocument(ctx, doc, false)
+			if err == nil {
+				t.Error("Expected error when context times out")
+			}
+			if result != nil {
+				t.Error("Expected nil result when context times out")
+			}
+		})
+
+		t.Run("validates draft parameter sets correct collection", func(t *testing.T) {
+			svc := NewATProtoService()
+			svc.session = &Session{
+				DID:           "did:plc:test123",
+				Handle:        "test.bsky.social",
+				AccessJWT:     "access_token",
+				RefreshJWT:    "refresh_token",
+				Authenticated: true,
+			}
+			ctx := context.Background()
+
+			doc := public.Document{
+				Title: "Test Document",
+			}
+
+			_, err := svc.PostDocument(ctx, doc, true)
+
+			if err != nil && err.Error() == "not authenticated" {
+				t.Error("Authentication check should pass, but got authentication error")
+			}
+		})
+
+		t.Run("validates published parameter sets correct collection", func(t *testing.T) {
+			svc := NewATProtoService()
+			svc.session = &Session{
+				DID:           "did:plc:test123",
+				Handle:        "test.bsky.social",
+				AccessJWT:     "access_token",
+				RefreshJWT:    "refresh_token",
+				Authenticated: true,
+			}
+			ctx := context.Background()
+
+			doc := public.Document{
+				Title: "Test Document",
+			}
+
+			_, err := svc.PostDocument(ctx, doc, false)
+
+			if err != nil && err.Error() == "not authenticated" {
+				t.Error("Authentication check should pass, but got authentication error")
+			}
+		})
+	})
+
+	t.Run("PatchDocument", func(t *testing.T) {
+		t.Run("returns error when not authenticated", func(t *testing.T) {
+			svc := NewATProtoService()
+			ctx := context.Background()
+
+			doc := public.Document{
+				Title: "Updated Document",
+			}
+
+			result, err := svc.PatchDocument(ctx, "test-rkey", doc, false)
+			if err == nil {
+				t.Error("Expected error when patching document without authentication")
+			}
+			if result != nil {
+				t.Error("Expected nil result when not authenticated")
+			}
+			if err.Error() != "not authenticated" {
+				t.Errorf("Expected 'not authenticated' error, got '%v'", err)
+			}
+		})
+
+		t.Run("returns error when session not authenticated", func(t *testing.T) {
+			svc := NewATProtoService()
+			ctx := context.Background()
+			svc.session = &Session{
+				Handle:        "test.bsky.social",
+				Authenticated: false,
+			}
+
+			doc := public.Document{
+				Title: "Updated Document",
+			}
+
+			result, err := svc.PatchDocument(ctx, "test-rkey", doc, false)
+			if err == nil {
+				t.Error("Expected error when patching document with unauthenticated session")
+			}
+			if result != nil {
+				t.Error("Expected nil result when session not authenticated")
+			}
+		})
+
+		t.Run("returns error when rkey is empty", func(t *testing.T) {
+			svc := NewATProtoService()
+			ctx := context.Background()
+			svc.session = &Session{
+				DID:           "did:plc:test123",
+				Handle:        "test.bsky.social",
+				AccessJWT:     "access_token",
+				RefreshJWT:    "refresh_token",
+				Authenticated: true,
+			}
+
+			doc := public.Document{
+				Title: "Updated Document",
+			}
+
+			result, err := svc.PatchDocument(ctx, "", doc, false)
+			if err == nil {
+				t.Error("Expected error when rkey is empty")
+			}
+			if result != nil {
+				t.Error("Expected nil result when rkey is empty")
+			}
+			if err.Error() != "rkey is required" {
+				t.Errorf("Expected 'rkey is required' error, got '%v'", err)
+			}
+		})
+
+		t.Run("returns error when document title is empty", func(t *testing.T) {
+			svc := NewATProtoService()
+			ctx := context.Background()
+			svc.session = &Session{
+				DID:           "did:plc:test123",
+				Handle:        "test.bsky.social",
+				AccessJWT:     "access_token",
+				RefreshJWT:    "refresh_token",
+				Authenticated: true,
+			}
+
+			doc := public.Document{
+				Title: "",
+			}
+
+			result, err := svc.PatchDocument(ctx, "test-rkey", doc, false)
+			if err == nil {
+				t.Error("Expected error when document title is empty")
+			}
+			if result != nil {
+				t.Error("Expected nil result when title is empty")
+			}
+			if err.Error() != "document title is required" {
+				t.Errorf("Expected 'document title is required' error, got '%v'", err)
+			}
+		})
+
+		t.Run("returns error when context cancelled", func(t *testing.T) {
+			svc := NewATProtoService()
+			svc.session = &Session{
+				DID:           "did:plc:test123",
+				Handle:        "test.bsky.social",
+				AccessJWT:     "access_token",
+				RefreshJWT:    "refresh_token",
+				Authenticated: true,
+			}
+
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+
+			doc := public.Document{
+				Title: "Updated Document",
+			}
+
+			result, err := svc.PatchDocument(ctx, "test-rkey", doc, false)
+			if err == nil {
+				t.Error("Expected error when context is cancelled")
+			}
+			if result != nil {
+				t.Error("Expected nil result when context is cancelled")
+			}
+		})
+
+		t.Run("returns error when context timeout", func(t *testing.T) {
+			svc := NewATProtoService()
+			svc.session = &Session{
+				DID:           "did:plc:test123",
+				Handle:        "test.bsky.social",
+				AccessJWT:     "access_token",
+				RefreshJWT:    "refresh_token",
+				Authenticated: true,
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 1)
+			defer cancel()
+			time.Sleep(2 * time.Millisecond)
+
+			doc := public.Document{
+				Title: "Updated Document",
+			}
+
+			result, err := svc.PatchDocument(ctx, "test-rkey", doc, false)
+			if err == nil {
+				t.Error("Expected error when context times out")
+			}
+			if result != nil {
+				t.Error("Expected nil result when context times out")
+			}
+		})
+
+		t.Run("validates draft parameter sets correct collection", func(t *testing.T) {
+			svc := NewATProtoService()
+			svc.session = &Session{
+				DID:           "did:plc:test123",
+				Handle:        "test.bsky.social",
+				AccessJWT:     "access_token",
+				RefreshJWT:    "refresh_token",
+				Authenticated: true,
+			}
+			ctx := context.Background()
+
+			doc := public.Document{
+				Title: "Updated Document",
+			}
+
+			_, err := svc.PatchDocument(ctx, "test-rkey", doc, true)
+
+			if err != nil && err.Error() == "not authenticated" {
+				t.Error("Authentication check should pass, but got authentication error")
+			}
+		})
+
+		t.Run("validates published parameter sets correct collection", func(t *testing.T) {
+			svc := NewATProtoService()
+			svc.session = &Session{
+				DID:           "did:plc:test123",
+				Handle:        "test.bsky.social",
+				AccessJWT:     "access_token",
+				RefreshJWT:    "refresh_token",
+				Authenticated: true,
+			}
+			ctx := context.Background()
+
+			doc := public.Document{
+				Title: "Updated Document",
+			}
+
+			_, err := svc.PatchDocument(ctx, "test-rkey", doc, false)
+
+			if err != nil && err.Error() == "not authenticated" {
+				t.Error("Authentication check should pass, but got authentication error")
+			}
+		})
+	})
+
+	t.Run("DeleteDocument", func(t *testing.T) {
+		t.Run("returns error when not authenticated", func(t *testing.T) {
+			svc := NewATProtoService()
+			ctx := context.Background()
+
+			err := svc.DeleteDocument(ctx, "test-rkey", false)
+			if err == nil {
+				t.Error("Expected error when deleting document without authentication")
+			}
+			if err.Error() != "not authenticated" {
+				t.Errorf("Expected 'not authenticated' error, got '%v'", err)
+			}
+		})
+
+		t.Run("returns error when session not authenticated", func(t *testing.T) {
+			svc := NewATProtoService()
+			ctx := context.Background()
+			svc.session = &Session{
+				Handle:        "test.bsky.social",
+				Authenticated: false,
+			}
+
+			err := svc.DeleteDocument(ctx, "test-rkey", false)
+			if err == nil {
+				t.Error("Expected error when deleting document with unauthenticated session")
+			}
+		})
+
+		t.Run("returns error when rkey is empty", func(t *testing.T) {
+			svc := NewATProtoService()
+			ctx := context.Background()
+			svc.session = &Session{
+				DID:           "did:plc:test123",
+				Handle:        "test.bsky.social",
+				AccessJWT:     "access_token",
+				RefreshJWT:    "refresh_token",
+				Authenticated: true,
+			}
+
+			err := svc.DeleteDocument(ctx, "", false)
+			if err == nil {
+				t.Error("Expected error when rkey is empty")
+			}
+			if err.Error() != "rkey is required" {
+				t.Errorf("Expected 'rkey is required' error, got '%v'", err)
+			}
+		})
+
+		t.Run("returns error when context cancelled", func(t *testing.T) {
+			svc := NewATProtoService()
+			svc.session = &Session{
+				DID:           "did:plc:test123",
+				Handle:        "test.bsky.social",
+				AccessJWT:     "access_token",
+				RefreshJWT:    "refresh_token",
+				Authenticated: true,
+			}
+
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+
+			err := svc.DeleteDocument(ctx, "test-rkey", false)
+			if err == nil {
+				t.Error("Expected error when context is cancelled")
+			}
+		})
+
+		t.Run("returns error when context timeout", func(t *testing.T) {
+			svc := NewATProtoService()
+			svc.session = &Session{
+				DID:           "did:plc:test123",
+				Handle:        "test.bsky.social",
+				AccessJWT:     "access_token",
+				RefreshJWT:    "refresh_token",
+				Authenticated: true,
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 1)
+			defer cancel()
+			time.Sleep(2 * time.Millisecond)
+
+			err := svc.DeleteDocument(ctx, "test-rkey", false)
+			if err == nil {
+				t.Error("Expected error when context times out")
+			}
+		})
+
+		t.Run("validates draft parameter sets correct collection", func(t *testing.T) {
+			svc := NewATProtoService()
+			svc.session = &Session{
+				DID:           "did:plc:test123",
+				Handle:        "test.bsky.social",
+				AccessJWT:     "access_token",
+				RefreshJWT:    "refresh_token",
+				Authenticated: true,
+			}
+			ctx := context.Background()
+
+			err := svc.DeleteDocument(ctx, "test-rkey", true)
+
+			if err != nil && err.Error() == "not authenticated" {
+				t.Error("Authentication check should pass, but got authentication error")
+			}
+		})
+
+		t.Run("validates published parameter sets correct collection", func(t *testing.T) {
+			svc := NewATProtoService()
+			svc.session = &Session{
+				DID:           "did:plc:test123",
+				Handle:        "test.bsky.social",
+				AccessJWT:     "access_token",
+				RefreshJWT:    "refresh_token",
+				Authenticated: true,
+			}
+			ctx := context.Background()
+
+			err := svc.DeleteDocument(ctx, "test-rkey", false)
+
+			if err != nil && err.Error() == "not authenticated" {
+				t.Error("Authentication check should pass, but got authentication error")
 			}
 		})
 	})

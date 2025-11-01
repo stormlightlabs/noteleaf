@@ -44,6 +44,7 @@ import (
 	"time"
 
 	"github.com/bluesky-social/indigo/api/atproto"
+	lexutil "github.com/bluesky-social/indigo/lex/util"
 	"github.com/bluesky-social/indigo/repo"
 	"github.com/bluesky-social/indigo/xrpc"
 	"github.com/ipfs/go-cid"
@@ -320,6 +321,152 @@ func (s *ATProtoService) ListPublications(ctx context.Context) ([]PublicationWit
 	}
 
 	return publications, nil
+}
+
+// PostDocument creates a new document in the user's repository
+func (s *ATProtoService) PostDocument(ctx context.Context, doc public.Document, isDraft bool) (*DocumentWithMeta, error) {
+	if !s.IsAuthenticated() {
+		return nil, fmt.Errorf("not authenticated")
+	}
+
+	if doc.Title == "" {
+		return nil, fmt.Errorf("document title is required")
+	}
+
+	collection := public.TypeDocument
+	if isDraft {
+		collection = public.TypeDocumentDraft
+	}
+
+	doc.Type = collection
+
+	recordBytes, err := json.Marshal(doc)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal document: %w", err)
+	}
+
+	record := &lexutil.LexiconTypeDecoder{}
+	if err := record.UnmarshalJSON(recordBytes); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal document to lexicon type: %w", err)
+	}
+
+	input := &atproto.RepoCreateRecord_Input{
+		Repo:       s.session.DID,
+		Collection: collection,
+		Record:     record,
+	}
+
+	output, err := atproto.RepoCreateRecord(ctx, s.client, input)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create record: %w", err)
+	}
+
+	parts := strings.Split(output.Uri, "/")
+	rkey := ""
+	if len(parts) > 0 {
+		rkey = parts[len(parts)-1]
+	}
+
+	meta := public.DocumentMeta{
+		RKey:      rkey,
+		CID:       output.Cid,
+		URI:       output.Uri,
+		IsDraft:   isDraft,
+		FetchedAt: time.Now(),
+	}
+
+	return &DocumentWithMeta{
+		Document: doc,
+		Meta:     meta,
+	}, nil
+}
+
+// PatchDocument updates an existing document in the user's repository
+func (s *ATProtoService) PatchDocument(ctx context.Context, rkey string, doc public.Document, isDraft bool) (*DocumentWithMeta, error) {
+	if !s.IsAuthenticated() {
+		return nil, fmt.Errorf("not authenticated")
+	}
+
+	if rkey == "" {
+		return nil, fmt.Errorf("rkey is required")
+	}
+
+	if doc.Title == "" {
+		return nil, fmt.Errorf("document title is required")
+	}
+
+	collection := public.TypeDocument
+	if isDraft {
+		collection = public.TypeDocumentDraft
+	}
+
+	doc.Type = collection
+
+	recordBytes, err := json.Marshal(doc)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal document: %w", err)
+	}
+
+	record := &lexutil.LexiconTypeDecoder{}
+	if err := record.UnmarshalJSON(recordBytes); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal document to lexicon type: %w", err)
+	}
+
+	input := &atproto.RepoPutRecord_Input{
+		Repo:       s.session.DID,
+		Collection: collection,
+		Rkey:       rkey,
+		Record:     record,
+	}
+
+	output, err := atproto.RepoPutRecord(ctx, s.client, input)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update record: %w", err)
+	}
+
+	uri := fmt.Sprintf("at://%s/%s/%s", s.session.DID, collection, rkey)
+
+	meta := public.DocumentMeta{
+		RKey:      rkey,
+		CID:       output.Cid,
+		URI:       uri,
+		IsDraft:   isDraft,
+		FetchedAt: time.Now(),
+	}
+
+	return &DocumentWithMeta{
+		Document: doc,
+		Meta:     meta,
+	}, nil
+}
+
+// DeleteDocument removes a document from the user's repository
+func (s *ATProtoService) DeleteDocument(ctx context.Context, rkey string, isDraft bool) error {
+	if !s.IsAuthenticated() {
+		return fmt.Errorf("not authenticated")
+	}
+
+	if rkey == "" {
+		return fmt.Errorf("rkey is required")
+	}
+
+	collection := public.TypeDocument
+	if isDraft {
+		collection = public.TypeDocumentDraft
+	}
+
+	input := &atproto.RepoDeleteRecord_Input{
+		Repo:       s.session.DID,
+		Collection: collection,
+		Rkey:       rkey,
+	}
+
+	_, err := atproto.RepoDeleteRecord(ctx, s.client, input)
+	if err != nil {
+		return fmt.Errorf("failed to delete record: %w", err)
+	}
+
+	return nil
 }
 
 // Close cleans up resources

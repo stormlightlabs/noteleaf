@@ -1,8 +1,10 @@
 // Package handlers provides command handlers for leaflet publication operations.
 //
 // TODO: Post (create 1)
+// TODO: Patch (update 1)
 // TODO: Push (create or update - more than 1)
 // TODO: Add TUI viewing for document details
+// TODO: Repost - "Reblog" - post to BlueSky
 package handlers
 
 import (
@@ -271,6 +273,184 @@ func (h *PublicationHandler) List(ctx context.Context, filter string) error {
 	for _, note := range notes {
 		printPublication(note)
 	}
+
+	return nil
+}
+
+// Post creates a new document on leaflet from a local note
+func (h *PublicationHandler) Post(ctx context.Context, noteID int64, isDraft bool) error {
+	if !h.atproto.IsAuthenticated() {
+		return fmt.Errorf("not authenticated - run 'noteleaf pub auth' first")
+	}
+
+	note, err := h.repos.Notes.Get(ctx, noteID)
+	if err != nil {
+		return fmt.Errorf("failed to get note: %w", err)
+	}
+
+	if note.HasLeafletAssociation() {
+		return fmt.Errorf("note already published - use patch to update")
+	}
+
+	session, err := h.atproto.GetSession()
+	if err != nil {
+		return fmt.Errorf("failed to get session: %w", err)
+	}
+
+	converter := public.NewMarkdownConverter()
+	blocks, err := converter.ToLeaflet(note.Content)
+	if err != nil {
+		return fmt.Errorf("failed to convert markdown to leaflet format: %w", err)
+	}
+
+	doc := public.Document{
+		Author:      session.DID,
+		Title:       note.Title,
+		Description: "",
+		Pages: []public.LinearDocument{
+			{
+				Type:   public.TypeLinearDocument,
+				Blocks: blocks,
+			},
+		},
+	}
+
+	if !isDraft {
+		now := time.Now()
+		doc.PublishedAt = now.Format(time.RFC3339)
+	}
+
+	ui.Infoln("Creating document '%s' on leaflet...", note.Title)
+
+	result, err := h.atproto.PostDocument(ctx, doc, isDraft)
+	if err != nil {
+		return fmt.Errorf("failed to post document: %w", err)
+	}
+
+	note.LeafletRKey = &result.Meta.RKey
+	note.LeafletCID = &result.Meta.CID
+	note.IsDraft = isDraft
+
+	if !isDraft && doc.PublishedAt != "" {
+		publishedAt, err := time.Parse(time.RFC3339, doc.PublishedAt)
+		if err == nil {
+			note.PublishedAt = &publishedAt
+		}
+	}
+
+	if err := h.repos.Notes.Update(ctx, note); err != nil {
+		return fmt.Errorf("document created but failed to update local note: %w", err)
+	}
+
+	if isDraft {
+		ui.Successln("Draft created successfully!")
+	} else {
+		ui.Successln("Document published successfully!")
+	}
+	ui.Infoln("  RKey: %s", result.Meta.RKey)
+	ui.Infoln("  CID: %s", result.Meta.CID)
+
+	return nil
+}
+
+// Patch updates an existing document on leaflet from a local note
+func (h *PublicationHandler) Patch(ctx context.Context, noteID int64) error {
+	if !h.atproto.IsAuthenticated() {
+		return fmt.Errorf("not authenticated - run 'noteleaf pub auth' first")
+	}
+
+	note, err := h.repos.Notes.Get(ctx, noteID)
+	if err != nil {
+		return fmt.Errorf("failed to get note: %w", err)
+	}
+
+	if !note.HasLeafletAssociation() {
+		return fmt.Errorf("note not published - use post to create")
+	}
+
+	session, err := h.atproto.GetSession()
+	if err != nil {
+		return fmt.Errorf("failed to get session: %w", err)
+	}
+
+	converter := public.NewMarkdownConverter()
+	blocks, err := converter.ToLeaflet(note.Content)
+	if err != nil {
+		return fmt.Errorf("failed to convert markdown to leaflet format: %w", err)
+	}
+
+	doc := public.Document{
+		Author:      session.DID,
+		Title:       note.Title,
+		Description: "",
+		Pages: []public.LinearDocument{
+			{
+				Type:   public.TypeLinearDocument,
+				Blocks: blocks,
+			},
+		},
+	}
+
+	if !note.IsDraft && note.PublishedAt != nil {
+		doc.PublishedAt = note.PublishedAt.Format(time.RFC3339)
+	} else if !note.IsDraft {
+		now := time.Now()
+		doc.PublishedAt = now.Format(time.RFC3339)
+		note.PublishedAt = &now
+	}
+
+	ui.Infoln("Updating document '%s' on leaflet...", note.Title)
+
+	result, err := h.atproto.PatchDocument(ctx, *note.LeafletRKey, doc, note.IsDraft)
+	if err != nil {
+		return fmt.Errorf("failed to patch document: %w", err)
+	}
+
+	note.LeafletCID = &result.Meta.CID
+
+	if err := h.repos.Notes.Update(ctx, note); err != nil {
+		return fmt.Errorf("document updated but failed to update local note: %w", err)
+	}
+
+	ui.Successln("Document updated successfully!")
+	ui.Infoln("  RKey: %s", result.Meta.RKey)
+	ui.Infoln("  CID: %s", result.Meta.CID)
+
+	return nil
+}
+
+// Delete removes a document from leaflet
+func (h *PublicationHandler) Delete(ctx context.Context, noteID int64) error {
+	if !h.atproto.IsAuthenticated() {
+		return fmt.Errorf("not authenticated - run 'noteleaf pub auth' first")
+	}
+
+	note, err := h.repos.Notes.Get(ctx, noteID)
+	if err != nil {
+		return fmt.Errorf("failed to get note: %w", err)
+	}
+
+	if !note.HasLeafletAssociation() {
+		return fmt.Errorf("note not published on leaflet")
+	}
+
+	ui.Infoln("Deleting document '%s' from leaflet...", note.Title)
+
+	err = h.atproto.DeleteDocument(ctx, *note.LeafletRKey, note.IsDraft)
+	if err != nil {
+		return fmt.Errorf("failed to delete document: %w", err)
+	}
+
+	note.LeafletRKey = nil
+	note.LeafletCID = nil
+	note.PublishedAt = nil
+	note.IsDraft = false
+
+	if err := h.repos.Notes.Update(ctx, note); err != nil {
+		return fmt.Errorf("document deleted but failed to update local note: %w", err)
+	}
+
+	ui.Successln("Document deleted successfully!")
 
 	return nil
 }

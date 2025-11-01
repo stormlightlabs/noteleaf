@@ -10,8 +10,9 @@ package public
 import "time"
 
 const (
-	TypeDocument       = "pub.leaflet.document"
-	TypePublication    = "pub.leaflet.publication"
+	TypeDocument      = "pub.leaflet.document"
+	TypeDocumentDraft = "pub.leaflet.document.draft"
+	TypePublication   = "pub.leaflet.publication"
 	TypeLinearDocument = "pub.leaflet.pages.linearDocument"
 	TypeBlock          = "pub.leaflet.pages.linearDocument#block"
 
