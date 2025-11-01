@@ -5,13 +5,6 @@
 //  4. Extract documents and metadata
 //  5. Return as []DocumentWithMeta
 //
-// TODO: Implement document pulling
-//  1. GET {pdsURL}/xrpc/com.atproto.sync.getRepo?did={session.DID}
-//  2. Parse CAR stream using github.com/bluesky-social/indigo/repo
-//  3. Iterate over records, filter by collection == "pub.leaflet.document"
-//  4. Parse each record as public.Document
-//  5. Collect metadata (rkey, cid, uri)
-//
 // TODO: Implement publication listing:
 // 1. Query records with collection: pub.leaflet.publication
 // 2. Parse as public.Publication
@@ -21,12 +14,17 @@
 package services
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/bluesky-social/indigo/api/atproto"
+	"github.com/bluesky-social/indigo/repo"
 	"github.com/bluesky-social/indigo/xrpc"
+	"github.com/ipfs/go-cid"
 	"github.com/stormlightlabs/noteleaf/internal/public"
 )
 
@@ -192,7 +190,59 @@ func (s *ATProtoService) PullDocuments(ctx context.Context) ([]DocumentWithMeta,
 		return nil, fmt.Errorf("not authenticated")
 	}
 
-	return nil, fmt.Errorf("document pulling not yet implemented - TODO: implement com.atproto.sync.getRepo with CAR parsing")
+	carBytes, err := atproto.SyncGetRepo(ctx, s.client, s.session.DID, "")
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch repository: %w", err)
+	}
+
+	r, err := repo.ReadRepoFromCar(ctx, bytes.NewReader(carBytes))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse CAR file: %w", err)
+	}
+
+	var documents []DocumentWithMeta
+	prefix := public.TypeDocument
+
+	err = r.ForEach(ctx, prefix, func(k string, v cid.Cid) error {
+		_, recordBytes, err := r.GetRecordBytes(ctx, k)
+		if err != nil {
+			return fmt.Errorf("failed to get record bytes for %s: %w", k, err)
+		}
+
+		var doc public.Document
+		if err := json.Unmarshal(*recordBytes, &doc); err != nil {
+			return fmt.Errorf("failed to unmarshal document %s: %w", k, err)
+		}
+
+		parts := strings.Split(k, "/")
+		rkey := ""
+		if len(parts) > 0 {
+			rkey = parts[len(parts)-1]
+		}
+
+		uri := fmt.Sprintf("at://%s/%s", s.session.DID, k)
+
+		meta := public.DocumentMeta{
+			RKey:      rkey,
+			CID:       v.String(),
+			URI:       uri,
+			IsDraft:   false,
+			FetchedAt: time.Now(),
+		}
+
+		documents = append(documents, DocumentWithMeta{
+			Document: doc,
+			Meta:     meta,
+		})
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to iterate over documents: %w", err)
+	}
+
+	return documents, nil
 }
 
 // ListPublications fetches available publications for the authenticated user

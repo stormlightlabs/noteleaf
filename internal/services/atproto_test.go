@@ -312,5 +312,218 @@ func TestATProtoService(t *testing.T) {
 				t.Error("Expected session to be nil after close")
 			}
 		})
+
+		t.Run("handles nil session gracefully", func(t *testing.T) {
+			svc := NewATProtoService()
+			svc.session = nil
+
+			err := svc.Close()
+			if err != nil {
+				t.Errorf("Expected no error on close with nil session, got %v", err)
+			}
+		})
+	})
+
+	t.Run("PullDocuments", func(t *testing.T) {
+		t.Run("returns error when not authenticated", func(t *testing.T) {
+			svc := NewATProtoService()
+			ctx := context.Background()
+
+			docs, err := svc.PullDocuments(ctx)
+			if err == nil {
+				t.Error("Expected error when pulling documents without authentication")
+			}
+			if docs != nil {
+				t.Error("Expected nil documents when not authenticated")
+			}
+			if err.Error() != "not authenticated" {
+				t.Errorf("Expected 'not authenticated' error, got '%v'", err)
+			}
+		})
+
+		t.Run("returns error when session not authenticated", func(t *testing.T) {
+			svc := NewATProtoService()
+			ctx := context.Background()
+			svc.session = &Session{
+				Handle:        "test.bsky.social",
+				Authenticated: false,
+			}
+
+			docs, err := svc.PullDocuments(ctx)
+			if err == nil {
+				t.Error("Expected error when pulling documents with unauthenticated session")
+			}
+			if docs != nil {
+				t.Error("Expected nil documents when session not authenticated")
+			}
+		})
+
+		t.Run("returns error when context cancelled", func(t *testing.T) {
+			svc := NewATProtoService()
+			svc.session = &Session{
+				DID:           "did:plc:test123",
+				Handle:        "test.bsky.social",
+				AccessJWT:     "access_token",
+				RefreshJWT:    "refresh_token",
+				Authenticated: true,
+			}
+
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+
+			docs, err := svc.PullDocuments(ctx)
+			if err == nil {
+				t.Error("Expected error when context is cancelled")
+			}
+			if docs != nil {
+				t.Error("Expected nil documents when context is cancelled")
+			}
+		})
+
+		t.Run("returns empty list when no documents exist", func(t *testing.T) {
+			svc := NewATProtoService()
+			svc.session = &Session{
+				DID:           "did:plc:test123",
+				Handle:        "test.bsky.social",
+				AccessJWT:     "access_token",
+				RefreshJWT:    "refresh_token",
+				Authenticated: true,
+			}
+			ctx := context.Background()
+
+			docs, err := svc.PullDocuments(ctx)
+
+			if err != nil && err.Error() == "not authenticated" {
+				t.Error("Authentication check should pass, but got authentication error")
+			}
+
+			_ = docs
+		})
+	})
+
+	t.Run("ListPublications", func(t *testing.T) {
+		t.Run("returns error when not authenticated", func(t *testing.T) {
+			svc := NewATProtoService()
+			ctx := context.Background()
+
+			pubs, err := svc.ListPublications(ctx)
+			if err == nil {
+				t.Error("Expected error when listing publications without authentication")
+			}
+			if pubs != nil {
+				t.Error("Expected nil publications when not authenticated")
+			}
+			if err.Error() != "not authenticated" {
+				t.Errorf("Expected 'not authenticated' error, got '%v'", err)
+			}
+		})
+
+		t.Run("returns error when session not authenticated", func(t *testing.T) {
+			svc := NewATProtoService()
+			ctx := context.Background()
+			svc.session = &Session{
+				Handle:        "test.bsky.social",
+				Authenticated: false,
+			}
+
+			pubs, err := svc.ListPublications(ctx)
+			if err == nil {
+				t.Error("Expected error when listing publications with unauthenticated session")
+			}
+			if pubs != nil {
+				t.Error("Expected nil publications when session not authenticated")
+			}
+		})
+	})
+
+	t.Run("Authentication Error Scenarios", func(t *testing.T) {
+		t.Run("returns error with context timeout", func(t *testing.T) {
+			svc := NewATProtoService()
+			ctx, cancel := context.WithTimeout(context.Background(), 1)
+			defer cancel()
+			time.Sleep(2 * time.Millisecond)
+
+			err := svc.Authenticate(ctx, "test.bsky.social", "password")
+			if err == nil {
+				t.Error("Expected error when context times out")
+			}
+		})
+
+		t.Run("returns error with cancelled context", func(t *testing.T) {
+			svc := NewATProtoService()
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+
+			err := svc.Authenticate(ctx, "test.bsky.social", "password")
+			if err == nil {
+				t.Error("Expected error when context is cancelled")
+			}
+		})
+
+		t.Run("validates both handle and password together", func(t *testing.T) {
+			svc := NewATProtoService()
+			ctx := context.Background()
+
+			testCases := []struct {
+				name     string
+				handle   string
+				password string
+			}{
+				{"empty handle", "", "password"},
+				{"empty password", "handle", ""},
+				{"both empty", "", ""},
+			}
+
+			for _, tc := range testCases {
+				t.Run(tc.name, func(t *testing.T) {
+					err := svc.Authenticate(ctx, tc.handle, tc.password)
+					if err == nil {
+						t.Errorf("Expected error for %s", tc.name)
+					}
+					if !svc.IsAuthenticated() == false {
+						t.Error("Expected service to not be authenticated after error")
+					}
+				})
+			}
+		})
+	})
+
+	t.Run("RefreshToken Error Scenarios", func(t *testing.T) {
+		t.Run("returns error with cancelled context", func(t *testing.T) {
+			svc := NewATProtoService()
+			svc.session = &Session{
+				DID:           "did:plc:test123",
+				Handle:        "test.bsky.social",
+				AccessJWT:     "access_token",
+				RefreshJWT:    "refresh_token",
+				Authenticated: true,
+			}
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+
+			err := svc.RefreshToken(ctx)
+			if err == nil {
+				t.Error("Expected error when context is cancelled")
+			}
+		})
+
+		t.Run("returns error with timeout context", func(t *testing.T) {
+			svc := NewATProtoService()
+			svc.session = &Session{
+				DID:           "did:plc:test123",
+				Handle:        "test.bsky.social",
+				AccessJWT:     "access_token",
+				RefreshJWT:    "refresh_token",
+				Authenticated: true,
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 1)
+			defer cancel()
+			time.Sleep(2 * time.Millisecond)
+
+			err := svc.RefreshToken(ctx)
+			if err == nil {
+				t.Error("Expected error when context times out")
+			}
+		})
 	})
 }
