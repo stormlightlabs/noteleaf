@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/spf13/cobra"
 	"github.com/stormlightlabs/noteleaf/internal/handlers"
@@ -154,5 +155,98 @@ Use filters to show specific subsets:
 	}
 	root.AddCommand(statusCmd)
 
+	postCmd := &cobra.Command{
+		Use:   "post [note-id]",
+		Short: "Create a new document on leaflet",
+		Long: `Publish a local note to leaflet.pub as a new document.
+
+This command converts your markdown note to leaflet's block format and creates
+a new document on the platform. The note will be linked to the leaflet document
+for future updates via the patch command.
+
+Examples:
+  noteleaf pub post 123                # Publish note 123
+  noteleaf pub post 123 --draft        # Create as draft
+  noteleaf pub post 123 --preview      # Preview without posting
+  noteleaf pub post 123 --validate     # Validate conversion only`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			noteID, err := parseNoteID(args[0])
+			if err != nil {
+				return err
+			}
+
+			isDraft, _ := cmd.Flags().GetBool("draft")
+			preview, _ := cmd.Flags().GetBool("preview")
+			validate, _ := cmd.Flags().GetBool("validate")
+
+			defer c.handler.Close()
+
+			if preview {
+				return c.handler.PostPreview(cmd.Context(), noteID, isDraft)
+			}
+
+			if validate {
+				return c.handler.PostValidate(cmd.Context(), noteID, isDraft)
+			}
+
+			return c.handler.Post(cmd.Context(), noteID, isDraft)
+		},
+	}
+	postCmd.Flags().Bool("draft", false, "Create as draft instead of publishing")
+	postCmd.Flags().Bool("preview", false, "Show what would be posted without actually posting")
+	postCmd.Flags().Bool("validate", false, "Validate markdown conversion without posting")
+	root.AddCommand(postCmd)
+
+	patchCmd := &cobra.Command{
+		Use:   "patch [note-id]",
+		Short: "Update an existing document on leaflet",
+		Long: `Update an existing leaflet document from a local note.
+
+This command converts your markdown note to leaflet's block format and updates
+the existing document on the platform. The note must have been previously posted
+or pulled from leaflet (it needs a leaflet record key).
+
+The document's draft/published status is preserved from the note's current state.
+
+Examples:
+  noteleaf pub patch 123            # Update existing document
+  noteleaf pub patch 123 --preview  # Preview without updating
+  noteleaf pub patch 123 --validate # Validate conversion only`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			noteID, err := parseNoteID(args[0])
+			if err != nil {
+				return err
+			}
+
+			preview, _ := cmd.Flags().GetBool("preview")
+			validate, _ := cmd.Flags().GetBool("validate")
+
+			defer c.handler.Close()
+
+			if preview {
+				return c.handler.PatchPreview(cmd.Context(), noteID)
+			}
+
+			if validate {
+				return c.handler.PatchValidate(cmd.Context(), noteID)
+			}
+
+			return c.handler.Patch(cmd.Context(), noteID)
+		},
+	}
+	patchCmd.Flags().Bool("preview", false, "Show what would be updated without actually patching")
+	patchCmd.Flags().Bool("validate", false, "Validate markdown conversion without patching")
+	root.AddCommand(patchCmd)
+
 	return root
+}
+
+func parseNoteID(arg string) (int64, error) {
+	noteID, err := strconv.ParseInt(arg, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid note ID '%s': must be a number", arg)
+	}
+	return noteID, nil
 }

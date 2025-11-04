@@ -2,8 +2,15 @@
 //
 // TODO: Post (create 1)
 // TODO: Patch (update 1)
-// TODO: Push (create or update - more than 1)
+// TODO: Push
+//   - Builds on Post & Patch (create or update - more than 1)
+//
 // TODO: Add TUI viewing for document details
+//   - interactive list, read Markdown with glamour
+//
+// TODO: Add TUI for confirming post
+//   - proofread post with glamour
+//
 // TODO: Repost - "Reblog" - post to BlueSky
 package handlers
 
@@ -283,51 +290,19 @@ func (h *PublicationHandler) Post(ctx context.Context, noteID int64, isDraft boo
 		return fmt.Errorf("not authenticated - run 'noteleaf pub auth' first")
 	}
 
-	note, err := h.repos.Notes.Get(ctx, noteID)
-	if err != nil {
-		return fmt.Errorf("failed to get note: %w", err)
-	}
-
-	if note.HasLeafletAssociation() {
-		return fmt.Errorf("note already published - use patch to update")
-	}
-
-	session, err := h.atproto.GetSession()
-	if err != nil {
-		return fmt.Errorf("failed to get session: %w", err)
-	}
-
 	// TODO: Implement image handling for markdown conversion
 	// 1. Extract note's directory from filepath/database
 	// 2. Create LocalImageResolver with BlobUploader that calls h.atproto.UploadBlob()
 	// 3. Use converter.WithImageResolver(resolver, noteDir) before ToLeaflet()
 	// This will upload images to AT Protocol and get real CIDs/dimensions
-	converter := public.NewMarkdownConverter()
-	blocks, err := converter.ToLeaflet(note.Content)
+	note, doc, err := h.prepareDocumentForPublish(ctx, noteID, isDraft, false)
 	if err != nil {
-		return fmt.Errorf("failed to convert markdown to leaflet format: %w", err)
-	}
-
-	doc := public.Document{
-		Author:      session.DID,
-		Title:       note.Title,
-		Description: "",
-		Pages: []public.LinearDocument{
-			{
-				Type:   public.TypeLinearDocument,
-				Blocks: blocks,
-			},
-		},
-	}
-
-	if !isDraft {
-		now := time.Now()
-		doc.PublishedAt = now.Format(time.RFC3339)
+		return err
 	}
 
 	ui.Infoln("Creating document '%s' on leaflet...", note.Title)
 
-	result, err := h.atproto.PostDocument(ctx, doc, isDraft)
+	result, err := h.atproto.PostDocument(ctx, *doc, isDraft)
 	if err != nil {
 		return fmt.Errorf("failed to post document: %w", err)
 	}
@@ -364,18 +339,9 @@ func (h *PublicationHandler) Patch(ctx context.Context, noteID int64) error {
 		return fmt.Errorf("not authenticated - run 'noteleaf pub auth' first")
 	}
 
-	note, err := h.repos.Notes.Get(ctx, noteID)
+	tempNote, err := h.repos.Notes.Get(ctx, noteID)
 	if err != nil {
 		return fmt.Errorf("failed to get note: %w", err)
-	}
-
-	if !note.HasLeafletAssociation() {
-		return fmt.Errorf("note not published - use post to create")
-	}
-
-	session, err := h.atproto.GetSession()
-	if err != nil {
-		return fmt.Errorf("failed to get session: %w", err)
 	}
 
 	// TODO: Implement image handling for markdown conversion (same as Post method)
@@ -383,35 +349,22 @@ func (h *PublicationHandler) Patch(ctx context.Context, noteID int64) error {
 	// 2. Create LocalImageResolver with BlobUploader that calls h.atproto.UploadBlob()
 	// 3. Use converter.WithImageResolver(resolver, noteDir) before ToLeaflet()
 	// This will upload images to AT Protocol and get real CIDs/dimensions
-	converter := public.NewMarkdownConverter()
-	blocks, err := converter.ToLeaflet(note.Content)
+	note, doc, err := h.prepareDocumentForPublish(ctx, noteID, tempNote.IsDraft, true)
 	if err != nil {
-		return fmt.Errorf("failed to convert markdown to leaflet format: %w", err)
+		return err
 	}
 
-	doc := public.Document{
-		Author:      session.DID,
-		Title:       note.Title,
-		Description: "",
-		Pages: []public.LinearDocument{
-			{
-				Type:   public.TypeLinearDocument,
-				Blocks: blocks,
-			},
-		},
-	}
-
-	if !note.IsDraft && note.PublishedAt != nil {
-		doc.PublishedAt = note.PublishedAt.Format(time.RFC3339)
-	} else if !note.IsDraft {
-		now := time.Now()
-		doc.PublishedAt = now.Format(time.RFC3339)
-		note.PublishedAt = &now
+	// Update note.PublishedAt if we set a new timestamp
+	if !note.IsDraft && note.PublishedAt == nil && doc.PublishedAt != "" {
+		publishedAt, err := time.Parse(time.RFC3339, doc.PublishedAt)
+		if err == nil {
+			note.PublishedAt = &publishedAt
+		}
 	}
 
 	ui.Infoln("Updating document '%s' on leaflet...", note.Title)
 
-	result, err := h.atproto.PatchDocument(ctx, *note.LeafletRKey, doc, note.IsDraft)
+	result, err := h.atproto.PatchDocument(ctx, *note.LeafletRKey, *doc, note.IsDraft)
 	if err != nil {
 		return fmt.Errorf("failed to patch document: %w", err)
 	}
@@ -461,6 +414,165 @@ func (h *PublicationHandler) Delete(ctx context.Context, noteID int64) error {
 	}
 
 	ui.Successln("Document deleted successfully!")
+
+	return nil
+}
+
+// prepareDocumentForPublish prepares a note for publication by converting to Leaflet format
+func (h *PublicationHandler) prepareDocumentForPublish(ctx context.Context, noteID int64, isDraft bool, forPatch bool) (*models.Note, *public.Document, error) {
+	note, err := h.repos.Notes.Get(ctx, noteID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get note: %w", err)
+	}
+
+	if !forPatch && note.HasLeafletAssociation() {
+		return nil, nil, fmt.Errorf("note already published - use patch to update")
+	}
+
+	if forPatch && !note.HasLeafletAssociation() {
+		return nil, nil, fmt.Errorf("note not published - use post to create")
+	}
+
+	session, err := h.atproto.GetSession()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get session: %w", err)
+	}
+
+	converter := public.NewMarkdownConverter()
+	blocks, err := converter.ToLeaflet(note.Content)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to convert markdown to leaflet format: %w", err)
+	}
+
+	doc := &public.Document{
+		Author:      session.DID,
+		Title:       note.Title,
+		Description: "",
+		Pages: []public.LinearDocument{
+			{
+				Type:   public.TypeLinearDocument,
+				Blocks: blocks,
+			},
+		},
+	}
+
+	if !isDraft {
+		if forPatch && note.PublishedAt != nil {
+			doc.PublishedAt = note.PublishedAt.Format(time.RFC3339)
+		} else {
+			now := time.Now()
+			doc.PublishedAt = now.Format(time.RFC3339)
+		}
+	}
+
+	return note, doc, nil
+}
+
+// PostPreview shows what would be posted without actually posting
+func (h *PublicationHandler) PostPreview(ctx context.Context, noteID int64, isDraft bool) error {
+	if !h.atproto.IsAuthenticated() {
+		return fmt.Errorf("not authenticated - run 'noteleaf pub auth' first")
+	}
+
+	note, doc, err := h.prepareDocumentForPublish(ctx, noteID, isDraft, false)
+	if err != nil {
+		return err
+	}
+
+	status := "published"
+	if isDraft {
+		status = "draft"
+	}
+
+	ui.Infoln("Preview: Would create document on leaflet")
+	ui.Infoln("  Title: %s", doc.Title)
+	ui.Infoln("  Status: %s", status)
+	ui.Infoln("  Pages: %d", len(doc.Pages))
+	ui.Infoln("  Blocks: %d", len(doc.Pages[0].Blocks))
+	if doc.PublishedAt != "" {
+		ui.Infoln("  PublishedAt: %s", doc.PublishedAt)
+	}
+	ui.Infoln("  Note ID: %d", note.ID)
+	ui.Successln("Preview complete - no changes made")
+
+	return nil
+}
+
+// PostValidate validates markdown conversion without posting
+func (h *PublicationHandler) PostValidate(ctx context.Context, noteID int64, isDraft bool) error {
+	if !h.atproto.IsAuthenticated() {
+		return fmt.Errorf("not authenticated - run 'noteleaf pub auth' first")
+	}
+
+	note, doc, err := h.prepareDocumentForPublish(ctx, noteID, isDraft, false)
+	if err != nil {
+		return err
+	}
+
+	ui.Infoln("Validating markdown conversion for note %d...", note.ID)
+	ui.Successln("Validation successful!")
+	ui.Infoln("  Title: %s", doc.Title)
+	ui.Infoln("  Blocks converted: %d", len(doc.Pages[0].Blocks))
+
+	return nil
+}
+
+// PatchPreview shows what would be patched without actually patching
+func (h *PublicationHandler) PatchPreview(ctx context.Context, noteID int64) error {
+	if !h.atproto.IsAuthenticated() {
+		return fmt.Errorf("not authenticated - run 'noteleaf pub auth' first")
+	}
+
+	tempNote, err := h.repos.Notes.Get(ctx, noteID)
+	if err != nil {
+		return fmt.Errorf("failed to get note: %w", err)
+	}
+
+	note, doc, err := h.prepareDocumentForPublish(ctx, noteID, tempNote.IsDraft, true)
+	if err != nil {
+		return err
+	}
+
+	status := "published"
+	if note.IsDraft {
+		status = "draft"
+	}
+
+	ui.Infoln("Preview: Would update document on leaflet")
+	ui.Infoln("  Title: %s", doc.Title)
+	ui.Infoln("  Status: %s", status)
+	ui.Infoln("  RKey: %s", *note.LeafletRKey)
+	ui.Infoln("  Pages: %d", len(doc.Pages))
+	ui.Infoln("  Blocks: %d", len(doc.Pages[0].Blocks))
+	if doc.PublishedAt != "" {
+		ui.Infoln("  PublishedAt: %s", doc.PublishedAt)
+	}
+	ui.Successln("Preview complete - no changes made")
+
+	return nil
+}
+
+// PatchValidate validates markdown conversion without patching
+func (h *PublicationHandler) PatchValidate(ctx context.Context, noteID int64) error {
+	if !h.atproto.IsAuthenticated() {
+		return fmt.Errorf("not authenticated - run 'noteleaf pub auth' first")
+	}
+
+	tempNote, err := h.repos.Notes.Get(ctx, noteID)
+	if err != nil {
+		return fmt.Errorf("failed to get note: %w", err)
+	}
+
+	note, doc, err := h.prepareDocumentForPublish(ctx, noteID, tempNote.IsDraft, true)
+	if err != nil {
+		return err
+	}
+
+	ui.Infoln("Validating markdown conversion for note %d...", note.ID)
+	ui.Successln("Validation successful!")
+	ui.Infoln("  Title: %s", doc.Title)
+	ui.Infoln("  RKey: %s", *note.LeafletRKey)
+	ui.Infoln("  Blocks converted: %d", len(doc.Pages[0].Blocks))
 
 	return nil
 }

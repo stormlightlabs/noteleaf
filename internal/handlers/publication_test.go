@@ -1010,6 +1010,412 @@ func TestPublicationHandler(t *testing.T) {
 		})
 	})
 
+	t.Run("PostPreview", func(t *testing.T) {
+		t.Run("returns error when not authenticated", func(t *testing.T) {
+			suite := NewHandlerTestSuite(t)
+			defer suite.Cleanup()
+
+			handler := CreateHandler(t, NewPublicationHandler)
+			ctx := context.Background()
+
+			err := handler.PostPreview(ctx, 1, false)
+			if err == nil {
+				t.Error("Expected error when not authenticated")
+			}
+
+			if err != nil && !strings.Contains(err.Error(), "not authenticated") {
+				t.Errorf("Expected 'not authenticated' error, got '%v'", err)
+			}
+		})
+
+		t.Run("returns error when note does not exist", func(t *testing.T) {
+			suite := NewHandlerTestSuite(t)
+			defer suite.Cleanup()
+
+			handler := CreateHandler(t, NewPublicationHandler)
+			ctx := context.Background()
+
+			session := &services.Session{
+				DID:           "did:plc:test123",
+				Handle:        "test.bsky.social",
+				AccessJWT:     "access_token",
+				RefreshJWT:    "refresh_token",
+				PDSURL:        "https://bsky.social",
+				ExpiresAt:     time.Now().Add(2 * time.Hour),
+				Authenticated: true,
+			}
+
+			err := handler.atproto.RestoreSession(session)
+			if err != nil {
+				t.Fatalf("Failed to restore session: %v", err)
+			}
+
+			err = handler.PostPreview(ctx, 999, false)
+			if err == nil {
+				t.Error("Expected error when note does not exist")
+			}
+
+			if err != nil && !strings.Contains(err.Error(), "failed to get note") {
+				t.Errorf("Expected 'failed to get note' error, got '%v'", err)
+			}
+		})
+
+		t.Run("returns error when note already published", func(t *testing.T) {
+			suite := NewHandlerTestSuite(t)
+			defer suite.Cleanup()
+
+			handler := CreateHandler(t, NewPublicationHandler)
+			ctx := context.Background()
+
+			rkey := "existing_rkey"
+			cid := "existing_cid"
+			note := &models.Note{
+				Title:       "Already Published",
+				Content:     "# Test content",
+				LeafletRKey: &rkey,
+				LeafletCID:  &cid,
+			}
+
+			id, err := handler.repos.Notes.Create(ctx, note)
+			suite.AssertNoError(err, "create note")
+
+			session := &services.Session{
+				DID:           "did:plc:test123",
+				Handle:        "test.bsky.social",
+				AccessJWT:     "access_token",
+				RefreshJWT:    "refresh_token",
+				PDSURL:        "https://bsky.social",
+				ExpiresAt:     time.Now().Add(2 * time.Hour),
+				Authenticated: true,
+			}
+
+			err = handler.atproto.RestoreSession(session)
+			if err != nil {
+				t.Fatalf("Failed to restore session: %v", err)
+			}
+
+			err = handler.PostPreview(ctx, id, false)
+			if err == nil {
+				t.Error("Expected error when note already published")
+			}
+
+			if err != nil && !strings.Contains(err.Error(), "already published") {
+				t.Errorf("Expected 'already published' error, got '%v'", err)
+			}
+		})
+
+		t.Run("shows preview for valid note", func(t *testing.T) {
+			suite := NewHandlerTestSuite(t)
+			defer suite.Cleanup()
+
+			handler := CreateHandler(t, NewPublicationHandler)
+			ctx := context.Background()
+
+			note := &models.Note{
+				Title:   "Test Note",
+				Content: "# Test content\n\nThis is a test.",
+			}
+
+			id, err := handler.repos.Notes.Create(ctx, note)
+			suite.AssertNoError(err, "create note")
+
+			session := &services.Session{
+				DID:           "did:plc:test123",
+				Handle:        "test.bsky.social",
+				AccessJWT:     "access_token",
+				RefreshJWT:    "refresh_token",
+				PDSURL:        "https://bsky.social",
+				ExpiresAt:     time.Now().Add(2 * time.Hour),
+				Authenticated: true,
+			}
+
+			err = handler.atproto.RestoreSession(session)
+			if err != nil {
+				t.Fatalf("Failed to restore session: %v", err)
+			}
+
+			err = handler.PostPreview(ctx, id, false)
+			suite.AssertNoError(err, "preview should succeed")
+		})
+
+		t.Run("shows preview for draft", func(t *testing.T) {
+			suite := NewHandlerTestSuite(t)
+			defer suite.Cleanup()
+
+			handler := CreateHandler(t, NewPublicationHandler)
+			ctx := context.Background()
+
+			note := &models.Note{
+				Title:   "Draft Note",
+				Content: "# Draft content",
+			}
+
+			id, err := handler.repos.Notes.Create(ctx, note)
+			suite.AssertNoError(err, "create note")
+
+			session := &services.Session{
+				DID:           "did:plc:test123",
+				Handle:        "test.bsky.social",
+				AccessJWT:     "access_token",
+				RefreshJWT:    "refresh_token",
+				PDSURL:        "https://bsky.social",
+				ExpiresAt:     time.Now().Add(2 * time.Hour),
+				Authenticated: true,
+			}
+
+			err = handler.atproto.RestoreSession(session)
+			if err != nil {
+				t.Fatalf("Failed to restore session: %v", err)
+			}
+
+			err = handler.PostPreview(ctx, id, true)
+			suite.AssertNoError(err, "preview draft should succeed")
+		})
+	})
+
+	t.Run("PostValidate", func(t *testing.T) {
+		t.Run("returns error when not authenticated", func(t *testing.T) {
+			suite := NewHandlerTestSuite(t)
+			defer suite.Cleanup()
+
+			handler := CreateHandler(t, NewPublicationHandler)
+			ctx := context.Background()
+
+			err := handler.PostValidate(ctx, 1, false)
+			if err == nil {
+				t.Error("Expected error when not authenticated")
+			}
+
+			if err != nil && !strings.Contains(err.Error(), "not authenticated") {
+				t.Errorf("Expected 'not authenticated' error, got '%v'", err)
+			}
+		})
+
+		t.Run("validates markdown conversion successfully", func(t *testing.T) {
+			suite := NewHandlerTestSuite(t)
+			defer suite.Cleanup()
+
+			handler := CreateHandler(t, NewPublicationHandler)
+			ctx := context.Background()
+
+			note := &models.Note{
+				Title:   "Test Note",
+				Content: "# Test content\n\nValid markdown here.",
+			}
+
+			id, err := handler.repos.Notes.Create(ctx, note)
+			suite.AssertNoError(err, "create note")
+
+			session := &services.Session{
+				DID:           "did:plc:test123",
+				Handle:        "test.bsky.social",
+				AccessJWT:     "access_token",
+				RefreshJWT:    "refresh_token",
+				PDSURL:        "https://bsky.social",
+				ExpiresAt:     time.Now().Add(2 * time.Hour),
+				Authenticated: true,
+			}
+
+			err = handler.atproto.RestoreSession(session)
+			if err != nil {
+				t.Fatalf("Failed to restore session: %v", err)
+			}
+
+			err = handler.PostValidate(ctx, id, false)
+			suite.AssertNoError(err, "validation should succeed")
+		})
+	})
+
+	t.Run("PatchPreview", func(t *testing.T) {
+		t.Run("returns error when not authenticated", func(t *testing.T) {
+			suite := NewHandlerTestSuite(t)
+			defer suite.Cleanup()
+
+			handler := CreateHandler(t, NewPublicationHandler)
+			ctx := context.Background()
+
+			err := handler.PatchPreview(ctx, 1)
+			if err == nil {
+				t.Error("Expected error when not authenticated")
+			}
+
+			if err != nil && !strings.Contains(err.Error(), "not authenticated") {
+				t.Errorf("Expected 'not authenticated' error, got '%v'", err)
+			}
+		})
+
+		t.Run("returns error when note does not exist", func(t *testing.T) {
+			suite := NewHandlerTestSuite(t)
+			defer suite.Cleanup()
+
+			handler := CreateHandler(t, NewPublicationHandler)
+			ctx := context.Background()
+
+			session := &services.Session{
+				DID:           "did:plc:test123",
+				Handle:        "test.bsky.social",
+				AccessJWT:     "access_token",
+				RefreshJWT:    "refresh_token",
+				PDSURL:        "https://bsky.social",
+				ExpiresAt:     time.Now().Add(2 * time.Hour),
+				Authenticated: true,
+			}
+
+			err := handler.atproto.RestoreSession(session)
+			if err != nil {
+				t.Fatalf("Failed to restore session: %v", err)
+			}
+
+			err = handler.PatchPreview(ctx, 999)
+			if err == nil {
+				t.Error("Expected error when note does not exist")
+			}
+
+			if err != nil && !strings.Contains(err.Error(), "failed to get note") {
+				t.Errorf("Expected 'failed to get note' error, got '%v'", err)
+			}
+		})
+
+		t.Run("returns error when note not published", func(t *testing.T) {
+			suite := NewHandlerTestSuite(t)
+			defer suite.Cleanup()
+
+			handler := CreateHandler(t, NewPublicationHandler)
+			ctx := context.Background()
+
+			note := &models.Note{
+				Title:   "Not Published",
+				Content: "# Test content",
+			}
+
+			id, err := handler.repos.Notes.Create(ctx, note)
+			suite.AssertNoError(err, "create note")
+
+			session := &services.Session{
+				DID:           "did:plc:test123",
+				Handle:        "test.bsky.social",
+				AccessJWT:     "access_token",
+				RefreshJWT:    "refresh_token",
+				PDSURL:        "https://bsky.social",
+				ExpiresAt:     time.Now().Add(2 * time.Hour),
+				Authenticated: true,
+			}
+
+			err = handler.atproto.RestoreSession(session)
+			if err != nil {
+				t.Fatalf("Failed to restore session: %v", err)
+			}
+
+			err = handler.PatchPreview(ctx, id)
+			if err == nil {
+				t.Error("Expected error when note not published")
+			}
+
+			if err != nil && !strings.Contains(err.Error(), "not published") {
+				t.Errorf("Expected 'not published' error, got '%v'", err)
+			}
+		})
+
+		t.Run("shows preview for published note", func(t *testing.T) {
+			suite := NewHandlerTestSuite(t)
+			defer suite.Cleanup()
+
+			handler := CreateHandler(t, NewPublicationHandler)
+			ctx := context.Background()
+
+			rkey := "test_rkey"
+			cid := "test_cid"
+			publishedAt := time.Now().Add(-24 * time.Hour)
+			note := &models.Note{
+				Title:       "Published Note",
+				Content:     "# Updated content",
+				LeafletRKey: &rkey,
+				LeafletCID:  &cid,
+				PublishedAt: &publishedAt,
+				IsDraft:     false,
+			}
+
+			id, err := handler.repos.Notes.Create(ctx, note)
+			suite.AssertNoError(err, "create note")
+
+			session := &services.Session{
+				DID:           "did:plc:test123",
+				Handle:        "test.bsky.social",
+				AccessJWT:     "access_token",
+				RefreshJWT:    "refresh_token",
+				PDSURL:        "https://bsky.social",
+				ExpiresAt:     time.Now().Add(2 * time.Hour),
+				Authenticated: true,
+			}
+
+			err = handler.atproto.RestoreSession(session)
+			if err != nil {
+				t.Fatalf("Failed to restore session: %v", err)
+			}
+
+			err = handler.PatchPreview(ctx, id)
+			suite.AssertNoError(err, "preview should succeed")
+		})
+	})
+
+	t.Run("PatchValidate", func(t *testing.T) {
+		t.Run("returns error when not authenticated", func(t *testing.T) {
+			suite := NewHandlerTestSuite(t)
+			defer suite.Cleanup()
+
+			handler := CreateHandler(t, NewPublicationHandler)
+			ctx := context.Background()
+
+			err := handler.PatchValidate(ctx, 1)
+			if err == nil {
+				t.Error("Expected error when not authenticated")
+			}
+
+			if err != nil && !strings.Contains(err.Error(), "not authenticated") {
+				t.Errorf("Expected 'not authenticated' error, got '%v'", err)
+			}
+		})
+
+		t.Run("validates markdown conversion successfully", func(t *testing.T) {
+			suite := NewHandlerTestSuite(t)
+			defer suite.Cleanup()
+
+			handler := CreateHandler(t, NewPublicationHandler)
+			ctx := context.Background()
+
+			rkey := "test_rkey"
+			cid := "test_cid"
+			note := &models.Note{
+				Title:       "Published Note",
+				Content:     "# Updated content\n\nValid markdown here.",
+				LeafletRKey: &rkey,
+				LeafletCID:  &cid,
+				IsDraft:     false,
+			}
+
+			id, err := handler.repos.Notes.Create(ctx, note)
+			suite.AssertNoError(err, "create note")
+
+			session := &services.Session{
+				DID:           "did:plc:test123",
+				Handle:        "test.bsky.social",
+				AccessJWT:     "access_token",
+				RefreshJWT:    "refresh_token",
+				PDSURL:        "https://bsky.social",
+				ExpiresAt:     time.Now().Add(2 * time.Hour),
+				Authenticated: true,
+			}
+
+			err = handler.atproto.RestoreSession(session)
+			if err != nil {
+				t.Fatalf("Failed to restore session: %v", err)
+			}
+
+			err = handler.PatchValidate(ctx, id)
+			suite.AssertNoError(err, "validation should succeed")
+		})
+	})
+
 	t.Run("Delete", func(t *testing.T) {
 		t.Run("returns error when not authenticated", func(t *testing.T) {
 			suite := NewHandlerTestSuite(t)

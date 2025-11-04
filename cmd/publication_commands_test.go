@@ -66,6 +66,8 @@ func TestPublicationCommand(t *testing.T) {
 				"pull",
 				"list [--published|--draft|--all]",
 				"status",
+				"post [note-id]",
+				"patch [note-id]",
 			}
 
 			for _, expected := range expectedSubcommands {
@@ -171,6 +173,196 @@ func TestPublicationCommand(t *testing.T) {
 				t.Error("Expected pull to fail when not authenticated")
 			}
 			if err != nil && !strings.Contains(err.Error(), "not authenticated") {
+				t.Errorf("Expected 'not authenticated' error, got: %v", err)
+			}
+		})
+	})
+
+	t.Run("Post Command", func(t *testing.T) {
+		t.Run("requires note ID argument", func(t *testing.T) {
+			handler, cleanup := createTestPublicationHandler(t)
+			defer cleanup()
+
+			cmd := NewPublicationCommand(handler).Create()
+			cmd.SetArgs([]string{"post"})
+			err := cmd.Execute()
+
+			if err == nil {
+				t.Error("Expected error for missing note ID")
+			}
+		})
+
+		t.Run("rejects invalid note ID", func(t *testing.T) {
+			handler, cleanup := createTestPublicationHandler(t)
+			defer cleanup()
+
+			cmd := NewPublicationCommand(handler).Create()
+			cmd.SetArgs([]string{"post", "not-a-number"})
+			err := cmd.Execute()
+
+			if err == nil {
+				t.Error("Expected error for invalid note ID")
+			}
+			if !strings.Contains(err.Error(), "invalid note ID") {
+				t.Errorf("Expected 'invalid note ID' error, got: %v", err)
+			}
+		})
+
+		t.Run("fails when not authenticated", func(t *testing.T) {
+			handler, cleanup := createTestPublicationHandler(t)
+			defer cleanup()
+
+			cmd := NewPublicationCommand(handler).Create()
+			cmd.SetArgs([]string{"post", "123"})
+			err := cmd.Execute()
+
+			if err == nil {
+				t.Error("Expected post to fail when not authenticated")
+			}
+			if !strings.Contains(err.Error(), "not authenticated") {
+				t.Errorf("Expected 'not authenticated' error, got: %v", err)
+			}
+		})
+
+		t.Run("preview mode fails when not authenticated", func(t *testing.T) {
+			handler, cleanup := createTestPublicationHandler(t)
+			defer cleanup()
+
+			cmd := NewPublicationCommand(handler).Create()
+			cmd.SetArgs([]string{"post", "123", "--preview"})
+			err := cmd.Execute()
+
+			if err == nil {
+				t.Error("Expected post --preview to fail when not authenticated")
+			}
+			if !strings.Contains(err.Error(), "not authenticated") {
+				t.Errorf("Expected 'not authenticated' error, got: %v", err)
+			}
+		})
+
+		t.Run("validate mode fails when not authenticated", func(t *testing.T) {
+			handler, cleanup := createTestPublicationHandler(t)
+			defer cleanup()
+
+			cmd := NewPublicationCommand(handler).Create()
+			cmd.SetArgs([]string{"post", "123", "--validate"})
+			err := cmd.Execute()
+
+			if err == nil {
+				t.Error("Expected post --validate to fail when not authenticated")
+			}
+			if !strings.Contains(err.Error(), "not authenticated") {
+				t.Errorf("Expected 'not authenticated' error, got: %v", err)
+			}
+		})
+
+		t.Run("accepts draft flag", func(t *testing.T) {
+			handler, cleanup := createTestPublicationHandler(t)
+			defer cleanup()
+
+			cmd := NewPublicationCommand(handler).Create()
+			cmd.SetArgs([]string{"post", "123", "--draft"})
+			err := cmd.Execute()
+
+			if err == nil {
+				t.Error("Expected post --draft to fail when not authenticated")
+			}
+			if !strings.Contains(err.Error(), "not authenticated") {
+				t.Errorf("Expected 'not authenticated' error, got: %v", err)
+			}
+		})
+
+		t.Run("accepts preview and draft flags together", func(t *testing.T) {
+			handler, cleanup := createTestPublicationHandler(t)
+			defer cleanup()
+
+			cmd := NewPublicationCommand(handler).Create()
+			cmd.SetArgs([]string{"post", "123", "--preview", "--draft"})
+			err := cmd.Execute()
+
+			if err == nil {
+				t.Error("Expected post --preview --draft to fail when not authenticated")
+			}
+			if !strings.Contains(err.Error(), "not authenticated") {
+				t.Errorf("Expected 'not authenticated' error, got: %v", err)
+			}
+		})
+	})
+
+	t.Run("Patch Command", func(t *testing.T) {
+		t.Run("requires note ID argument", func(t *testing.T) {
+			handler, cleanup := createTestPublicationHandler(t)
+			defer cleanup()
+
+			cmd := NewPublicationCommand(handler).Create()
+			cmd.SetArgs([]string{"patch"})
+			err := cmd.Execute()
+
+			if err == nil {
+				t.Error("Expected error for missing note ID")
+			}
+		})
+
+		t.Run("rejects invalid note ID", func(t *testing.T) {
+			handler, cleanup := createTestPublicationHandler(t)
+			defer cleanup()
+
+			cmd := NewPublicationCommand(handler).Create()
+			cmd.SetArgs([]string{"patch", "not-a-number"})
+			err := cmd.Execute()
+
+			if err == nil {
+				t.Error("Expected error for invalid note ID")
+			}
+			if !strings.Contains(err.Error(), "invalid note ID") {
+				t.Errorf("Expected 'invalid note ID' error, got: %v", err)
+			}
+		})
+
+		t.Run("fails when not authenticated", func(t *testing.T) {
+			handler, cleanup := createTestPublicationHandler(t)
+			defer cleanup()
+
+			cmd := NewPublicationCommand(handler).Create()
+			cmd.SetArgs([]string{"patch", "123"})
+			err := cmd.Execute()
+
+			if err == nil {
+				t.Error("Expected patch to fail when not authenticated")
+			}
+			if !strings.Contains(err.Error(), "not authenticated") {
+				t.Errorf("Expected 'not authenticated' error, got: %v", err)
+			}
+		})
+
+		t.Run("preview mode fails when not authenticated", func(t *testing.T) {
+			handler, cleanup := createTestPublicationHandler(t)
+			defer cleanup()
+
+			cmd := NewPublicationCommand(handler).Create()
+			cmd.SetArgs([]string{"patch", "123", "--preview"})
+			err := cmd.Execute()
+
+			if err == nil {
+				t.Error("Expected patch --preview to fail when not authenticated")
+			}
+			if !strings.Contains(err.Error(), "not authenticated") {
+				t.Errorf("Expected 'not authenticated' error, got: %v", err)
+			}
+		})
+
+		t.Run("validate mode fails when not authenticated", func(t *testing.T) {
+			handler, cleanup := createTestPublicationHandler(t)
+			defer cleanup()
+
+			cmd := NewPublicationCommand(handler).Create()
+			cmd.SetArgs([]string{"patch", "123", "--validate"})
+			err := cmd.Execute()
+
+			if err == nil {
+				t.Error("Expected patch --validate to fail when not authenticated")
+			}
+			if !strings.Contains(err.Error(), "not authenticated") {
 				t.Errorf("Expected 'not authenticated' error, got: %v", err)
 			}
 		})
