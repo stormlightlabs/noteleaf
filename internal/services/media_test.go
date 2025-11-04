@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/stormlightlabs/noteleaf/internal/models"
+	"github.com/stormlightlabs/noteleaf/internal/shared"
 )
 
 func TestMediaServices(t *testing.T) {
@@ -26,7 +27,7 @@ func TestMediaServices(t *testing.T) {
 
 				service := CreateMovieService()
 				_, err := service.Search(context.Background(), "error", 1, 10)
-				AssertErrorContains(t, err, "search error")
+				shared.AssertErrorContains(t, err, "search error", "")
 			})
 		})
 
@@ -55,7 +56,7 @@ func TestMediaServices(t *testing.T) {
 
 				service := CreateMovieService()
 				_, err := service.Get(context.Background(), "error")
-				AssertErrorContains(t, err, "fetch error")
+				shared.AssertErrorContains(t, err, "fetch error", "")
 			})
 		})
 
@@ -77,7 +78,7 @@ func TestMediaServices(t *testing.T) {
 
 				service := CreateMovieService()
 				err := service.Check(context.Background())
-				AssertErrorContains(t, err, "html fetch error")
+				shared.AssertErrorContains(t, err, "html fetch error", "")
 			})
 		})
 
@@ -214,7 +215,7 @@ func TestMediaServices(t *testing.T) {
 
 				service := CreateTVService()
 				_, err := service.Search(context.Background(), "error", 1, 10)
-				AssertErrorContains(t, err, "search error")
+				shared.AssertErrorContains(t, err, "search error", "")
 			})
 		})
 
@@ -243,7 +244,7 @@ func TestMediaServices(t *testing.T) {
 
 				service := CreateTVService()
 				_, err := service.Get(context.Background(), "error")
-				AssertErrorContains(t, err, "fetch error")
+				shared.AssertErrorContains(t, err, "fetch error", "")
 			})
 		})
 
@@ -265,7 +266,7 @@ func TestMediaServices(t *testing.T) {
 
 				service := CreateTVService()
 				err := service.Check(context.Background())
-				AssertErrorContains(t, err, "html fetch error")
+				shared.AssertErrorContains(t, err, "html fetch error", "")
 			})
 		})
 	})

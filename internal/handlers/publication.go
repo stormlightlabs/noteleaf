@@ -297,6 +297,11 @@ func (h *PublicationHandler) Post(ctx context.Context, noteID int64, isDraft boo
 		return fmt.Errorf("failed to get session: %w", err)
 	}
 
+	// TODO: Implement image handling for markdown conversion
+	// 1. Extract note's directory from filepath/database
+	// 2. Create LocalImageResolver with BlobUploader that calls h.atproto.UploadBlob()
+	// 3. Use converter.WithImageResolver(resolver, noteDir) before ToLeaflet()
+	// This will upload images to AT Protocol and get real CIDs/dimensions
 	converter := public.NewMarkdownConverter()
 	blocks, err := converter.ToLeaflet(note.Content)
 	if err != nil {
@@ -373,6 +378,11 @@ func (h *PublicationHandler) Patch(ctx context.Context, noteID int64) error {
 		return fmt.Errorf("failed to get session: %w", err)
 	}
 
+	// TODO: Implement image handling for markdown conversion (same as Post method)
+	// 1. Extract note's directory from filepath/database
+	// 2. Create LocalImageResolver with BlobUploader that calls h.atproto.UploadBlob()
+	// 3. Use converter.WithImageResolver(resolver, noteDir) before ToLeaflet()
+	// This will upload images to AT Protocol and get real CIDs/dimensions
 	converter := public.NewMarkdownConverter()
 	blocks, err := converter.ToLeaflet(note.Content)
 	if err != nil {

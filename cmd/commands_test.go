@@ -10,6 +10,7 @@ import (
 
 	"github.com/stormlightlabs/noteleaf/internal/handlers"
 	"github.com/stormlightlabs/noteleaf/internal/services"
+	"github.com/stormlightlabs/noteleaf/internal/shared"
 )
 
 func setupCommandTest(t *testing.T) func() {
@@ -475,7 +476,7 @@ func TestCommandExecution(t *testing.T) {
 			if err == nil {
 				t.Error("expected movie add command to fail when search fails")
 			}
-			services.AssertErrorContains(t, err, "search failed")
+			shared.AssertErrorContains(t, err, "search failed", "")
 		})
 
 		t.Run("remove command with non-existent movie ID", func(t *testing.T) {
@@ -558,7 +559,7 @@ func TestCommandExecution(t *testing.T) {
 			if err == nil {
 				t.Error("expected tv add command to fail when search fails")
 			}
-			services.AssertErrorContains(t, err, "tv search failed")
+			shared.AssertErrorContains(t, err, "tv search failed", "")
 		})
 
 		t.Run("remove command with non-existent TV show ID", func(t *testing.T) {

@@ -117,7 +117,7 @@ func TestBookService(t *testing.T) {
 				t.Error("Search should return error for API failure")
 			}
 
-			AssertErrorContains(t, err, "API returned status 500")
+			shared.AssertErrorContains(t, err, "API returned status 500", "")
 		})
 
 		t.Run("handles malformed JSON", func(t *testing.T) {
@@ -135,7 +135,7 @@ func TestBookService(t *testing.T) {
 				t.Error("Search should return error for malformed JSON")
 			}
 
-			AssertErrorContains(t, err, "failed to decode response")
+			shared.AssertErrorContains(t, err, "failed to decode response", "")
 		})
 
 		t.Run("handles context cancellation", func(t *testing.T) {
@@ -231,7 +231,7 @@ func TestBookService(t *testing.T) {
 				t.Error("Get should return error for non-existent work")
 			}
 
-			AssertErrorContains(t, err, "book not found")
+			shared.AssertErrorContains(t, err, "book not found", "")
 		})
 
 		t.Run("handles API error", func(t *testing.T) {
@@ -248,7 +248,7 @@ func TestBookService(t *testing.T) {
 				t.Error("Get should return error for API failure")
 			}
 
-			AssertErrorContains(t, err, "API returned status 500")
+			shared.AssertErrorContains(t, err, "API returned status 500", "")
 		})
 	})
 
@@ -299,7 +299,7 @@ func TestBookService(t *testing.T) {
 				t.Error("Check should return error for API failure")
 			}
 
-			AssertErrorContains(t, err, "open Library API returned status 503")
+			shared.AssertErrorContains(t, err, "open Library API returned status 503", "")
 		})
 
 		t.Run("handles network error", func(t *testing.T) {

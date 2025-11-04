@@ -220,18 +220,6 @@ func AssertTVShowInResults(t *testing.T, results []*models.Model, expectedTitle 
 	t.Errorf("expected to find TV show containing '%s' in results", expectedTitle)
 }
 
-// AssertErrorContains checks that an error contains the expected message
-func AssertErrorContains(t *testing.T, err error, expectedMsg string) {
-	t.Helper()
-
-	if err == nil {
-		t.Fatalf("expected error containing '%s', got nil", expectedMsg)
-	}
-	if !strings.Contains(err.Error(), expectedMsg) {
-		t.Errorf("expected error to contain '%s', got '%v'", expectedMsg, err)
-	}
-}
-
 // CreateMovieService returns a new movie service for testing
 func CreateMovieService() *MovieService {
 	return NewMovieService()
