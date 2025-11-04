@@ -4,11 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/stormlightlabs/noteleaf/internal/shared"
 	"golang.org/x/time/rate"
 )
 
@@ -61,7 +61,7 @@ func TestBookService(t *testing.T) {
 				},
 			}
 
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			server := shared.NewHTTPTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.URL.Path != "/search.json" {
 					t.Errorf("Expected path /search.json, got %s", r.URL.Path)
 				}
@@ -104,7 +104,7 @@ func TestBookService(t *testing.T) {
 		})
 
 		t.Run("handles API error", func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			server := shared.NewHTTPTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusInternalServerError)
 			}))
 			defer server.Close()
@@ -121,7 +121,7 @@ func TestBookService(t *testing.T) {
 		})
 
 		t.Run("handles malformed JSON", func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			server := shared.NewHTTPTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
 				w.Write([]byte("invalid json"))
 			}))
@@ -175,7 +175,7 @@ func TestBookService(t *testing.T) {
 				Covers:      []int{8739161, 8739162},
 			}
 
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			server := shared.NewHTTPTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if !strings.HasPrefix(r.URL.Path, "/works/") {
 					t.Errorf("Expected path to start with /works/, got %s", r.URL.Path)
 				}
@@ -218,7 +218,7 @@ func TestBookService(t *testing.T) {
 		})
 
 		t.Run("handles not found", func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			server := shared.NewHTTPTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusNotFound)
 			}))
 			defer server.Close()
@@ -235,7 +235,7 @@ func TestBookService(t *testing.T) {
 		})
 
 		t.Run("handles API error", func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			server := shared.NewHTTPTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusInternalServerError)
 			}))
 			defer server.Close()
@@ -254,7 +254,7 @@ func TestBookService(t *testing.T) {
 
 	t.Run("Check", func(t *testing.T) {
 		t.Run("successful check", func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			server := shared.NewHTTPTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.URL.Path != "/search.json" {
 					t.Errorf("Expected path /search.json, got %s", r.URL.Path)
 				}
@@ -286,7 +286,7 @@ func TestBookService(t *testing.T) {
 		})
 
 		t.Run("handles API failure", func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			server := shared.NewHTTPTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusServiceUnavailable)
 			}))
 			defer server.Close()

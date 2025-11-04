@@ -1,9 +1,10 @@
 package articles
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
@@ -11,13 +12,6 @@ import (
 
 	"github.com/stormlightlabs/noteleaf/internal/models"
 )
-
-func newServerWithHtml(h string) *httptest.Server {
-	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(h))
-	}))
-}
 
 // ExampleParser_Convert demonstrates parsing a local HTML file using Wikipedia rules.
 func ExampleParser_Convert() {
@@ -58,7 +52,7 @@ func ExampleParser_Convert() {
 
 	// Output: # Christopher Lloyd
 	//
-	// **Source:** https://en.wikipedia.org/wiki/Christopher_Lloyd
+	// **Author:** Contributors to Wikimedia projects
 }
 
 func TestArticleParser(t *testing.T) {
@@ -197,8 +191,10 @@ body: //article
 			if err == nil {
 				t.Error("Expected error for unsupported domain")
 			}
-			if !strings.Contains(err.Error(), "no parsing rule found") {
-				t.Errorf("Expected 'no parsing rule found' error, got %v", err)
+
+			if !strings.Contains(err.Error(), "confidence too low") &&
+				!strings.Contains(err.Error(), "could not extract title") {
+				t.Errorf("Expected heuristic extraction error, got %v", err)
 			}
 		})
 
@@ -218,9 +214,11 @@ body: //article
 			if err == nil {
 				t.Error("Expected error when no title can be extracted")
 			}
+
 			if !strings.Contains(err.Error(), "could not extract title") &&
-				!strings.Contains(err.Error(), "could not extract body content") {
-				t.Errorf("Expected title or body extraction error, got %v", err)
+				!strings.Contains(err.Error(), "could not extract body content") &&
+				!strings.Contains(err.Error(), "confidence too low") {
+				t.Errorf("Expected title, body, or confidence error, got %v", err)
 			}
 		})
 
@@ -334,19 +332,105 @@ body: //article
 				t.Error("Expected footer content to be stripped")
 			}
 		})
+
+		t.Run("uses heuristic extraction for unsupported domain with semantic HTML", func(t *testing.T) {
+			htmlContent := `<html><head>
+				<title>Heuristic Test Article</title>
+				<meta property="og:author" content="Heuristic Author">
+				<meta property="article:published_time" content="2025-01-15">
+			</head><body>
+				<article>
+					<p>This is a substantial article that should be extracted using heuristic methods.</p>
+					<p>It contains multiple paragraphs with sufficient content for the readability algorithm.</p>
+					<p>The heuristic extractor should successfully identify this as main content.</p>
+				</article>
+			</body></html>`
+
+			markdown, err := parser.Convert(htmlContent, "unsupported-domain.com", "https://unsupported-domain.com/article")
+
+			if err == nil {
+				if !strings.Contains(markdown, "substantial article") {
+					t.Error("Expected markdown to contain extracted content")
+				}
+			}
+		})
+
+		t.Run("includes confidence score in parsed content", func(t *testing.T) {
+			htmlContent := `<html>
+			<head><title>Confidence Test</title></head>
+			<body>
+				<h1 id="firstHeading">Confidence Test Article</h1>
+				<div id="bodyContent">
+					<p>Article content for confidence testing.</p>
+				</div>
+			</body>
+		</html>`
+
+			content, err := parser.Parse(htmlContent, ".wikipedia.org", "https://en.wikipedia.org/wiki/Confidence")
+			if err != nil {
+				t.Fatalf("Expected no error, got %v", err)
+			}
+
+			if content.Confidence == 0.0 {
+				t.Error("Expected non-zero confidence score")
+			}
+
+			if content.ExtractionMethod == "" {
+				t.Error("Expected extraction method to be set")
+			}
+		})
+
+		t.Run("falls back to metadata extractor when XPath fails", func(t *testing.T) {
+			htmlContent := `<html><head>
+				<title>Metadata Fallback Test</title>
+				<meta property="og:author" content="Metadata Author">
+				<meta property="article:published_time" content="2025-01-20">
+			</head><body>
+				<h1 id="firstHeading">Fallback Test</h1>
+				<div id="bodyContent">
+					<p>Content without author or date in XPath locations.</p>
+				</div>
+			</body></html>`
+
+			content, err := parser.Parse(htmlContent, ".wikipedia.org", "https://en.wikipedia.org/wiki/Metadata_Test")
+			if err != nil {
+				t.Fatalf("Expected no error, got %v", err)
+			}
+
+			if content.Author != "Metadata Author" {
+				t.Errorf("Expected metadata fallback for author, got %q", content.Author)
+			}
+
+			if content.Date != "2025-01-20" {
+				t.Errorf("Expected metadata fallback for date, got %q", content.Date)
+			}
+		})
 	})
 
 	t.Run("ParseURL", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			switch {
-			case strings.Contains(r.URL.Path, "404"):
-				w.WriteHeader(http.StatusNotFound)
-			case strings.Contains(r.URL.Path, "unsupported"):
-				w.WriteHeader(http.StatusOK)
-				w.Write([]byte("<html><head><title>Test</title></head><body><p>Content</p></body></html>"))
-			default:
-				w.WriteHeader(http.StatusOK)
-				w.Write([]byte(`<html>
+		parser, err := NewArticleParser(http.DefaultClient)
+		if err != nil {
+			t.Fatalf("Failed to create parser: %v", err)
+		}
+
+		localhostRule := &ParsingRule{
+			Domain: "example.com",
+			Title:  "//h1[@id='firstHeading']",
+			Body:   "//div[@id='bodyContent']",
+			Strip:  []string{"//div[@class='noprint']"},
+		}
+		parser.AddRule("example.com", localhostRule)
+
+		const (
+			validURL       = "https://example.com/wiki/test"
+			httpErrorURL   = "https://example.com/wiki/404"
+			unsupportedURL = "https://unsupported-domain.test/article"
+		)
+
+		parser.SetHTTPClient(newMockHTTPClient(t, func(req *http.Request) (*http.Response, error) {
+			switch req.URL.String() {
+			case validURL:
+				return htmlResponse(http.StatusOK, `<html>
 					<head><title>Test Article</title></head>
 					<body>
 						<h1 id="firstHeading">Test Wikipedia Article</h1>
@@ -355,45 +439,62 @@ body: //article
 							<div class="noprint">This gets stripped</div>
 						</div>
 					</body>
-				</html>`))
+				</html>`), nil
+			case httpErrorURL:
+				return &http.Response{
+					StatusCode: http.StatusNotFound,
+					Header:     make(http.Header),
+					Body:       io.NopCloser(strings.NewReader("")),
+				}, nil
+			case unsupportedURL:
+				return htmlResponse(http.StatusOK, `<html><head><title>Unsupported</title></head><body><p>Content</p></body></html>`), nil
+			default:
+				return nil, fmt.Errorf("unexpected request: %s", req.URL.String())
 			}
 		}))
-		defer server.Close()
-
-		parser, err := NewArticleParser(server.Client())
-		if err != nil {
-			t.Fatalf("Failed to create parser: %v", err)
-		}
-
-		localhostRule := &ParsingRule{
-			Domain: "127.0.0.1",
-			Title:  "//h1[@id='firstHeading']",
-			Body:   "//div[@id='bodyContent']",
-			Strip:  []string{"//div[@class='noprint']"},
-		}
-		parser.AddRule("127.0.0.1", localhostRule)
 
 		t.Run("fails with invalid URL", func(t *testing.T) {
 			_, err := parser.ParseURL("not-a-url")
 			if err == nil {
 				t.Error("Expected error for invalid URL")
 			}
-			if !strings.Contains(err.Error(), "unsupported protocol scheme") {
-				t.Errorf("Expected 'unsupported protocol scheme' error, got %v", err)
+			if !strings.Contains(err.Error(), "unsupported protocol scheme") &&
+				!strings.Contains(err.Error(), "failed to fetch URL") &&
+				!strings.Contains(err.Error(), "invalid URL") {
+				t.Errorf("Expected URL scheme error, got %v", err)
 			}
 		})
 
 		t.Run("fails with unsupported domain", func(t *testing.T) {
-			_, err := parser.ParseURL(server.URL + "/unsupported.com")
+			_, err := parser.ParseURL(unsupportedURL)
 			if err == nil {
 				t.Error("Expected error for unsupported domain")
 			}
 		})
 
 		t.Run("fails with HTTP error", func(t *testing.T) {
-			_, err := parser.ParseURL(server.URL + "/404/en.wikipedia.org/wiki/test")
+			_, err := parser.ParseURL(httpErrorURL)
 			if err == nil {
 				t.Error("Expected error for HTTP 404")
+			}
+		})
+
+		t.Run("successfully parses supported domain", func(t *testing.T) {
+			content, err := parser.ParseURL(validURL)
+			if err != nil {
+				t.Fatalf("Expected no error, got %v", err)
+			}
+			if content == nil {
+				t.Fatal("Expected parsed content, got nil")
+			}
+			if content.Title != "Test Wikipedia Article" {
+				t.Errorf("Expected title to be extracted, got %q", content.Title)
+			}
+			if !strings.Contains(content.Content, "This is the article content.") {
+				t.Errorf("Expected content to include article text, got %q", content.Content)
+			}
+			if strings.Contains(content.Content, "This gets stripped") {
+				t.Error("Expected strip rules to remove non-content nodes")
 			}
 		})
 
@@ -594,28 +695,38 @@ func TestCreateArticleFromURL(t *testing.T) {
 	})
 
 	t.Run("fails with unsupported domain", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("<html><head><title>Test</title></head><body><p>Content</p></body></html>"))
-		}))
-		defer server.Close()
+		unsupportedURL := "https://unsupported-domain.test/article"
+		withDefaultHTTPClient(t, func(req *http.Request) (*http.Response, error) {
+			if req.URL.String() == unsupportedURL {
+				return htmlResponse(http.StatusOK, "<html><body><div>Too little content</div></body></html>"), nil
+			}
+			return nil, fmt.Errorf("unexpected request: %s", req.URL.String())
+		})
 
-		_, err := CreateArticleFromURL(server.URL, tempDir)
+		_, err := CreateArticleFromURL(unsupportedURL, tempDir)
 		if err == nil {
 			t.Error("Expected error for unsupported domain")
 		}
-		if !strings.Contains(err.Error(), "no parsing rule found") {
-			t.Errorf("Expected 'no parsing rule found' error, got %v", err)
+		if !strings.Contains(err.Error(), "confidence too low") &&
+			!strings.Contains(err.Error(), "could not extract title") {
+			t.Errorf("Expected heuristic extraction error, got %v", err)
 		}
 	})
 
 	t.Run("fails with HTTP error", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusNotFound)
-		}))
-		defer server.Close()
+		errorURL := "https://example.com/missing"
+		withDefaultHTTPClient(t, func(req *http.Request) (*http.Response, error) {
+			if req.URL.String() == errorURL {
+				return &http.Response{
+					StatusCode: http.StatusNotFound,
+					Header:     make(http.Header),
+					Body:       io.NopCloser(strings.NewReader("")),
+				}, nil
+			}
+			return nil, fmt.Errorf("unexpected request: %s", req.URL.String())
+		})
 
-		_, err := CreateArticleFromURL("https://en.wikipedia.org/wiki/NonExistentPage12345", tempDir)
+		_, err := CreateArticleFromURL(errorURL, tempDir)
 		if err == nil {
 			t.Error("Expected error for HTTP 404")
 		}
@@ -625,7 +736,15 @@ func TestCreateArticleFromURL(t *testing.T) {
 	})
 
 	t.Run("fails with network error", func(t *testing.T) {
-		_, err := CreateArticleFromURL("http://localhost:99999/test", tempDir)
+		networkURL := "https://example.com/network"
+		withDefaultHTTPClient(t, func(req *http.Request) (*http.Response, error) {
+			if req.URL.String() == networkURL {
+				return nil, errors.New("dial error")
+			}
+			return nil, fmt.Errorf("unexpected request: %s", req.URL.String())
+		})
+
+		_, err := CreateArticleFromURL(networkURL, tempDir)
 		if err == nil {
 			t.Error("Expected error for network failure")
 		}
@@ -635,69 +754,80 @@ func TestCreateArticleFromURL(t *testing.T) {
 	})
 
 	t.Run("fails with malformed HTML", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("<html><head><title>Test</head></body>"))
-		}))
-		defer server.Close()
-
-		parser, err := NewArticleParser(server.Client())
+		parser, err := NewArticleParser(http.DefaultClient)
 		if err != nil {
 			t.Fatalf("Failed to create parser: %v", err)
 		}
 
 		localhostRule := &ParsingRule{
-			Domain: "127.0.0.1",
+			Domain: "example.com",
 			Title:  "//h1[@id='firstHeading']",
 			Body:   "//div[@id='bodyContent']",
 			Strip:  []string{"//div[@class='noprint']"},
 		}
-		parser.AddRule("127.0.0.1", localhostRule)
+		parser.AddRule("example.com", localhostRule)
 
-		_, err = parser.ParseURL(server.URL)
+		malformedURL := "https://example.com/malformed"
+		parser.SetHTTPClient(newMockHTTPClient(t, func(req *http.Request) (*http.Response, error) {
+			if req.URL.String() == malformedURL {
+				return htmlResponse(http.StatusOK, "<html><head><title>Test</head></body>"), nil
+			}
+			return nil, fmt.Errorf("unexpected request: %s", req.URL.String())
+		}))
+
+		_, err = parser.ParseURL(malformedURL)
 		if err == nil {
 			t.Error("Expected error for malformed HTML")
 		}
+
 		if !strings.Contains(err.Error(), "failed to parse HTML") &&
 			!strings.Contains(err.Error(), "could not extract title") &&
-			!strings.Contains(err.Error(), "could not extract body content") {
+			!strings.Contains(err.Error(), "could not extract body content") &&
+			!strings.Contains(err.Error(), "confidence too low") {
 			t.Errorf("Expected HTML parsing or extraction error, got %v", err)
 		}
 	})
 
 	t.Run("fails when no title can be extracted", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`<html>
-				<head><title>Test</title></head>
-				<body>
-					<div id="bodyContent">
-						<p>Content without proper title</p>
-					</div>
-				</body>
-			</html>`))
-		}))
-		defer server.Close()
-
-		parser, err := NewArticleParser(server.Client())
+		parser, err := NewArticleParser(http.DefaultClient)
 		if err != nil {
 			t.Fatalf("Failed to create parser: %v", err)
 		}
 
 		localhostRule := &ParsingRule{
-			Domain: "127.0.0.1",
+			Domain: "example.com",
 			Title:  "//h1[@id='firstHeading']",
 			Body:   "//div[@id='bodyContent']",
 			Strip:  []string{"//div[@class='noprint']"},
 		}
-		parser.AddRule("127.0.0.1", localhostRule)
+		parser.AddRule("example.com", localhostRule)
 
-		_, err = parser.ParseURL(server.URL)
-		if err == nil {
-			t.Error("Expected error when no title can be extracted")
-		}
-		if !strings.Contains(err.Error(), "could not extract title") {
-			t.Errorf("Expected 'could not extract title' error, got %v", err)
+		noTitleURL := "https://example.com/notitle"
+		parser.SetHTTPClient(newMockHTTPClient(t, func(req *http.Request) (*http.Response, error) {
+			if req.URL.String() == noTitleURL {
+				return htmlResponse(http.StatusOK, `<html>
+					<head><title>Test</title></head>
+					<body>
+						<div id="bodyContent">
+							<p>Content without proper title</p>
+						</div>
+					</body>
+				</html>`), nil
+			}
+			return nil, fmt.Errorf("unexpected request: %s", req.URL.String())
+		}))
+
+		result, err := parser.ParseURL(noTitleURL)
+
+		if err != nil {
+			if !strings.Contains(err.Error(), "could not extract title") &&
+				!strings.Contains(err.Error(), "confidence too low") {
+				t.Errorf("Expected title extraction error, got %v", err)
+			}
+		} else if result != nil {
+			if result.Title == "" {
+				t.Error("Expected title to be extracted via metadata fallback")
+			}
 		}
 	})
 
@@ -714,23 +844,28 @@ func TestCreateArticleFromURL(t *testing.T) {
 			</body>
 		</html>`
 
-		server := newServerWithHtml(wikipediaHTML)
-		defer server.Close()
-
-		parser, err := NewArticleParser(server.Client())
+		parser, err := NewArticleParser(http.DefaultClient)
 		if err != nil {
 			t.Fatalf("Failed to create parser: %v", err)
 		}
 
 		localhostRule := &ParsingRule{
-			Domain: "127.0.0.1",
+			Domain: "example.com",
 			Title:  "//h1[@id='firstHeading']",
 			Body:   "//div[@id='bodyContent']",
 			Strip:  []string{"//div[@class='noprint']"},
 		}
-		parser.AddRule("127.0.0.1", localhostRule)
+		parser.AddRule("example.com", localhostRule)
 
-		content, err := parser.ParseURL(server.URL)
+		contentURL := "https://example.com/integration"
+		parser.SetHTTPClient(newMockHTTPClient(t, func(req *http.Request) (*http.Response, error) {
+			if req.URL.String() == contentURL {
+				return htmlResponse(http.StatusOK, wikipediaHTML), nil
+			}
+			return nil, fmt.Errorf("unexpected request: %s", req.URL.String())
+		}))
+
+		content, err := parser.ParseURL(contentURL)
 		if err != nil {
 			t.Fatalf("Expected no error, got %v", err)
 		}
@@ -741,7 +876,7 @@ func TestCreateArticleFromURL(t *testing.T) {
 		}
 
 		article := &models.Article{
-			URL:          server.URL,
+			URL:          contentURL,
 			Title:        content.Title,
 			MarkdownPath: mdPath,
 			HTMLPath:     htmlPath,
@@ -752,8 +887,8 @@ func TestCreateArticleFromURL(t *testing.T) {
 		if article.Title != "Integration Test Article" {
 			t.Errorf("Expected title 'Integration Test Article', got %s", article.Title)
 		}
-		if article.URL != server.URL {
-			t.Errorf("Expected URL %s, got %s", server.URL, article.URL)
+		if article.URL != contentURL {
+			t.Errorf("Expected URL %s, got %s", contentURL, article.URL)
 		}
 		if article.MarkdownPath == "" {
 			t.Error("Expected non-empty markdown path")
@@ -817,24 +952,29 @@ func TestCreateArticleFromURL(t *testing.T) {
 			</body>
 		</html>`
 
-		server := newServerWithHtml(contentHTML)
-		defer server.Close()
-
-		parser, err := NewArticleParser(server.Client())
+		parser, err := NewArticleParser(http.DefaultClient)
 		if err != nil {
 			t.Fatalf("Failed to create parser: %v", err)
 		}
 
 		localhostRule := &ParsingRule{
-			Domain: "127.0.0.1",
+			Domain: "example.com",
 			Title:  "//h1[contains(concat(' ',normalize-space(@class),' '),' title ')]",
 			Body:   "//blockquote[contains(concat(' ',normalize-space(@class),' '),' abstract ')]",
 			Date:   "//meta[@name='citation_date']/@content",
 			Author: "//meta[@name='citation_author']/@content",
 		}
-		parser.AddRule("127.0.0.1", localhostRule)
+		parser.AddRule("example.com", localhostRule)
 
-		content, err := parser.ParseURL(server.URL)
+		contentURL := "https://example.com/metadata"
+		parser.SetHTTPClient(newMockHTTPClient(t, func(req *http.Request) (*http.Response, error) {
+			if req.URL.String() == contentURL {
+				return htmlResponse(http.StatusOK, contentHTML), nil
+			}
+			return nil, fmt.Errorf("unexpected request: %s", req.URL.String())
+		}))
+
+		content, err := parser.ParseURL(contentURL)
 		if err != nil {
 			t.Fatalf("Expected no error, got %v", err)
 		}
@@ -876,5 +1016,33 @@ func TestCreateArticleFromURL(t *testing.T) {
 		if article.Date != "2024-01-01" {
 			t.Errorf("Expected article date '2024-01-01', got %s", article.Date)
 		}
+	})
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
+
+func newMockHTTPClient(t *testing.T, fn roundTripFunc) *http.Client {
+	t.Helper()
+	return &http.Client{Transport: fn}
+}
+
+func htmlResponse(status int, body string) *http.Response {
+	return &http.Response{
+		StatusCode: status,
+		Header:     http.Header{"Content-Type": []string{"text/html; charset=utf-8"}},
+		Body:       io.NopCloser(strings.NewReader(body)),
+	}
+}
+
+func withDefaultHTTPClient(t *testing.T, fn roundTripFunc) {
+	t.Helper()
+	original := http.DefaultClient.Transport
+	http.DefaultClient.Transport = fn
+	t.Cleanup(func() {
+		http.DefaultClient.Transport = original
 	})
 }

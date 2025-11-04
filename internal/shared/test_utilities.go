@@ -3,6 +3,7 @@ package shared
 
 import (
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -10,6 +11,28 @@ import (
 	"testing"
 	"time"
 )
+
+func NewHTTPTestServer(t testing.TB, handler http.Handler) *httptest.Server {
+	t.Helper()
+	server, err := startHTTPTestServer(handler)
+	if err != nil {
+		t.Fatalf("failed to start HTTP test server: %v", err)
+	}
+	return server
+}
+
+func startHTTPTestServer(handler http.Handler) (*httptest.Server, error) {
+	ln, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		return nil, err
+	}
+	server := &httptest.Server{
+		Listener: ln,
+		Config:   &http.Server{Handler: handler},
+	}
+	server.Start()
+	return server, nil
+}
 
 func CreateTempDir(p string, t *testing.T) (string, func()) {
 	t.Helper()
@@ -144,10 +167,15 @@ func NewMockServer() *HTTPMockServer {
 
 // WithHandler sets up the mock server with a custom handler
 func (m *HTTPMockServer) WithHandler(handler http.HandlerFunc) *HTTPMockServer {
-	m.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server, err := startHTTPTestServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		m.requests = append(m.requests, r)
 		handler(w, r)
 	}))
+	if err != nil {
+		panic(err)
+	}
+
+	m.server = server
 	return m
 }
 

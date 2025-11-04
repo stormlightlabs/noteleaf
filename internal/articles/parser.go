@@ -26,11 +26,13 @@ var rulesFS embed.FS
 
 // ParsedContent represents the extracted content from a web page
 type ParsedContent struct {
-	Title   string
-	Author  string
-	Date    string
-	Content string
-	URL     string
+	Title            string
+	Author           string
+	Date             string
+	Content          string
+	URL              string
+	Confidence       float64 // 0-1 scale, confidence in extraction quality
+	ExtractionMethod string  // "xpath", "heuristic", "dual-validated", etc.
 }
 
 // ParsingRule represents XPath rules for extracting content from a specific domain
@@ -62,15 +64,19 @@ type Parser interface {
 
 // ArticleParser implements the Parser interface
 type ArticleParser struct {
-	rules  map[string]*ParsingRule
-	client *http.Client
+	rules             map[string]*ParsingRule
+	client            *http.Client
+	heuristicExtract  *HeuristicExtractor
+	metadataExtractor *MetadataExtractor
 }
 
 // NewArticleParser creates a new ArticleParser with the specified HTTP client and loaded rules
 func NewArticleParser(client *http.Client) (*ArticleParser, error) {
 	parser := &ArticleParser{
-		rules:  make(map[string]*ParsingRule),
-		client: client,
+		rules:             make(map[string]*ParsingRule),
+		client:            client,
+		heuristicExtract:  NewHeuristicExtractor(),
+		metadataExtractor: NewMetadataExtractor(),
 	}
 
 	if err := parser.loadRules(); err != nil {
@@ -83,6 +89,11 @@ func NewArticleParser(client *http.Client) (*ArticleParser, error) {
 // AddRule adds or replaces a parsing rule for a specific domain
 func (p *ArticleParser) AddRule(domain string, rule *ParsingRule) {
 	p.rules[domain] = rule
+}
+
+// SetHTTPClient overrides the HTTP client used for fetching article content.
+func (p *ArticleParser) SetHTTPClient(client *http.Client) {
+	p.client = client
 }
 
 func (p *ArticleParser) loadRules() error {
@@ -197,10 +208,9 @@ func (p *ArticleParser) ParseURL(s string) (*ParsedContent, error) {
 	}
 
 	domain := parsedURL.Hostname()
-
 	rule := p.findRule(domain)
-
 	req, err := http.NewRequest(http.MethodGet, s, nil)
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -234,25 +244,33 @@ func (p *ArticleParser) ParseURL(s string) (*ParsedContent, error) {
 	return p.Parse(string(htmlBytes), domain, s)
 }
 
-// ParseHTML extracts article content from HTML string using domain-specific rules
+// ParseHTML extracts article content from HTML string using domain-specific rules with heuristic fallback.
+// Implements dual validation: compares XPath results with heuristic extraction when rules exist.
 func (p *ArticleParser) Parse(htmlContent, domain, sourceURL string) (*ParsedContent, error) {
-	rule := p.findRule(domain)
-
-	if rule == nil {
-		return nil, fmt.Errorf("no parsing rule found for domain: %s", domain)
-	}
-
 	doc, err := htmlquery.Parse(strings.NewReader(htmlContent))
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse HTML: %w", err)
 	}
 
-	content := &ParsedContent{URL: sourceURL}
+	rule := p.findRule(domain)
+
+	if rule == nil {
+		return p.parseWithHeuristics(doc, sourceURL)
+	}
+
+	content := &ParsedContent{
+		URL:              sourceURL,
+		ExtractionMethod: "xpath",
+		Confidence:       0.85,
+	}
 
 	if rule.Title != "" {
 		if titleNode := htmlquery.FindOne(doc, rule.Title); titleNode != nil {
 			content.Title = strings.TrimSpace(htmlquery.InnerText(titleNode))
 		}
+	}
+	if content.Title == "" {
+		content.Title = p.metadataExtractor.ExtractTitle(doc)
 	}
 
 	if rule.Author != "" {
@@ -260,17 +278,23 @@ func (p *ArticleParser) Parse(htmlContent, domain, sourceURL string) (*ParsedCon
 			content.Author = strings.TrimSpace(htmlquery.InnerText(authorNode))
 		}
 	}
+	if content.Author == "" {
+		content.Author = p.metadataExtractor.ExtractAuthor(doc)
+	}
 
 	if rule.Date != "" {
 		if dateNode := htmlquery.FindOne(doc, rule.Date); dateNode != nil {
 			content.Date = strings.TrimSpace(htmlquery.InnerText(dateNode))
 		}
 	}
+	if content.Date == "" {
+		content.Date = p.metadataExtractor.ExtractPublishedDate(doc)
+	}
 
 	if rule.Body != "" {
 		bodyNode := htmlquery.FindOne(doc, rule.Body)
 		if bodyNode == nil {
-			return nil, fmt.Errorf("could not extract body content from HTML")
+			return p.parseWithHeuristics(doc, sourceURL)
 		}
 
 		for _, stripXPath := range rule.Strip {
@@ -283,11 +307,67 @@ func (p *ArticleParser) Parse(htmlContent, domain, sourceURL string) (*ParsedCon
 
 		removeDefaultNonContentNodes(bodyNode)
 
-		content.Content = normalizeWhitespace(htmlquery.InnerText(bodyNode))
+		xpathContent := normalizeWhitespace(htmlquery.InnerText(bodyNode))
+
+		heuristicResult := p.heuristicExtract.CompareWithXPath(doc, bodyNode)
+		if heuristicResult != nil {
+			content.Content = heuristicResult.Content
+			if content.Content == "" {
+				content.Content = xpathContent
+			}
+			content.Confidence = heuristicResult.Confidence
+			content.ExtractionMethod = heuristicResult.ExtractionMethod
+		} else {
+			content.Content = xpathContent
+		}
 	}
 
 	if content.Title == "" {
 		return nil, fmt.Errorf("could not extract title from HTML")
+	}
+
+	return content, nil
+}
+
+// parseWithHeuristics performs heuristic-only extraction when no XPath rule exists.
+func (p *ArticleParser) parseWithHeuristics(doc *exhtml.Node, sourceURL string) (*ParsedContent, error) {
+	result := p.heuristicExtract.ExtractWithSemanticHTML(doc)
+	if result == nil {
+		result = &ExtractionResult{
+			ExtractionMethod: "heuristic-failed",
+			Confidence:       0.0,
+		}
+	}
+
+	metadata := p.metadataExtractor.ExtractMetadata(doc)
+	if metadata != nil {
+		if result.Title == "" {
+			result.Title = metadata.Title
+		}
+		if result.Author == "" {
+			result.Author = metadata.Author
+		}
+		if result.PublishedDate == "" {
+			result.PublishedDate = metadata.PublishedDate
+		}
+	}
+
+	content := &ParsedContent{
+		Title:            result.Title,
+		Author:           result.Author,
+		Date:             result.PublishedDate,
+		Content:          result.Content,
+		URL:              sourceURL,
+		Confidence:       result.Confidence,
+		ExtractionMethod: result.ExtractionMethod,
+	}
+
+	if content.Title == "" {
+		return nil, fmt.Errorf("could not extract title from HTML using heuristics")
+	}
+
+	if content.Confidence < 0.3 {
+		return nil, fmt.Errorf("heuristic extraction confidence too low (%.2f)", content.Confidence)
 	}
 
 	return content, nil
