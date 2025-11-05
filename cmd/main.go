@@ -13,6 +13,7 @@ import (
 	"github.com/stormlightlabs/noteleaf/internal/store"
 	"github.com/stormlightlabs/noteleaf/internal/ui"
 	"github.com/stormlightlabs/noteleaf/internal/utils"
+	"github.com/stormlightlabs/noteleaf/internal/version"
 	"github.com/stormlightlabs/noteleaf/tools"
 )
 
@@ -253,7 +254,7 @@ history of completed media.`,
 	root.AddCommand(tools.NewDocGenCommand(root))
 
 	opts := []fang.Option{
-		fang.WithVersion("0.1.0"),
+		fang.WithVersion(version.String()),
 		fang.WithoutCompletions(),
 		fang.WithColorSchemeFunc(ui.NoteleafColorScheme),
 	}

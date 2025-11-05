@@ -10,83 +10,85 @@ The foundation across all domains is implemented. Tasks support CRUD operations,
 
 ### CORE
 
-- [ ] Ensure **all documented subcommands** exist and work:
+- [x] Ensure **all documented subcommands** exist and work:
     - Tasks: add, list, view, update, edit, delete, projects, tags, contexts, done, start, stop, timesheet
     - Notes: create, list, read, edit, remove
     - Books: add, list, reading, finished, remove, progress, update
     - Movies: add, list, watched, remove
     - TV: add, list, watching, watched, remove
     - Articles: add, list, view, read, remove
-- [ ] Confirm all **aliases** work (`todo`, `ls`, `rm`, etc.).
-- [ ] Verify **flags** and argument parsing match man page (priority, project, context, due, tags, etc.).
-- [ ] Implement or finish stubs (e.g. `config management` noted in code).
+- [x] Confirm all **aliases** work (`todo`, `ls`, `rm`, etc.).
+- [x] Verify **flags** and argument parsing match man page (priority, project, context, due, tags, etc.).
+- [x] Implement or finish stubs (e.g. `config management` noted in code).
 
 ### Task Management Domain
 
-- [ ] Verify tasks can be created with all attributes (priority, project, context, due date, tags).
-- [ ] Confirm task listing supports interactive and static modes.
-- [ ] Implement status filtering (`pending`, `completed`, etc.).
-- [ ] Validate time tracking (start/stop) writes entries and timesheet summarizes correctly.
-- [ ] Ensure update supports add/remove tags and all fields.
-- [ ] Test interactive editor (`task edit`).
+- [x] Verify tasks can be created with all attributes (priority, project, context, due date, tags).
+- [x] Confirm task listing supports interactive and static modes.
+- [x] Implement status filtering (`pending`, `completed`, etc.).
+- [x] Validate time tracking (start/stop) writes entries and timesheet summarizes correctly.
+- [x] Ensure update supports add/remove tags and all fields.
+- [x] Test interactive editor (`task edit`).
 
 ### Notes Domain
 
-- [ ] Implement note creation from:
+- [x] Implement note creation from:
     - Inline text
     - File (`--file`)
     - Interactive input (`--interactive`)
-- [ ] Verify note list interactive TUI works, static list fallback works.
-- [ ] Confirm filtering by tags and `--archived`.
-- [ ] Ensure notes can be opened, edited in `$EDITOR`, and deleted.
+- [x] Verify note list interactive TUI works, static list fallback works.
+- [x] Confirm filtering by tags and `--archived`.
+- [x] Ensure notes can be opened, edited in `$EDITOR`, and deleted.
 
 ### Media Domains
 
 #### Books
 
-- [ ] Implement search + add (possibly external API).
-- [ ] Verify list supports statuses (`queued`, `reading`, `finished`).
-- [ ] Progress updates (`book progress`) work with percentages.
-- [ ] Status update (`book update`) accepts valid values.
+- [x] Implement search + add (possibly external API).
+- [x] Verify list supports statuses (`queued`, `reading`, `finished`).
+- [x] Progress updates (`book progress`) work with percentages.
+- [x] Status update (`book update`) accepts valid values.
 
 #### Movies
 
-- [ ] Implement search + add.
-- [ ] Verify `list` with status filtering (`all`, `queued`, `watched`).
-- [ ] Confirm `watched`/`remove` commands update correctly.
+- [x] Implement search + add.
+- [x] Verify `list` with status filtering (`all`, `queued`, `watched`).
+- [x] Confirm `watched`/`remove` commands update correctly.
 
 #### TV
 
-- [ ] Implement search + add.
-- [ ] Verify `list` with multiple statuses (`queued`, `watching`, `watched`).
-- [ ] Ensure `watching`, `watched`, `remove` commands behave correctly.
+- [x] Implement search + add.
+- [x] Verify `list` with multiple statuses (`queued`, `watching`, `watched`).
+- [x] Ensure `watching`, `watched`, `remove` commands behave correctly.
 
 #### Articles
 
-- [ ] Implement article parser (XPath/domain-specific rules).
-- [ ] Save articles in Markdown + HTML.
-- [ ] Verify metadata is stored in DB.
-- [ ] Confirm list supports query, author filter, limit.
-- [ ] Test article view/read/remove.
+- [x] Implement article parser (XPath/domain-specific rules).
+- [x] Save articles in Markdown + HTML.
+- [x] Verify metadata is stored in DB.
+- [x] Confirm list supports query, author filter, limit.
+- [x] Test article view/read/remove.
 
 ### Configuration & Data
 
-- [ ] Implement **config management**
-- [ ] Define config file format (TOML, YAML, JSON).
-- [ ] Set default config/data paths:
+- [x] Implement **config management**
+- [x] Define config file format (TOML, YAML, JSON).
+- [x] Set default config/data paths:
     - Linux: `~/.config/noteleaf`, `~/.local/share/noteleaf`
     - macOS: `~/Library/Application Support/noteleaf`
     - Windows: `%APPDATA%\noteleaf`
-- [ ] Implement overrides with environment variables (`NOTELEAF_CONFIG`, `NOTELEAF_DATA_DIR`).
-- [ ] Ensure consistent DB schema migrations and versioning.
+- [x] Implement overrides with environment variables (`NOTELEAF_CONFIG`, `NOTELEAF_DATA_DIR`).
+- [x] Ensure consistent DB schema migrations and versioning.
 
 ### Documentation
 
-- [ ] Finalize **man page** (plaintext + roff).
-- [ ] Write quickstart guide in `README.md`.
-- [ ] Add examples for each command.
-- [ ] Document config file with defaults and examples.
-- [ ] Provide developer docs for contributing.
+- [x] Finalize **man page** - use `tools/docgen.go` as a dev only command for `website/docs/manual`
+- [x] Strictly follow <https://diataxis.fr/>
+    - [x] Write quickstart guide in `README.md` & add `website/docs/Quickstart.md`
+    - [x] Add examples for each command (`website/docs/examples`)
+    - [x] Document config file with defaults and examples in `website/docs/Configuration.md`
+    - [x] Provide developer docs for contributing in `docs/dev`
+        - [x] Move to `website/docs/development`
 
 ### QA
 

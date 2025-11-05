@@ -467,10 +467,11 @@ func TestBookService(t *testing.T) {
 		})
 	})
 
-	t.Run("UserAgent header", func(t *testing.T) {
-		expectedFormat := "Noteleaf/1.0.0 (info@stormlightlabs.org)"
-		if userAgent != expectedFormat {
-			t.Errorf("User agent should follow the required format. Expected %s, got %s", expectedFormat, userAgent)
+	t.Run("UserAgent header format", func(t *testing.T) {
+		expectedPrefix := "Noteleaf/"
+		expectedSuffix := " (info@stormlightlabs.org)"
+		if !strings.HasPrefix(userAgent, expectedPrefix) || !strings.HasSuffix(userAgent, expectedSuffix) {
+			t.Errorf("User agent should follow format 'Noteleaf/<version> (info@stormlightlabs.org)', got %s", userAgent)
 		}
 	})
 

@@ -1,0 +1,191 @@
+version: '3'
+
+vars:
+  BINARY_NAME: noteleaf
+  BUILD_DIR: ./tmp
+  CMD_DIR: ./cmd
+  COVERAGE_FILE: coverage.out
+  COVERAGE_HTML: coverage.html
+  VERSION_PKG: github.com/stormlightlabs/noteleaf/internal/version
+
+  # Git version detection
+  GIT_COMMIT:
+    sh: git rev-parse --short HEAD 2>/dev/null || echo "none"
+  GIT_TAG:
+    sh: git describe --tags --exact-match 2>/dev/null || echo ""
+  GIT_DESCRIBE:
+    sh: git describe --tags --always --dirty 2>/dev/null || echo "dev"
+  BUILD_DATE:
+    sh: date -u +"%Y-%m-%dT%H:%M:%SZ"
+
+tasks:
+  default:
+    desc: Show available tasks
+    silent: true
+    cmds:
+      - task --list
+
+  test:
+    desc: Run all tests
+    cmds:
+      - go test ./...
+
+  coverage:
+    desc: Generate HTML coverage report
+    cmds:
+      - go test -coverprofile={{.COVERAGE_FILE}} ./...
+      - go tool cover -html={{.COVERAGE_FILE}} -o {{.COVERAGE_HTML}}
+      - echo "Coverage report generated at {{.COVERAGE_HTML}}"
+
+  cov:
+    desc: Show coverage in terminal
+    cmds:
+      - go test -coverprofile={{.COVERAGE_FILE}} ./...
+      - go tool cover -func={{.COVERAGE_FILE}}
+
+  build:
+    desc: Build binary (simple build without version injection)
+    cmds:
+      - mkdir -p {{.BUILD_DIR}}
+      - go build -o {{.BUILD_DIR}}/{{.BINARY_NAME}} {{.CMD_DIR}}
+      - echo "Built {{.BUILD_DIR}}/{{.BINARY_NAME}}"
+
+  build:dev:
+    desc: Build binary with dev version (includes git commit hash)
+    vars:
+      VERSION: "{{.GIT_DESCRIBE}}"
+      LDFLAGS: "-X {{.VERSION_PKG}}.Version={{.VERSION}} -X {{.VERSION_PKG}}.Commit={{.GIT_COMMIT}} -X {{.VERSION_PKG}}.BuildDate={{.BUILD_DATE}}"
+    cmds:
+      - mkdir -p {{.BUILD_DIR}}
+      - go build -ldflags "{{.LDFLAGS}}" -o {{.BUILD_DIR}}/{{.BINARY_NAME}} {{.CMD_DIR}}
+      - 'echo "Built {{.BUILD_DIR}}/{{.BINARY_NAME}} (version: {{.VERSION}})"'
+
+  build:rc:
+    desc: Build release candidate binary (requires git tag with -rc suffix)
+    vars:
+      VERSION: "{{.GIT_TAG}}"
+      LDFLAGS: "-X {{.VERSION_PKG}}.Version={{.VERSION}} -X {{.VERSION_PKG}}.Commit={{.GIT_COMMIT}} -X {{.VERSION_PKG}}.BuildDate={{.BUILD_DATE}}"
+    preconditions:
+      - sh: '[ -n "{{.GIT_TAG}}" ]'
+        msg: "No git tag found. Create a tag with 'git tag v1.0.0-rc1' first."
+      - sh: 'echo "{{.GIT_TAG}}" | grep -q "\-rc"'
+        msg: "Git tag must contain '-rc' for release candidate builds (e.g., v1.0.0-rc1)"
+    cmds:
+      - mkdir -p {{.BUILD_DIR}}
+      - go build -ldflags "{{.LDFLAGS}}" -o {{.BUILD_DIR}}/{{.BINARY_NAME}} {{.CMD_DIR}}
+      - 'echo "Built {{.BUILD_DIR}}/{{.BINARY_NAME}} (version: {{.VERSION}})"'
+
+  build:prod:
+    desc: Build production binary (requires clean semver git tag)
+    vars:
+      VERSION: "{{.GIT_TAG}}"
+      LDFLAGS: "-X {{.VERSION_PKG}}.Version={{.VERSION}} -X {{.VERSION_PKG}}.Commit={{.GIT_COMMIT}} -X {{.VERSION_PKG}}.BuildDate={{.BUILD_DATE}}"
+    preconditions:
+      - sh: '[ -n "{{.GIT_TAG}}" ]'
+        msg: "No git tag found. Create a tag with 'git tag v1.0.0' first."
+      - sh: 'echo "{{.GIT_TAG}}" | grep -qE "^v?[0-9]+\.[0-9]+\.[0-9]+$"'
+        msg: "Git tag must be a clean semver version (e.g., v1.0.0 or 1.0.0) without prerelease suffix"
+      - sh: '[ -z "$(git status --porcelain)" ]'
+        msg: "Working directory must be clean (no uncommitted changes) for production builds"
+    cmds:
+      - mkdir -p {{.BUILD_DIR}}
+      - go build -ldflags "{{.LDFLAGS}}" -o {{.BUILD_DIR}}/{{.BINARY_NAME}} {{.CMD_DIR}}
+      - 'echo "Built {{.BUILD_DIR}}/{{.BINARY_NAME}} (version: {{.VERSION}})"'
+
+  clean:
+    desc: Remove build artifacts and coverage files
+    cmds:
+      - rm -f {{.COVERAGE_FILE}} {{.COVERAGE_HTML}}
+      - rm -rf {{.BUILD_DIR}}
+      - echo "Cleaned build artifacts"
+
+  lint:
+    desc: Run linters (go vet and go fmt)
+    cmds:
+      - go vet ./...
+      - go fmt ./...
+
+  check:
+    desc: Run linters and coverage tests
+    cmds:
+      - task: lint
+      - task: cov
+
+  deps:
+    desc: Download and tidy dependencies
+    cmds:
+      - go mod download
+      - go mod tidy
+
+  run:
+    desc: Build and run the application
+    deps: [build]
+    cmds:
+      - '{{.BUILD_DIR}}/{{.BINARY_NAME}}'
+
+  status:
+    desc: Show Go version, module info, and dependencies
+    silent: true
+    cmds:
+      - echo "=== Go Version ==="
+      - go version
+      - echo ""
+      - echo "=== Module Info ==="
+      - go list -m
+      - echo ""
+      - echo "=== Dependencies ==="
+      - go list -m all
+
+  dev:
+    desc: Full development workflow (clean, lint, test, build)
+    cmds:
+      - task: clean
+      - task: lint
+      - task: test
+      - task: build
+
+  docs:generate:
+    desc: Generate documentation in all formats
+    cmds:
+      - go run tools/docgen.go -output website/docs/manual -format docusaurus
+      - go run tools/docgen.go -output docs/manual -format man
+      - echo "Documentation generated"
+
+  docs:man:
+    desc: Generate man pages
+    cmds:
+      - mkdir -p docs/manual
+      - go run tools/docgen.go -output docs/manual -format man
+      - echo "Man pages generated in docs/manual"
+
+  docs:serve:
+    desc: Start docusaurus development server
+    dir: website
+    cmds:
+      - npm run start
+
+  version:show:
+    desc: Display current version information
+    silent: true
+    cmds:
+      - echo "Version info:"
+      - 'echo "  Git tag: {{.GIT_TAG}}"'
+      - 'echo "  Git commit: {{.GIT_COMMIT}}"'
+      - 'echo "  Git describe: {{.GIT_DESCRIBE}}"'
+      - 'echo "  Build date: {{.BUILD_DATE}}"'
+
+  version:validate:
+    desc: Validate git tag format for releases
+    cmds:
+      - |
+        if [ -z "{{.GIT_TAG}}" ]; then
+          echo "No git tag found"
+          exit 1
+        fi
+        if echo "{{.GIT_TAG}}" | grep -qE "^v?[0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+)?$"; then
+          echo "Valid version tag: {{.GIT_TAG}}"
+        else
+          echo "Invalid version tag: {{.GIT_TAG}}"
+          echo "Expected format: v1.0.0 or v1.0.0-rc1"
+          exit 1
+        fi

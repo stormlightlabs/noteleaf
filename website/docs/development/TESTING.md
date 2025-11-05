@@ -4,11 +4,14 @@ This document outlines the testing patterns and practices used in the `noteleaf`
 
 ## Overview
 
-The codebase follows Go's standard testing practices with specialized testing utilities for complex scenarios. Tests use the standard library along with carefully selected dependencies like faker for data generation and BubbleTea for TUI testing. This approach keeps dependencies minimal while providing robust testing infrastructure for interactive components and complex integrations.
+The codebase follows Go's standard testing practices with specialized testing utilities for complex scenarios.
+Tests use the standard library along with carefully selected dependencies like faker for data generation and BubbleTea for TUI testing.
+This approach keeps dependencies minimal while providing robust testing infrastructure for interactive components and complex integrations.
 
 ### Organization
 
-Each package contains its own test files alongside the source code. Test files are organized by functionality and mirror the structure of the source code they test. The codebase includes four main test utility files that provide specialized testing infrastructure:
+Each package contains its own test files alongside the source code. Test files are organized by functionality and mirror the structure of the source code they test.
+The codebase includes four main test utility files that provide specialized testing infrastructure:
 
 - `internal/services/test_utilities.go` - HTTP mocking and media service testing
 - `internal/repo/test_utilities.go` - Database testing and data generation
@@ -19,39 +22,50 @@ Each package contains its own test files alongside the source code. Test files a
 
 ### Handler Creation
 
-Tests create real handler instances using temporary databases to ensure test isolation. Factory functions handle both database setup and handler initialization, returning both the handler and a cleanup function.
+Tests create real handler instances using temporary databases to ensure test isolation.
+Factory functions handle both database setup and handler initialization, returning both the handler and a cleanup function.
 
 ### Database Isolation
 
-Tests use temporary directories and environment variable manipulation to create isolated database instances. Each test gets its own temporary SQLite database that is automatically cleaned up after the test completes.
+Tests use temporary directories and environment variable manipulation to create isolated database instances.
+Each test gets its own temporary SQLite database that is automatically cleaned up after the test completes.
 
-The `setupCommandTest` function creates a temporary directory, sets `XDG_CONFIG_HOME` to point to it, and initializes the database schema. This ensures tests don't interfere with each other or with development data.
+The `setupCommandTest` function creates a temporary directory, sets `XDG_CONFIG_HOME` to point to it, and initializes the database schema.
+This ensures tests don't interfere with each other or with development data.
 
 ### Resource Management
 
-Tests properly manage resources using cleanup functions returned by factory methods. The cleanup function handles both handler closure and temporary directory removal. This pattern ensures complete resource cleanup even if tests fail.
+Tests properly manage resources using cleanup functions returned by factory methods.
+The cleanup function handles both handler closure and temporary directory removal.
+This pattern ensures complete resource cleanup even if tests fail.
 
 ### Error Handling
 
-Tests use `t.Fatal` for setup errors that prevent test execution and `t.Error` for test assertion failures. Fatal errors stop test execution while errors allow tests to continue checking other conditions.
+Tests use `t.Fatal` for setup errors that prevent test execution and `t.Error` for test assertion failures.
+Fatal errors stop test execution while errors allow tests to continue checking other conditions.
 
 ### Context Cancellation
 
-Error case testing frequently uses context cancellation to simulate database and network failures. The pattern creates a context, immediately cancels it, then calls the function under test to verify error handling. This provides a reliable way to test error paths without requiring complex mock setups or external failure injection.
+Error case testing frequently uses context cancellation to simulate database and network failures.
+The pattern creates a context, immediately cancels it, then calls the function under test to verify error handling.
+This provides a reliable way to test error paths without requiring complex mock setups or external failure injection.
 
 ### Command Structure
 
-Command group tests verify cobra command structure including use strings, aliases, short descriptions, and subcommand presence. Tests check that commands are properly configured without executing their logic.
+Command group tests verify cobra command structure including use strings, aliases, short descriptions, and subcommand presence.
+Tests check that commands are properly configured without executing their logic.
 
 ### Interface Compliance
 
-Tests verify interface compliance using compile-time checks with blank identifier assignments. This ensures structs implement expected interfaces without runtime overhead.
+Tests verify interface compliance using compile-time checks with blank identifier assignments.
+This ensures structs implement expected interfaces without runtime overhead.
 
 ## Test Infrastructure
 
 ### Test Utility Frameworks
 
-The codebase provides comprehensive testing utilities organized by layer and functionality. Each test utility file contains specialized helpers, mocks, and test infrastructure for its respective domain.
+The codebase provides comprehensive testing utilities organized by layer and functionality.
+Each test utility file contains specialized helpers, mocks, and test infrastructure for its respective domain.
 
 #### Database Testing Utilities
 
@@ -105,18 +119,25 @@ The `InputSimulator` provides controlled input sequences that prevent tests from
 
 #### TUI Testing with BubbleTea Framework
 
-The TUI testing framework addresses the fundamental challenge of testing interactive terminal applications in a deterministic, concurrent environment. BubbleTea's message-passing architecture creates unique testing requirements that standard Go testing patterns cannot adequately address.
+The TUI testing framework addresses the fundamental challenge of testing interactive terminal applications in a deterministic, concurrent environment.
+BubbleTea's message-passing architecture creates unique testing requirements that standard Go testing patterns cannot adequately address.
 
-The framework implements a controlled execution environment that replaces BubbleTea's typical program loop with a deterministic testing harness. Rather than running an actual terminal program, the "testing suite" directly manages model state transitions by simulating the Update/View cycle. This approach eliminates the non-deterministic behavior inherent in real terminal interactions while preserving the exact message flow patterns that production code experiences.
+The framework implements a controlled execution environment that replaces BubbleTea's typical program loop with a deterministic testing harness.
+Rather than running an actual terminal program, the "testing suite" directly manages model state transitions by simulating the Update/View cycle.
+This approach eliminates the non-deterministic behavior inherent in real terminal interactions while preserving the exact message flow patterns that production code experiences.
 
-State verification relies on function composition patterns where test conditions are expressed as closures that capture specific model states. The `WaitFor` mechanism uses polling with configurable timeouts, addressing the async nature of BubbleTea model updates without creating race conditions. This pattern bridges imperative test assertions with BubbleTea's declarative update model.
+State verification relies on function composition patterns where test conditions are expressed as closures that capture specific model states.
+The `WaitFor` mechanism uses polling with configurable timeouts, addressing the async nature of BubbleTea model updates without creating race conditions.
+This pattern bridges imperative test assertions with BubbleTea's declarative update model.
 This is inspired by front-end/TS/JS testing patterns.
 
 The framework's I/O abstraction layer replaces terminal input/output with controlled buffers that implement standard Go interfaces.
-This design maintains interface compatibility while providing complete control over timing and content. The controlled I/O system captures all output for later verification and injects precise input sequences, enabling complex interaction testing without external dependencies.
+This design maintains interface compatibility while providing complete control over timing and content.
+The controlled I/O system captures all output for later verification and injects precise input sequences, enabling complex interaction testing without external dependencies.
 
 Concurrency management uses channels and context propagation to coordinate between the testing framework and the model under test.
-The suite manages goroutine lifecycle and ensures proper cleanup, preventing test interference and resource leaks. This architecture supports testing of models that perform background operations or handle async events.
+The suite manages goroutine lifecycle and ensures proper cleanup, preventing test interference and resource leaks.
+This architecture supports testing of models that perform background operations or handle async events.
 
 #### HTTP Service Mocking
 
@@ -134,11 +155,14 @@ Environment testing utilities provide controlled environment manipulation. Envir
 
 ### Single Root Test
 
-The preferred test organization pattern uses a single root test function with nested subtests using `t.Run`. This provides clear hierarchical organization and allows running specific test sections while maintaining shared setup and context. This pattern offers several advantages: clear test hierarchy with logical grouping, ability to run specific test sections, consistent test structure across the codebase, and shared setup that can be inherited by subtests.
+The preferred test organization pattern uses a single root test function with nested subtests using `t.Run`.
+This provides clear hierarchical organization and allows running specific test sections while maintaining shared setup and context.
+This pattern offers several advantages: clear test hierarchy with logical grouping, ability to run specific test sections, consistent test structure across the codebase, and shared setup that can be inherited by subtests.
 
 ### Integration vs Unit Testing
 
-The codebase emphasizes integration testing over heavy mocking by using real handlers and services to verify actual behavior rather than mocked interactions. The goal is to catch integration issues while maintaining test reliability.
+The codebase emphasizes integration testing over heavy mocking by using real handlers and services to verify actual behavior rather than mocked interactions.
+The goal is to catch integration issues while maintaining test reliability.
 
 ### Static Output
 
@@ -146,7 +170,9 @@ UI components support static output modes for testing. Tests capture output usin
 
 ### Standard Output Redirection
 
-For testing functions that write to stdout, tests use a pipe redirection pattern with goroutines to capture output. The pattern saves the original stdout, redirects to a pipe, captures output in a separate goroutine, and restores stdout after the test. This ensures clean output capture without interfering with the testing framework.
+For testing functions that write to stdout, tests use a pipe redirection pattern with goroutines to capture output.
+The pattern saves the original stdout, redirects to a pipe, captures output in a separate goroutine, and restores stdout after the test.
+This ensures clean output capture without interfering with the testing framework.
 
 ## Utilities
 
@@ -189,17 +215,20 @@ Testing utilities provide comprehensive resource management:
 
 ## Testing CLI Commands
 
-Command group tests focus on structure verification rather than execution testing. Tests check command configuration, subcommand presence, and interface compliance. This approach ensures command trees are properly constructed without requiring complex execution mocking.
+Command group tests focus on structure verification rather than execution testing.
+Tests check command configuration, subcommand presence, and interface compliance. This approach ensures command trees are properly constructed without requiring complex execution mocking.
 
 ### CommandGroup Interface Testing
 
-The CommandGroup interface enables testable CLI architecture. Tests verify that command groups implement the interface correctly and return properly configured cobra commands. This pattern separates command structure from command execution.
+The CommandGroup interface enables testable CLI architecture. Tests verify that command groups implement the interface correctly and return properly configured cobra commands.
+This pattern separates command structure from command execution.
 
 Interface compliance is tested using compile-time checks within the "Interface Implementations" subtest, ensuring all command structs properly implement the CommandGroup interface without runtime overhead.
 
 ## Performance Considerations
 
-Tests avoid expensive operations in setup functions. Handler creation uses real instances but tests focus on structure verification rather than full execution paths. This keeps test suites fast while maintaining coverage of critical functionality.
+Tests avoid expensive operations in setup functions. Handler creation uses real instances but tests focus on structure verification rather than full execution paths.
+This keeps test suites fast while maintaining coverage of critical functionality.
 
 The single root test pattern allows for efficient resource management where setup costs can be amortized across multiple related test cases.
 

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/stormlightlabs/noteleaf/internal/models"
+	"github.com/stormlightlabs/noteleaf/internal/version"
 	"golang.org/x/time/rate"
 )
 
@@ -27,10 +28,11 @@ const (
 	// Rate limiting: 180 requests per minute = 3 requests per second
 	requestsPerSecond int = 3
 	burstLimit        int = 5
+)
 
-	// User agent
-	// TODO: See https://www.digitalocean.com/community/tutorials/using-ldflags-to-set-version-information-for-go-applications
-	userAgent string = "Noteleaf/1.0.0 (info@stormlightlabs.org)"
+var (
+	// User agent for HTTP requests - uses version information set at build time
+	userAgent = version.UserAgent("Noteleaf", "info@stormlightlabs.org")
 )
 
 // APIService defines the contract for API interactions

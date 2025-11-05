@@ -24,7 +24,8 @@ The application follows a layered architecture with clear separation between pre
 
 ### Business Logic
 
-**Handlers** - Business logic resides in `internal/handlers/` with one handler per domain (TaskHandler, NoteHandler, ArticleHandler, etc.). Handlers receive repository dependencies through constructor injection.
+**Handlers** - Business logic resides in `internal/handlers/` with one handler per domain (TaskHandler, NoteHandler, ArticleHandler, etc.).
+Handlers receive repository dependencies through constructor injection.
 
 **Services** - Domain-specific operations in `internal/services/` handle complex business workflows and external integrations.
 
@@ -34,7 +35,8 @@ The application follows a layered architecture with clear separation between pre
 
 ### Content Management
 
-**Articles** - Web scraping using `gocolly/colly` with domain-specific extraction rules stored in `internal/articles/rules/`. Articles are parsed to markdown and stored with dual file references (markdown + HTML).
+**Articles** - Web scraping using `gocolly/colly` with domain-specific extraction rules stored in `internal/articles/rules/`.
+Articles are parsed to markdown and stored with dual file references (markdown + HTML).
 
 **Tasks** - Todo/task management inspired by TaskWarrior with filtering, status tracking, and interactive TUI views.
 
@@ -64,24 +66,34 @@ The application follows a layered architecture with clear separation between pre
 
 ### Technology Choices
 
-**Go over Rust** - Go was selected for its simplicity, excellent CLI ecosystem (Cobra, Charm libraries), and faster development velocity. While Rust + Ratatui would provide better memory safety and potentially superior performance, Go's straightforward concurrency model and mature tooling ecosystem made it the pragmatic choice for rapid prototyping and iteration.
+**Go over Rust** - Go was selected for its simplicity, excellent CLI ecosystem (Cobra, Charm libraries), and faster development velocity.
+While Rust + Ratatui would provide better memory safety and potentially superior performance, Go's straightforward concurrency model and mature tooling ecosystem made it the pragmatic choice for rapid prototyping and iteration.
 
-**SQLite over PostgreSQL** - SQLite provides zero-configuration deployment and sufficient performance for single-user CLI applications. The embedded database eliminates setup complexity while supporting full SQL features needed for filtering and querying. PostgreSQL would add deployment overhead without meaningful benefits for this use case.
+**SQLite over PostgreSQL** - SQLite provides zero-configuration deployment and sufficient performance for single-user CLI applications.
+The embedded database eliminates setup complexity while supporting full SQL features needed for filtering and querying.
+PostgreSQL would add deployment overhead without meaningful benefits for this use case.
 
-**Repository Pattern over Active Record** - Repository interfaces enable clean separation between business logic and data access, facilitating testing through dependency injection. This pattern scales better than Active Record for complex domain logic while maintaining clear boundaries between layers.
+**Repository Pattern over Active Record** - Repository interfaces enable clean separation between business logic and data access, facilitating testing through dependency injection.
+This pattern scales better than Active Record for complex domain logic while maintaining clear boundaries between layers.
 
 ### Architectural Tradeoffs
 
-**CommandGroup Interface** - Centralizes command registration while enabling modular command organization. The pattern requires additional abstraction but provides consistent dependency injection and testing capabilities across all command groups.
+**CommandGroup Interface** - Centralizes command registration while enabling modular command organization.
+The pattern requires additional abstraction but provides consistent dependency injection and testing capabilities across all command groups.
 
-**Handler-based Business Logic** - Business logic in handlers rather than rich domain models keeps the codebase simple and avoids over-engineering. While this approach may not scale to complex business rules, it provides clear separation of concerns for the current feature set.
+**Handler-based Business Logic** - Business logic in handlers rather than rich domain models keeps the codebase simple and avoids over-engineering.
+While this approach may not scale to complex business rules, it provides clear separation of concerns for the current feature set.
 
-**Dual Storage for Articles** - Articles store both markdown and HTML versions to balance processing speed with format flexibility. This doubles storage requirements but eliminates runtime conversion overhead and preserves original formatting.
+**Dual Storage for Articles** - Articles store both markdown and HTML versions to balance processing speed with format flexibility.
+This doubles storage requirements but eliminates runtime conversion overhead and preserves original formatting.
 
 ### Component Interactions
 
-**Handler → Repository → Database** - Request flow follows a linear path from CLI commands through business logic to data persistence. This pattern ensures consistent validation and error handling while maintaining clear separation of concerns.
+**Handler → Repository → Database** - Request flow follows a linear path from CLI commands through business logic to data persistence.
+This pattern ensures consistent validation and error handling while maintaining clear separation of concerns.
 
-**TUI State Management** - Bubbletea's unidirectional data flow provides predictable state updates for interactive components. The model-view-update pattern ensures consistent UI behavior across different terminal environments.
+**TUI State Management** - Bubbletea's unidirectional data flow provides predictable state updates for interactive components.
+The model-view-update pattern ensures consistent UI behavior across different terminal environments.
 
-**Configuration and Migration** - Application startup validates configuration and runs database migrations before initializing handlers. This fail-fast approach prevents runtime errors and ensures consistent database schema across deployments.
+**Configuration and Migration** - Application startup validates configuration and runs database migrations before initializing handlers.
+This fail-fast approach prevents runtime errors and ensures consistent database schema across deployments.
