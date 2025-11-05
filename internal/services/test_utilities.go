@@ -7,8 +7,10 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stormlightlabs/noteleaf/internal/models"
+	"github.com/stormlightlabs/noteleaf/internal/public"
 )
 
 // From: https://www.rottentomatoes.com/m/the_fantastic_four_first_steps
@@ -258,4 +260,218 @@ func TestTVSearch(t *testing.T, service *TVService, query string, expectedTitleF
 	}
 
 	AssertTVShowInResults(t, results, expectedTitleFragment)
+}
+
+// MockATProtoService is a mock implementation of ATProtoService for testing
+type MockATProtoService struct {
+	AuthenticateFunc   func(ctx context.Context, handle, password string) error
+	GetSessionFunc     func() (*Session, error)
+	IsAuthenticatedVal bool
+	RestoreSessionFunc func(session *Session) error
+	PullDocumentsFunc  func(ctx context.Context) ([]DocumentWithMeta, error)
+	PostDocumentFunc   func(ctx context.Context, doc public.Document, isDraft bool) (*DocumentWithMeta, error)
+	PatchDocumentFunc  func(ctx context.Context, rkey string, doc public.Document, isDraft bool) (*DocumentWithMeta, error)
+	DeleteDocumentFunc func(ctx context.Context, rkey string, isDraft bool) error
+	UploadBlobFunc     func(ctx context.Context, data []byte, mimeType string) (public.Blob, error)
+	CloseFunc          func() error
+	Session            *Session // Exported for test access
+}
+
+// NewMockATProtoService creates a new mock AT Proto service
+func NewMockATProtoService() *MockATProtoService {
+	return &MockATProtoService{IsAuthenticatedVal: false}
+}
+
+// Authenticate mocks authentication
+func (m *MockATProtoService) Authenticate(ctx context.Context, handle, password string) error {
+	if m.AuthenticateFunc != nil {
+		return m.AuthenticateFunc(ctx, handle, password)
+	}
+
+	// Default successful authentication
+	m.Session = &Session{
+		DID:           "did:plc:test123",
+		Handle:        handle,
+		AccessJWT:     "mock_access_token",
+		RefreshJWT:    "mock_refresh_token",
+		PDSURL:        "https://bsky.social",
+		ExpiresAt:     time.Now().Add(2 * time.Hour),
+		Authenticated: true,
+	}
+	m.IsAuthenticatedVal = true
+	return nil
+}
+
+// GetSession returns the current session
+func (m *MockATProtoService) GetSession() (*Session, error) {
+	if m.GetSessionFunc != nil {
+		return m.GetSessionFunc()
+	}
+
+	if m.Session == nil || !m.Session.Authenticated {
+		return nil, errors.New("not authenticated - run 'noteleaf pub auth' first")
+	}
+	return m.Session, nil
+}
+
+// IsAuthenticated returns authentication status
+func (m *MockATProtoService) IsAuthenticated() bool {
+	return m.IsAuthenticatedVal
+}
+
+// RestoreSession restores a session
+func (m *MockATProtoService) RestoreSession(session *Session) error {
+	if m.RestoreSessionFunc != nil {
+		return m.RestoreSessionFunc(session)
+	}
+
+	m.Session = session
+	m.IsAuthenticatedVal = true
+	return nil
+}
+
+// PullDocuments mocks pulling documents
+func (m *MockATProtoService) PullDocuments(ctx context.Context) ([]DocumentWithMeta, error) {
+	if m.PullDocumentsFunc != nil {
+		return m.PullDocumentsFunc(ctx)
+	}
+	return []DocumentWithMeta{}, nil
+}
+
+// PostDocument mocks posting a document
+func (m *MockATProtoService) PostDocument(ctx context.Context, doc public.Document, isDraft bool) (*DocumentWithMeta, error) {
+	if m.PostDocumentFunc != nil {
+		return m.PostDocumentFunc(ctx, doc, isDraft)
+	}
+
+	// Default successful post
+	return &DocumentWithMeta{
+		Document: doc,
+		Meta: public.DocumentMeta{
+			RKey:      "mock_rkey_123",
+			CID:       "mock_cid_456",
+			URI:       "at://did:plc:test123/pub.leaflet.document/mock_rkey_123",
+			IsDraft:   isDraft,
+			FetchedAt: time.Now(),
+		},
+	}, nil
+}
+
+// PatchDocument mocks patching a document
+func (m *MockATProtoService) PatchDocument(ctx context.Context, rkey string, doc public.Document, isDraft bool) (*DocumentWithMeta, error) {
+	if m.PatchDocumentFunc != nil {
+		return m.PatchDocumentFunc(ctx, rkey, doc, isDraft)
+	}
+
+	return &DocumentWithMeta{
+		Document: doc,
+		Meta: public.DocumentMeta{
+			RKey:      rkey,
+			CID:       "mock_cid_updated_789",
+			URI:       "at://did:plc:test123/pub.leaflet.document/" + rkey,
+			IsDraft:   isDraft,
+			FetchedAt: time.Now(),
+		},
+	}, nil
+}
+
+// DeleteDocument mocks deleting a document
+func (m *MockATProtoService) DeleteDocument(ctx context.Context, rkey string, isDraft bool) error {
+	if m.DeleteDocumentFunc != nil {
+		return m.DeleteDocumentFunc(ctx, rkey, isDraft)
+	}
+	return nil
+}
+
+// UploadBlob mocks blob upload
+func (m *MockATProtoService) UploadBlob(ctx context.Context, data []byte, mimeType string) (public.Blob, error) {
+	if m.UploadBlobFunc != nil {
+		return m.UploadBlobFunc(ctx, data, mimeType)
+	}
+
+	return public.Blob{
+		Type:     public.TypeBlob,
+		Ref:      public.CID{Link: "mock_blob_cid"},
+		MimeType: mimeType,
+		Size:     len(data),
+	}, nil
+}
+
+// Close mocks cleanup
+func (m *MockATProtoService) Close() error {
+	if m.CloseFunc != nil {
+		return m.CloseFunc()
+	}
+	m.Session = nil
+	m.IsAuthenticatedVal = false
+	return nil
+}
+
+// SetupSuccessfulAuthMocks configures mock for successful authentication
+func SetupSuccessfulAuthMocks() *MockATProtoService {
+	mock := NewMockATProtoService()
+	mock.AuthenticateFunc = func(ctx context.Context, handle, password string) error {
+		mock.Session = &Session{
+			DID:           "did:plc:test123",
+			Handle:        handle,
+			AccessJWT:     "mock_access_token",
+			RefreshJWT:    "mock_refresh_token",
+			PDSURL:        "https://bsky.social",
+			ExpiresAt:     time.Now().Add(2 * time.Hour),
+			Authenticated: true,
+		}
+		mock.IsAuthenticatedVal = true
+		return nil
+	}
+	return mock
+}
+
+// SetupSuccessfulPullMocks configures mock for successful document pull
+func SetupSuccessfulPullMocks() *MockATProtoService {
+	mock := NewMockATProtoService()
+	mock.IsAuthenticatedVal = true
+	mock.Session = &Session{
+		DID:           "did:plc:test123",
+		Handle:        "test.bsky.social",
+		AccessJWT:     "mock_access",
+		RefreshJWT:    "mock_refresh",
+		PDSURL:        "https://bsky.social",
+		ExpiresAt:     time.Now().Add(2 * time.Hour),
+		Authenticated: true,
+	}
+
+	mock.PullDocumentsFunc = func(ctx context.Context) ([]DocumentWithMeta, error) {
+		return []DocumentWithMeta{
+			{
+				Document: public.Document{
+					Type:  public.TypeDocument,
+					Title: "Test Document",
+					Pages: []public.LinearDocument{
+						{
+							Type: public.TypeLinearDocument,
+							Blocks: []public.BlockWrap{
+								{
+									Type: "pub.leaflet.pages.linearDocument#block",
+									Block: public.TextBlock{
+										Type:      "pub.leaflet.pages.linearDocument#textBlock",
+										Plaintext: "Test content",
+									},
+								},
+							},
+						},
+					},
+					PublishedAt: time.Now().Format(time.RFC3339),
+				},
+				Meta: public.DocumentMeta{
+					RKey:      "test_rkey",
+					CID:       "test_cid",
+					URI:       "at://did:plc:test123/pub.leaflet.document/test_rkey",
+					IsDraft:   false,
+					FetchedAt: time.Now(),
+				},
+			},
+		}, nil
+	}
+
+	return mock
 }

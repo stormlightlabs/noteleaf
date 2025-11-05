@@ -20,7 +20,7 @@ type PublicationHandler struct {
 	db      *store.Database
 	config  *store.Config
 	repos   *repo.Repositories
-	atproto *services.ATProtoService
+	atproto services.ATProtoClient
 }
 
 // NewPublicationHandler creates a new publication handler

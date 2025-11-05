@@ -772,6 +772,149 @@ func TestTaskHandler(t *testing.T) {
 				t.Error("Expected 'a' and 'c' to remain in slice")
 			}
 		})
+
+		t.Run("parseDescription extracts project", func(t *testing.T) {
+			parsed := parseDescription("Buy groceries +shopping")
+
+			if parsed.Description != "Buy groceries" {
+				t.Errorf("Expected description 'Buy groceries', got '%s'", parsed.Description)
+			}
+			if parsed.Project != "shopping" {
+				t.Errorf("Expected project 'shopping', got '%s'", parsed.Project)
+			}
+		})
+
+		t.Run("parseDescription extracts context", func(t *testing.T) {
+			parsed := parseDescription("Call boss @work")
+
+			if parsed.Description != "Call boss" {
+				t.Errorf("Expected description 'Call boss', got '%s'", parsed.Description)
+			}
+			if parsed.Context != "work" {
+				t.Errorf("Expected context 'work', got '%s'", parsed.Context)
+			}
+		})
+
+		t.Run("parseDescription extracts tags", func(t *testing.T) {
+			parsed := parseDescription("Fix bug #urgent #backend")
+
+			if parsed.Description != "Fix bug" {
+				t.Errorf("Expected description 'Fix bug', got '%s'", parsed.Description)
+			}
+			if len(parsed.Tags) != 2 {
+				t.Errorf("Expected 2 tags, got %d", len(parsed.Tags))
+			}
+			if parsed.Tags[0] != "urgent" || parsed.Tags[1] != "backend" {
+				t.Errorf("Expected tags 'urgent' and 'backend', got %v", parsed.Tags)
+			}
+		})
+
+		t.Run("parseDescription extracts due date", func(t *testing.T) {
+			parsed := parseDescription("Submit report due:2024-12-31")
+
+			if parsed.Description != "Submit report" {
+				t.Errorf("Expected description 'Submit report', got '%s'", parsed.Description)
+			}
+			if parsed.Due != "2024-12-31" {
+				t.Errorf("Expected due '2024-12-31', got '%s'", parsed.Due)
+			}
+		})
+
+		t.Run("parseDescription extracts recurrence", func(t *testing.T) {
+			parsed := parseDescription("Weekly meeting recur:FREQ=WEEKLY")
+
+			if parsed.Description != "Weekly meeting" {
+				t.Errorf("Expected description 'Weekly meeting', got '%s'", parsed.Description)
+			}
+			if parsed.Recur != "FREQ=WEEKLY" {
+				t.Errorf("Expected recur 'FREQ=WEEKLY', got '%s'", parsed.Recur)
+			}
+		})
+
+		t.Run("parseDescription extracts until date", func(t *testing.T) {
+			parsed := parseDescription("Daily standup until:2024-12-31")
+
+			if parsed.Description != "Daily standup" {
+				t.Errorf("Expected description 'Daily standup', got '%s'", parsed.Description)
+			}
+			if parsed.Until != "2024-12-31" {
+				t.Errorf("Expected until '2024-12-31', got '%s'", parsed.Until)
+			}
+		})
+
+		t.Run("parseDescription extracts parent UUID", func(t *testing.T) {
+			parentUUID := "550e8400-e29b-41d4-a716-446655440000"
+			text := "Subtask parent:" + parentUUID
+			parsed := parseDescription(text)
+
+			if parsed.Description != "Subtask" {
+				t.Errorf("Expected description 'Subtask', got '%s'", parsed.Description)
+			}
+			if parsed.ParentUUID != parentUUID {
+				t.Errorf("Expected parent UUID '%s', got '%s'", parentUUID, parsed.ParentUUID)
+			}
+		})
+
+		t.Run("parseDescription extracts dependencies", func(t *testing.T) {
+			uuid1 := "550e8400-e29b-41d4-a716-446655440000"
+			uuid2 := "660e8400-e29b-41d4-a716-446655440001"
+			text := "Task with deps depends:" + uuid1 + "," + uuid2
+			parsed := parseDescription(text)
+
+			if parsed.Description != "Task with deps" {
+				t.Errorf("Expected description 'Task with deps', got '%s'", parsed.Description)
+			}
+			if len(parsed.DependsOn) != 2 {
+				t.Errorf("Expected 2 dependencies, got %d", len(parsed.DependsOn))
+			}
+			if parsed.DependsOn[0] != uuid1 || parsed.DependsOn[1] != uuid2 {
+				t.Errorf("Expected dependencies [%s, %s], got %v", uuid1, uuid2, parsed.DependsOn)
+			}
+		})
+
+		t.Run("parseDescription extracts all metadata", func(t *testing.T) {
+			text := "Complex task +project @context #tag1 #tag2 due:2024-12-31 recur:FREQ=DAILY until:2025-01-31"
+			parsed := parseDescription(text)
+
+			if parsed.Description != "Complex task" {
+				t.Errorf("Expected description 'Complex task', got '%s'", parsed.Description)
+			}
+			if parsed.Project != "project" {
+				t.Errorf("Expected project 'project', got '%s'", parsed.Project)
+			}
+			if parsed.Context != "context" {
+				t.Errorf("Expected context 'context', got '%s'", parsed.Context)
+			}
+			if len(parsed.Tags) != 2 {
+				t.Errorf("Expected 2 tags, got %d", len(parsed.Tags))
+			}
+			if parsed.Due != "2024-12-31" {
+				t.Errorf("Expected due '2024-12-31', got '%s'", parsed.Due)
+			}
+			if parsed.Recur != "FREQ=DAILY" {
+				t.Errorf("Expected recur 'FREQ=DAILY', got '%s'", parsed.Recur)
+			}
+			if parsed.Until != "2025-01-31" {
+				t.Errorf("Expected until '2025-01-31', got '%s'", parsed.Until)
+			}
+		})
+
+		t.Run("parseDescription handles plain text without metadata", func(t *testing.T) {
+			parsed := parseDescription("Just a simple task")
+
+			if parsed.Description != "Just a simple task" {
+				t.Errorf("Expected description 'Just a simple task', got '%s'", parsed.Description)
+			}
+			if parsed.Project != "" {
+				t.Errorf("Expected empty project, got '%s'", parsed.Project)
+			}
+			if parsed.Context != "" {
+				t.Errorf("Expected empty context, got '%s'", parsed.Context)
+			}
+			if len(parsed.Tags) != 0 {
+				t.Errorf("Expected no tags, got %d", len(parsed.Tags))
+			}
+		})
 	})
 
 	t.Run("Print", func(t *testing.T) {
@@ -800,24 +943,391 @@ func TestTaskHandler(t *testing.T) {
 			Modified:    now,
 		}
 
-		t.Run("printTask doesn't panic", func(t *testing.T) {
-			defer func() {
-				if r := recover(); r != nil {
-					t.Errorf("printTask panicked: %v", r)
-				}
+		t.Run("printTask outputs basic fields", func(t *testing.T) {
+			var buf bytes.Buffer
+			oldStdout := os.Stdout
+			r, w, _ := os.Pipe()
+			os.Stdout = w
+
+			outputChan := make(chan string, 1)
+			go func() {
+				buf.ReadFrom(r)
+				outputChan <- buf.String()
 			}()
 
 			printTask(task)
+			w.Close()
+			os.Stdout = oldStdout
+			output := <-outputChan
+
+			if !strings.Contains(output, "Test task") {
+				t.Error("Output should contain task description")
+			}
+			if !strings.Contains(output, "[A]") {
+				t.Error("Output should contain priority")
+			}
+			if !strings.Contains(output, "+test") {
+				t.Error("Output should contain project")
+			}
 		})
 
-		t.Run("printTaskDetail doesn't panic", func(t *testing.T) {
-			defer func() {
-				if r := recover(); r != nil {
-					t.Errorf("printTaskDetail panicked: %v", r)
-				}
+		t.Run("printTask outputs context", func(t *testing.T) {
+			taskWithContext := &models.Task{
+				ID:          1,
+				UUID:        uuid.New().String(),
+				Description: "Test task",
+				Status:      "pending",
+				Context:     "work",
+			}
+
+			var buf bytes.Buffer
+			oldStdout := os.Stdout
+			r, w, _ := os.Pipe()
+			os.Stdout = w
+
+			outputChan := make(chan string, 1)
+			go func() {
+				buf.ReadFrom(r)
+				outputChan <- buf.String()
 			}()
 
-			printTaskDetail(task, false)
+			printTask(taskWithContext)
+			w.Close()
+			os.Stdout = oldStdout
+			output := <-outputChan
+
+			if !strings.Contains(output, "@work") {
+				t.Error("Output should contain context")
+			}
+		})
+
+		t.Run("printTask outputs recur indicator", func(t *testing.T) {
+			taskWithRecur := &models.Task{
+				ID:          1,
+				UUID:        uuid.New().String(),
+				Description: "Recurring task",
+				Status:      "pending",
+				Recur:       "FREQ=DAILY",
+			}
+
+			var buf bytes.Buffer
+			oldStdout := os.Stdout
+			r, w, _ := os.Pipe()
+			os.Stdout = w
+
+			outputChan := make(chan string, 1)
+			go func() {
+				buf.ReadFrom(r)
+				outputChan <- buf.String()
+			}()
+
+			printTask(taskWithRecur)
+			w.Close()
+			os.Stdout = oldStdout
+			output := <-outputChan
+
+			if !strings.Contains(output, "\u21bb") {
+				t.Error("Output should contain recurrence indicator")
+			}
+		})
+
+		t.Run("printTask outputs dependency count", func(t *testing.T) {
+			taskWithDeps := &models.Task{
+				ID:          1,
+				UUID:        uuid.New().String(),
+				Description: "Task with dependencies",
+				Status:      "pending",
+				DependsOn:   []string{"uuid1", "uuid2"},
+			}
+
+			var buf bytes.Buffer
+			oldStdout := os.Stdout
+			r, w, _ := os.Pipe()
+			os.Stdout = w
+
+			outputChan := make(chan string, 1)
+			go func() {
+				buf.ReadFrom(r)
+				outputChan <- buf.String()
+			}()
+
+			printTask(taskWithDeps)
+			w.Close()
+			os.Stdout = oldStdout
+			output := <-outputChan
+
+			if !strings.Contains(output, "\u29372") {
+				t.Error("Output should contain dependency count")
+			}
+		})
+
+		t.Run("printTaskDetail outputs context", func(t *testing.T) {
+			taskWithContext := &models.Task{
+				ID:          1,
+				UUID:        uuid.New().String(),
+				Description: "Test task",
+				Status:      "pending",
+				Context:     "office",
+				Entry:       now,
+				Modified:    now,
+			}
+
+			var buf bytes.Buffer
+			oldStdout := os.Stdout
+			r, w, _ := os.Pipe()
+			os.Stdout = w
+
+			outputChan := make(chan string, 1)
+			go func() {
+				buf.ReadFrom(r)
+				outputChan <- buf.String()
+			}()
+
+			printTaskDetail(taskWithContext, false)
+			w.Close()
+			os.Stdout = oldStdout
+			output := <-outputChan
+
+			if !strings.Contains(output, "Context: office") {
+				t.Error("Output should contain context field")
+			}
+		})
+
+		t.Run("printTaskDetail outputs recurrence", func(t *testing.T) {
+			taskWithRecur := &models.Task{
+				ID:          1,
+				UUID:        uuid.New().String(),
+				Description: "Recurring task",
+				Status:      "pending",
+				Recur:       "FREQ=WEEKLY",
+				Entry:       now,
+				Modified:    now,
+			}
+
+			var buf bytes.Buffer
+			oldStdout := os.Stdout
+			r, w, _ := os.Pipe()
+			os.Stdout = w
+
+			outputChan := make(chan string, 1)
+			go func() {
+				buf.ReadFrom(r)
+				outputChan <- buf.String()
+			}()
+
+			printTaskDetail(taskWithRecur, false)
+			w.Close()
+			os.Stdout = oldStdout
+			output := <-outputChan
+
+			if !strings.Contains(output, "Recurrence: FREQ=WEEKLY") {
+				t.Error("Output should contain recurrence field")
+			}
+		})
+
+		t.Run("printTaskDetail outputs until date", func(t *testing.T) {
+			until := now.Add(30 * 24 * time.Hour)
+			taskWithUntil := &models.Task{
+				ID:          1,
+				UUID:        uuid.New().String(),
+				Description: "Task with until",
+				Status:      "pending",
+				Until:       &until,
+				Entry:       now,
+				Modified:    now,
+			}
+
+			var buf bytes.Buffer
+			oldStdout := os.Stdout
+			r, w, _ := os.Pipe()
+			os.Stdout = w
+
+			outputChan := make(chan string, 1)
+			go func() {
+				buf.ReadFrom(r)
+				outputChan <- buf.String()
+			}()
+
+			printTaskDetail(taskWithUntil, false)
+			w.Close()
+			os.Stdout = oldStdout
+			output := <-outputChan
+
+			if !strings.Contains(output, "Recur Until:") {
+				t.Error("Output should contain recur until field")
+			}
+		})
+
+		t.Run("printTaskDetail outputs parent UUID", func(t *testing.T) {
+			parentUUID := "550e8400-e29b-41d4-a716-446655440000"
+			taskWithParent := &models.Task{
+				ID:          1,
+				UUID:        uuid.New().String(),
+				Description: "Subtask",
+				Status:      "pending",
+				ParentUUID:  &parentUUID,
+				Entry:       now,
+				Modified:    now,
+			}
+
+			var buf bytes.Buffer
+			oldStdout := os.Stdout
+			r, w, _ := os.Pipe()
+			os.Stdout = w
+
+			outputChan := make(chan string, 1)
+			go func() {
+				buf.ReadFrom(r)
+				outputChan <- buf.String()
+			}()
+
+			printTaskDetail(taskWithParent, false)
+			w.Close()
+			os.Stdout = oldStdout
+			output := <-outputChan
+
+			if !strings.Contains(output, "Parent Task:") {
+				t.Error("Output should contain parent task field")
+			}
+			if !strings.Contains(output, parentUUID) {
+				t.Error("Output should contain parent UUID")
+			}
+		})
+
+		t.Run("printTaskDetail outputs dependencies", func(t *testing.T) {
+			taskWithDeps := &models.Task{
+				ID:          1,
+				UUID:        uuid.New().String(),
+				Description: "Task with deps",
+				Status:      "pending",
+				DependsOn:   []string{"uuid1", "uuid2"},
+				Entry:       now,
+				Modified:    now,
+			}
+
+			var buf bytes.Buffer
+			oldStdout := os.Stdout
+			r, w, _ := os.Pipe()
+			os.Stdout = w
+
+			outputChan := make(chan string, 1)
+			go func() {
+				buf.ReadFrom(r)
+				outputChan <- buf.String()
+			}()
+
+			printTaskDetail(taskWithDeps, false)
+			w.Close()
+			os.Stdout = oldStdout
+			output := <-outputChan
+
+			if !strings.Contains(output, "Depends On:") {
+				t.Error("Output should contain depends on field")
+			}
+			if !strings.Contains(output, "uuid1") || !strings.Contains(output, "uuid2") {
+				t.Error("Output should contain dependency UUIDs")
+			}
+		})
+
+		t.Run("printTaskDetail outputs start time", func(t *testing.T) {
+			start := now.Add(-1 * time.Hour)
+			taskWithStart := &models.Task{
+				ID:          1,
+				UUID:        uuid.New().String(),
+				Description: "Started task",
+				Status:      "pending",
+				Start:       &start,
+				Entry:       now,
+				Modified:    now,
+			}
+
+			var buf bytes.Buffer
+			oldStdout := os.Stdout
+			r, w, _ := os.Pipe()
+			os.Stdout = w
+
+			outputChan := make(chan string, 1)
+			go func() {
+				buf.ReadFrom(r)
+				outputChan <- buf.String()
+			}()
+
+			printTaskDetail(taskWithStart, false)
+			w.Close()
+			os.Stdout = oldStdout
+			output := <-outputChan
+
+			if !strings.Contains(output, "Started:") {
+				t.Error("Output should contain started field")
+			}
+		})
+
+		t.Run("printTaskDetail outputs end time", func(t *testing.T) {
+			end := now.Add(-1 * time.Hour)
+			taskWithEnd := &models.Task{
+				ID:          1,
+				UUID:        uuid.New().String(),
+				Description: "Completed task",
+				Status:      "completed",
+				End:         &end,
+				Entry:       now,
+				Modified:    now,
+			}
+
+			var buf bytes.Buffer
+			oldStdout := os.Stdout
+			r, w, _ := os.Pipe()
+			os.Stdout = w
+
+			outputChan := make(chan string, 1)
+			go func() {
+				buf.ReadFrom(r)
+				outputChan <- buf.String()
+			}()
+
+			printTaskDetail(taskWithEnd, false)
+			w.Close()
+			os.Stdout = oldStdout
+			output := <-outputChan
+
+			if !strings.Contains(output, "Completed:") {
+				t.Error("Output should contain completed field")
+			}
+		})
+
+		t.Run("printTaskDetail outputs annotations", func(t *testing.T) {
+			taskWithAnnotations := &models.Task{
+				ID:          1,
+				UUID:        uuid.New().String(),
+				Description: "Task with notes",
+				Status:      "pending",
+				Annotations: []string{"Note 1", "Note 2"},
+				Entry:       now,
+				Modified:    now,
+			}
+
+			var buf bytes.Buffer
+			oldStdout := os.Stdout
+			r, w, _ := os.Pipe()
+			os.Stdout = w
+
+			outputChan := make(chan string, 1)
+			go func() {
+				buf.ReadFrom(r)
+				outputChan <- buf.String()
+			}()
+
+			printTaskDetail(taskWithAnnotations, false)
+			w.Close()
+			os.Stdout = oldStdout
+			output := <-outputChan
+
+			if !strings.Contains(output, "Annotations:") {
+				t.Error("Output should contain annotations field")
+			}
+			if !strings.Contains(output, "Note 1") || !strings.Contains(output, "Note 2") {
+				t.Error("Output should contain annotation texts")
+			}
 		})
 	})
 

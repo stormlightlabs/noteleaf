@@ -1967,4 +1967,260 @@ func TestPublicationHandler(t *testing.T) {
 			}
 		})
 	})
+
+	t.Run("Auth Success Path", func(t *testing.T) {
+		suite := NewHandlerTestSuite(t)
+		defer suite.Cleanup()
+
+		handler := CreateHandler(t, NewPublicationHandler)
+		ctx := context.Background()
+
+		mock := services.SetupSuccessfulAuthMocks()
+		handler.atproto = mock
+
+		err := handler.Auth(ctx, "test.bsky.social", "password123")
+		suite.AssertNoError(err, "authentication should succeed")
+
+		if !handler.atproto.IsAuthenticated() {
+			t.Error("Expected handler to be authenticated after successful auth")
+		}
+
+		session, err := handler.atproto.GetSession()
+		suite.AssertNoError(err, "get session should succeed")
+
+		if session.Handle != "test.bsky.social" {
+			t.Errorf("Expected handle 'test.bsky.social', got '%s'", session.Handle)
+		}
+
+		if session.DID == "" {
+			t.Error("Expected DID to be set")
+		}
+	})
+
+	t.Run("Pull Success Path", func(t *testing.T) {
+		suite := NewHandlerTestSuite(t)
+		defer suite.Cleanup()
+
+		handler := CreateHandler(t, NewPublicationHandler)
+		ctx := context.Background()
+
+		mock := services.SetupSuccessfulPullMocks()
+		handler.atproto = mock
+
+		err := handler.Pull(ctx)
+		suite.AssertNoError(err, "pull should succeed")
+
+		notes, err := handler.repos.Notes.GetLeafletNotes(ctx)
+		suite.AssertNoError(err, "get leaflet notes should succeed")
+
+		if len(notes) != 1 {
+			t.Errorf("Expected 1 note created, got %d", len(notes))
+		}
+
+		if notes[0].Title != "Test Document" {
+			t.Errorf("Expected title 'Test Document', got '%s'", notes[0].Title)
+		}
+
+		if notes[0].LeafletRKey == nil || *notes[0].LeafletRKey != "test_rkey" {
+			t.Error("Expected leaflet rkey to be set correctly")
+		}
+	})
+
+	t.Run("Post Success Path", func(t *testing.T) {
+		suite := NewHandlerTestSuite(t)
+		defer suite.Cleanup()
+
+		handler := CreateHandler(t, NewPublicationHandler)
+		ctx := context.Background()
+
+		mock := services.NewMockATProtoService()
+		mock.IsAuthenticatedVal = true
+		mock.Session = &services.Session{
+			DID:           "did:plc:test123",
+			Handle:        "test.bsky.social",
+			AccessJWT:     "mock_access",
+			RefreshJWT:    "mock_refresh",
+			PDSURL:        "https://bsky.social",
+			ExpiresAt:     time.Now().Add(2 * time.Hour),
+			Authenticated: true,
+		}
+		handler.atproto = mock
+
+		note := &models.Note{
+			Title:   "Test Post",
+			Content: "# Test Content\n\nThis is a test.",
+		}
+
+		id, err := handler.repos.Notes.Create(ctx, note)
+		suite.AssertNoError(err, "create note should succeed")
+
+		err = handler.Post(ctx, id, false)
+		suite.AssertNoError(err, "post should succeed")
+
+		updatedNote, err := handler.repos.Notes.Get(ctx, id)
+		suite.AssertNoError(err, "get updated note should succeed")
+
+		if updatedNote.LeafletRKey == nil || *updatedNote.LeafletRKey != "mock_rkey_123" {
+			t.Error("Expected leaflet rkey to be set after post")
+		}
+
+		if updatedNote.LeafletCID == nil || *updatedNote.LeafletCID != "mock_cid_456" {
+			t.Error("Expected leaflet cid to be set after post")
+		}
+
+		if updatedNote.IsDraft {
+			t.Error("Expected note to be marked as published")
+		}
+
+		if updatedNote.PublishedAt == nil {
+			t.Error("Expected published at to be set")
+		}
+	})
+
+	t.Run("Post Draft Success Path", func(t *testing.T) {
+		suite := NewHandlerTestSuite(t)
+		defer suite.Cleanup()
+
+		handler := CreateHandler(t, NewPublicationHandler)
+		ctx := context.Background()
+
+		mock := services.NewMockATProtoService()
+		mock.IsAuthenticatedVal = true
+		mock.Session = &services.Session{
+			DID:           "did:plc:test123",
+			Handle:        "test.bsky.social",
+			AccessJWT:     "mock_access",
+			RefreshJWT:    "mock_refresh",
+			PDSURL:        "https://bsky.social",
+			ExpiresAt:     time.Now().Add(2 * time.Hour),
+			Authenticated: true,
+		}
+		handler.atproto = mock
+
+		note := &models.Note{
+			Title:   "Test Draft",
+			Content: "# Draft Content",
+		}
+
+		id, err := handler.repos.Notes.Create(ctx, note)
+		suite.AssertNoError(err, "create note should succeed")
+
+		err = handler.Post(ctx, id, true)
+		suite.AssertNoError(err, "post draft should succeed")
+
+		updatedNote, err := handler.repos.Notes.Get(ctx, id)
+		suite.AssertNoError(err, "get updated note should succeed")
+
+		if !updatedNote.IsDraft {
+			t.Error("Expected note to be marked as draft")
+		}
+
+		if updatedNote.PublishedAt != nil {
+			t.Error("Expected published at to be nil for draft")
+		}
+	})
+
+	t.Run("Patch Success Path", func(t *testing.T) {
+		suite := NewHandlerTestSuite(t)
+		defer suite.Cleanup()
+
+		handler := CreateHandler(t, NewPublicationHandler)
+		ctx := context.Background()
+
+		mock := services.NewMockATProtoService()
+		mock.IsAuthenticatedVal = true
+		mock.Session = &services.Session{
+			DID:           "did:plc:test123",
+			Handle:        "test.bsky.social",
+			AccessJWT:     "mock_access",
+			RefreshJWT:    "mock_refresh",
+			PDSURL:        "https://bsky.social",
+			ExpiresAt:     time.Now().Add(2 * time.Hour),
+			Authenticated: true,
+		}
+		handler.atproto = mock
+
+		rkey := "existing_rkey"
+		cid := "existing_cid"
+		publishedAt := time.Now().Add(-24 * time.Hour)
+		note := &models.Note{
+			Title:       "Updated Note",
+			Content:     "# Updated Content",
+			LeafletRKey: &rkey,
+			LeafletCID:  &cid,
+			PublishedAt: &publishedAt,
+			IsDraft:     false,
+		}
+
+		id, err := handler.repos.Notes.Create(ctx, note)
+		suite.AssertNoError(err, "create note should succeed")
+
+		err = handler.Patch(ctx, id)
+		suite.AssertNoError(err, "patch should succeed")
+
+		updatedNote, err := handler.repos.Notes.Get(ctx, id)
+		suite.AssertNoError(err, "get updated note should succeed")
+
+		if updatedNote.LeafletCID == nil || *updatedNote.LeafletCID != "mock_cid_updated_789" {
+			t.Error("Expected leaflet cid to be updated after patch")
+		}
+	})
+
+	t.Run("Delete Success Path", func(t *testing.T) {
+		suite := NewHandlerTestSuite(t)
+		defer suite.Cleanup()
+
+		handler := CreateHandler(t, NewPublicationHandler)
+		ctx := context.Background()
+
+		mock := services.NewMockATProtoService()
+		mock.IsAuthenticatedVal = true
+		mock.Session = &services.Session{
+			DID:           "did:plc:test123",
+			Handle:        "test.bsky.social",
+			AccessJWT:     "mock_access",
+			RefreshJWT:    "mock_refresh",
+			PDSURL:        "https://bsky.social",
+			ExpiresAt:     time.Now().Add(2 * time.Hour),
+			Authenticated: true,
+		}
+		handler.atproto = mock
+
+		rkey := "test_rkey"
+		cid := "test_cid"
+		publishedAt := time.Now().Add(-24 * time.Hour)
+		note := &models.Note{
+			Title:       "Note to Delete",
+			Content:     "# Content",
+			LeafletRKey: &rkey,
+			LeafletCID:  &cid,
+			PublishedAt: &publishedAt,
+			IsDraft:     false,
+		}
+
+		id, err := handler.repos.Notes.Create(ctx, note)
+		suite.AssertNoError(err, "create note should succeed")
+
+		err = handler.Delete(ctx, id)
+		suite.AssertNoError(err, "delete should succeed")
+
+		updatedNote, err := handler.repos.Notes.Get(ctx, id)
+		suite.AssertNoError(err, "get updated note should succeed")
+
+		if updatedNote.LeafletRKey != nil {
+			t.Error("Expected leaflet rkey to be cleared after delete")
+		}
+
+		if updatedNote.LeafletCID != nil {
+			t.Error("Expected leaflet cid to be cleared after delete")
+		}
+
+		if updatedNote.PublishedAt != nil {
+			t.Error("Expected published at to be cleared after delete")
+		}
+
+		if updatedNote.IsDraft {
+			t.Error("Expected draft flag to be false after delete")
+		}
+	})
 }

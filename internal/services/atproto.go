@@ -48,6 +48,20 @@ type Session struct {
 	Authenticated bool      // Whether session is valid
 }
 
+// ATProtoClient defines the interface for AT Protocol operations
+type ATProtoClient interface {
+	Authenticate(ctx context.Context, handle, password string) error
+	GetSession() (*Session, error)
+	IsAuthenticated() bool
+	RestoreSession(session *Session) error
+	PullDocuments(ctx context.Context) ([]DocumentWithMeta, error)
+	PostDocument(ctx context.Context, doc public.Document, isDraft bool) (*DocumentWithMeta, error)
+	PatchDocument(ctx context.Context, rkey string, doc public.Document, isDraft bool) (*DocumentWithMeta, error)
+	DeleteDocument(ctx context.Context, rkey string, isDraft bool) error
+	UploadBlob(ctx context.Context, data []byte, mimeType string) (public.Blob, error)
+	Close() error
+}
+
 // ATProtoService provides AT Protocol operations for leaflet integration
 type ATProtoService struct {
 	handle   string
