@@ -1,22 +1,10 @@
 // Package handlers provides command handlers for leaflet publication operations.
-//
-// TODO: Post (create 1)
-// TODO: Patch (update 1)
-// TODO: Push
-//   - Builds on Post & Patch (create or update - more than 1)
-//
-// TODO: Add TUI viewing for document details
-//   - interactive list, read Markdown with glamour
-//
-// TODO: Add TUI for confirming post
-//   - proofread post with glamour
-//
-// TODO: Repost - "Reblog" - post to BlueSky
 package handlers
 
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"time"
 
 	"github.com/stormlightlabs/noteleaf/internal/models"
@@ -290,11 +278,6 @@ func (h *PublicationHandler) Post(ctx context.Context, noteID int64, isDraft boo
 		return fmt.Errorf("not authenticated - run 'noteleaf pub auth' first")
 	}
 
-	// TODO: Implement image handling for markdown conversion
-	// 1. Extract note's directory from filepath/database
-	// 2. Create LocalImageResolver with BlobUploader that calls h.atproto.UploadBlob()
-	// 3. Use converter.WithImageResolver(resolver, noteDir) before ToLeaflet()
-	// This will upload images to AT Protocol and get real CIDs/dimensions
 	note, doc, err := h.prepareDocumentForPublish(ctx, noteID, isDraft, false)
 	if err != nil {
 		return err
@@ -344,17 +327,11 @@ func (h *PublicationHandler) Patch(ctx context.Context, noteID int64) error {
 		return fmt.Errorf("failed to get note: %w", err)
 	}
 
-	// TODO: Implement image handling for markdown conversion (same as Post method)
-	// 1. Extract note's directory from filepath/database
-	// 2. Create LocalImageResolver with BlobUploader that calls h.atproto.UploadBlob()
-	// 3. Use converter.WithImageResolver(resolver, noteDir) before ToLeaflet()
-	// This will upload images to AT Protocol and get real CIDs/dimensions
 	note, doc, err := h.prepareDocumentForPublish(ctx, noteID, tempNote.IsDraft, true)
 	if err != nil {
 		return err
 	}
 
-	// Update note.PublishedAt if we set a new timestamp
 	if !note.IsDraft && note.PublishedAt == nil && doc.PublishedAt != "" {
 		publishedAt, err := time.Parse(time.RFC3339, doc.PublishedAt)
 		if err == nil {
@@ -418,6 +395,75 @@ func (h *PublicationHandler) Delete(ctx context.Context, noteID int64) error {
 	return nil
 }
 
+// Push creates or updates multiple documents on leaflet from local notes
+func (h *PublicationHandler) Push(ctx context.Context, noteIDs []int64, isDraft bool) error {
+	if !h.atproto.IsAuthenticated() {
+		return fmt.Errorf("not authenticated - run 'noteleaf pub auth' first")
+	}
+
+	if len(noteIDs) == 0 {
+		return fmt.Errorf("no note IDs provided")
+	}
+
+	ui.Infoln("Processing %d note(s)...\n", len(noteIDs))
+
+	var created, updated, failed int
+	var errors []string
+
+	for _, noteID := range noteIDs {
+		note, err := h.repos.Notes.Get(ctx, noteID)
+		if err != nil {
+			ui.Warningln("  [%d] Failed to get note: %v", noteID, err)
+			errors = append(errors, fmt.Sprintf("note %d: %v", noteID, err))
+			failed++
+			continue
+		}
+
+		if note.HasLeafletAssociation() {
+			err = h.Patch(ctx, noteID)
+			if err != nil {
+				ui.Warningln("  [%d] Failed to update '%s': %v", noteID, note.Title, err)
+				errors = append(errors, fmt.Sprintf("note %d (%s): %v", noteID, note.Title, err))
+				failed++
+			} else {
+				updated++
+			}
+		} else {
+			err = h.Post(ctx, noteID, isDraft)
+			if err != nil {
+				ui.Warningln("  [%d] Failed to create '%s': %v", noteID, note.Title, err)
+				errors = append(errors, fmt.Sprintf("note %d (%s): %v", noteID, note.Title, err))
+				failed++
+			} else {
+				created++
+			}
+		}
+	}
+
+	ui.Newline()
+	ui.Successln("Push complete: %d created, %d updated, %d failed", created, updated, failed)
+
+	if len(errors) > 0 {
+		return fmt.Errorf("push completed with %d error(s)", failed)
+	}
+
+	return nil
+}
+
+// Browse opens an interactive TUI for browsing publications
+func (h *PublicationHandler) Browse(ctx context.Context, filter string) error {
+	if filter == "" {
+		filter = "all"
+	}
+
+	opts := ui.DataListOptions{
+		Title: "Publications - " + filter,
+	}
+
+	list := ui.NewPublicationDataList(h.repos.Notes, opts, filter)
+	return list.Browse(ctx)
+}
+
 // prepareDocumentForPublish prepares a note for publication by converting to Leaflet format
 func (h *PublicationHandler) prepareDocumentForPublish(ctx context.Context, noteID int64, isDraft bool, forPatch bool) (*models.Note, *public.Document, error) {
 	note, err := h.repos.Notes.Get(ctx, noteID)
@@ -439,6 +485,17 @@ func (h *PublicationHandler) prepareDocumentForPublish(ctx context.Context, note
 	}
 
 	converter := public.NewMarkdownConverter()
+
+	noteDir := extractNoteDirectory(note)
+	if noteDir != "" {
+		imageResolver := &public.LocalImageResolver{
+			BlobUploader: func(data []byte, mimeType string) (public.Blob, error) {
+				return h.atproto.UploadBlob(ctx, data, mimeType)
+			},
+		}
+		converter = converter.WithImageResolver(imageResolver, noteDir)
+	}
+
 	blocks, err := converter.ToLeaflet(note.Content)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to convert markdown to leaflet format: %w", err)
@@ -587,6 +644,15 @@ func (h *PublicationHandler) GetAuthStatus() string {
 		return "Authenticated (session details unavailable)"
 	}
 	return "Not authenticated"
+}
+
+// extractNoteDirectory extracts the directory path from a note's FilePath
+func extractNoteDirectory(note *models.Note) string {
+	if note.FilePath == "" {
+		return ""
+	}
+
+	return filepath.Dir(note.FilePath)
 }
 
 // sessionFromConfig converts config AT Protocol fields to a Session

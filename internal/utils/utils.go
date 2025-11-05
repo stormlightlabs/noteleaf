@@ -32,7 +32,6 @@ func NewLogger(level string, format string) *log.Logger {
 		logger.SetLevel(log.InfoLevel)
 	}
 
-	// Set format
 	if format == "json" {
 		logger.SetFormatter(log.JSONFormatter)
 	} else {
@@ -66,7 +65,10 @@ type TestBookRepository interface {
 	List(ctx context.Context, options repo.BookListOptions) ([]*models.Book, error)
 }
 
-// TestNoteRepository interface for dependency injection in tests
+// TestNoteRepository interface for dependency injection in tests.
 type TestNoteRepository interface {
 	List(ctx context.Context, options repo.NoteListOptions) ([]*models.Note, error)
+	ListPublished(ctx context.Context) ([]*models.Note, error)
+	ListDrafts(ctx context.Context) ([]*models.Note, error)
+	GetLeafletNotes(ctx context.Context) ([]*models.Note, error)
 }

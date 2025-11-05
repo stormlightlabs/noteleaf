@@ -103,7 +103,7 @@ Notes are matched by their leaflet record key (rkey) stored in the database.`,
 	root.AddCommand(pullCmd)
 
 	listCmd := &cobra.Command{
-		Use:     "list [--published|--draft|--all]",
+		Use:     "list [--published|--draft|--all] [--interactive]",
 		Short:   "List notes synced with leaflet",
 		Aliases: []string{"ls"},
 		Long: `Display notes that have been pulled from or pushed to leaflet.
@@ -115,13 +115,15 @@ Shows publication metadata including:
 - Content identifier (cid) for change tracking
 
 Use filters to show specific subsets:
-  --published  Show only published documents
-  --draft      Show only drafts
-  --all        Show all leaflet documents (default)`,
+  --published    Show only published documents
+  --draft        Show only drafts
+  --all          Show all leaflet documents (default)
+  --interactive  Open interactive TUI browser with search and preview`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			published, _ := cmd.Flags().GetBool("published")
 			draft, _ := cmd.Flags().GetBool("draft")
 			all, _ := cmd.Flags().GetBool("all")
+			interactive, _ := cmd.Flags().GetBool("interactive")
 
 			filter := "all"
 			if published {
@@ -133,12 +135,18 @@ Use filters to show specific subsets:
 			}
 
 			defer c.handler.Close()
+
+			if interactive {
+				return c.handler.Browse(cmd.Context(), filter)
+			}
+
 			return c.handler.List(cmd.Context(), filter)
 		},
 	}
 	listCmd.Flags().Bool("published", false, "Show only published documents")
 	listCmd.Flags().Bool("draft", false, "Show only drafts")
 	listCmd.Flags().Bool("all", false, "Show all leaflet documents")
+	listCmd.Flags().BoolP("interactive", "i", false, "Open interactive TUI browser")
 	root.AddCommand(listCmd)
 
 	statusCmd := &cobra.Command{
@@ -239,6 +247,40 @@ Examples:
 	patchCmd.Flags().Bool("preview", false, "Show what would be updated without actually patching")
 	patchCmd.Flags().Bool("validate", false, "Validate markdown conversion without patching")
 	root.AddCommand(patchCmd)
+
+	pushCmd := &cobra.Command{
+		Use:   "push [note-ids...]",
+		Short: "Create or update multiple documents on leaflet",
+		Long: `Batch publish or update multiple local notes to leaflet.pub.
+
+For each note:
+- If the note has never been published, creates a new document (like post)
+- If the note has been published before, updates the existing document (like patch)
+
+This is useful for bulk operations and continuous publishing workflows.
+
+Examples:
+  noteleaf pub push 1 2 3              # Publish/update notes 1, 2, and 3
+  noteleaf pub push 42 99 --draft      # Create/update as drafts`,
+		Args: cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			noteIDs := make([]int64, len(args))
+			for i, arg := range args {
+				id, err := parseNoteID(arg)
+				if err != nil {
+					return err
+				}
+				noteIDs[i] = id
+			}
+
+			isDraft, _ := cmd.Flags().GetBool("draft")
+
+			defer c.handler.Close()
+			return c.handler.Push(cmd.Context(), noteIDs, isDraft)
+		},
+	}
+	pushCmd.Flags().Bool("draft", false, "Create/update as drafts instead of publishing")
+	root.AddCommand(pushCmd)
 
 	return root
 }

@@ -6,7 +6,7 @@ default:
 
 # Run all tests
 test:
-    go test ./... -v
+    go test ./...
 
 # Run tests with coverage
 coverage:

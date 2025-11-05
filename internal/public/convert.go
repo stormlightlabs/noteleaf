@@ -45,11 +45,7 @@ type ImageResolver interface {
 
 // LocalImageResolver resolves local file paths to image metadata
 type LocalImageResolver struct {
-	// BlobUploader is called to upload image bytes and get a blob reference
-	// If nil, creates a placeholder blob with a hash-based CID
-	//
-	// TODO: CLI commands that publish documents must provide this function to upload
-	// images to AT Protocol blob storage via com.atproto.repo.uploadBlob
+	// Called to upload image bytes and get a blob reference
 	BlobUploader func(data []byte, mimeType string) (Blob, error)
 }
 

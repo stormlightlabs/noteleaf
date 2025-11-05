@@ -64,10 +64,11 @@ func TestPublicationCommand(t *testing.T) {
 			expectedSubcommands := []string{
 				"auth [handle]",
 				"pull",
-				"list [--published|--draft|--all]",
+				"list [--published|--draft|--all] [--interactive]",
 				"status",
 				"post [note-id]",
 				"patch [note-id]",
+				"push [note-ids...]",
 			}
 
 			for _, expected := range expectedSubcommands {

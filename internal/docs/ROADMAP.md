@@ -71,7 +71,7 @@ The foundation across all domains is implemented. Tasks support CRUD operations,
 
 ### Configuration & Data
 
-- [ ] Implement **config management** (flagged TODO in code).
+- [ ] Implement **config management**
 - [ ] Define config file format (TOML, YAML, JSON).
 - [ ] Set default config/data paths:
     - Linux: `~/.config/noteleaf`, `~/.local/share/noteleaf`

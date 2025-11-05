@@ -11,6 +11,7 @@ import (
 
 	"github.com/stormlightlabs/noteleaf/internal/models"
 	"github.com/stormlightlabs/noteleaf/internal/repo"
+	"github.com/stormlightlabs/noteleaf/internal/shared"
 )
 
 type mockNoteRepository struct {
@@ -42,7 +43,6 @@ func (m *mockNoteRepository) List(ctx context.Context, options repo.NoteListOpti
 			}
 		}
 
-		// Filter by content search
 		if options.Content != "" && !strings.Contains(note.Content, options.Content) {
 			continue
 		}
@@ -55,6 +55,45 @@ func (m *mockNoteRepository) List(ctx context.Context, options repo.NoteListOpti
 	}
 
 	return filtered, nil
+}
+
+func (m *mockNoteRepository) ListPublished(ctx context.Context) ([]*models.Note, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	var published []*models.Note
+	for _, note := range m.notes {
+		if note.LeafletRKey != nil && !note.IsDraft {
+			published = append(published, note)
+		}
+	}
+	return published, nil
+}
+
+func (m *mockNoteRepository) ListDrafts(ctx context.Context) ([]*models.Note, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	var drafts []*models.Note
+	for _, note := range m.notes {
+		if note.LeafletRKey != nil && note.IsDraft {
+			drafts = append(drafts, note)
+		}
+	}
+	return drafts, nil
+}
+
+func (m *mockNoteRepository) GetLeafletNotes(ctx context.Context) ([]*models.Note, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	var leafletNotes []*models.Note
+	for _, note := range m.notes {
+		if note.LeafletRKey != nil {
+			leafletNotes = append(leafletNotes, note)
+		}
+	}
+	return leafletNotes, nil
 }
 
 func TestNoteAdapter(t *testing.T) {
@@ -88,7 +127,6 @@ func TestNoteAdapter(t *testing.T) {
 			for _, tt := range tests {
 				t.Run(tt.name, func(t *testing.T) {
 					result := record.GetField(tt.field)
-					// For slices, do a deep comparison
 					if tags, ok := tt.expected.([]string); ok {
 						resultTags, ok := result.([]string)
 						if !ok || len(resultTags) != len(tags) {
@@ -182,7 +220,6 @@ func TestNoteAdapter(t *testing.T) {
 				t.Errorf("Load() returned %d items, want 3", len(items))
 			}
 
-			// Check first item
 			if items[0].GetTitle() != "Work Note" {
 				t.Errorf("First item title = %q, want 'Work Note'", items[0].GetTitle())
 			}
@@ -323,12 +360,8 @@ func TestNoteAdapter(t *testing.T) {
 		}
 
 		outputStr := output.String()
-		if !strings.Contains(outputStr, "Notes") {
-			t.Error("Output should contain 'Notes' title")
-		}
-		if !strings.Contains(outputStr, "Test Note") {
-			t.Error("Output should contain note title")
-		}
+		shared.AssertContains(t, outputStr, "Notes", "Output should contain 'Notes' title")
+		shared.AssertContains(t, outputStr, "Test Note", "Output should contain note title")
 	})
 
 	t.Run("Format Note for View", func(t *testing.T) {
@@ -344,18 +377,9 @@ func TestNoteAdapter(t *testing.T) {
 
 		result := formatNoteForView(note)
 
-		// Check that it contains expected elements
-		if !strings.Contains(result, "Test Note") {
-			t.Error("Formatted view should contain note title")
-		}
-		if !strings.Contains(result, "test") {
-			t.Error("Formatted view should contain tags")
-		}
-		if !strings.Contains(result, "2023-01-01") {
-			t.Error("Formatted view should contain created date")
-		}
-		if !strings.Contains(result, "2023-01-02") {
-			t.Error("Formatted view should contain modified date")
-		}
+		shared.AssertContains(t, result, "Test Note", "Formatted view should contain note title")
+		shared.AssertContains(t, result, "test", "Formatted view should contain tags")
+		shared.AssertContains(t, result, "2023-01-01", "Formatted view should contain created date")
+		shared.AssertContains(t, result, "2023-01-02", "Formatted view should contain modified date")
 	})
 }

@@ -4,35 +4,7 @@
 //   - Pull: Fetch pub.leaflet.document records from AT Protocol repository
 //   - Post: Create new pub.leaflet.document records in AT Protocol repository
 //   - Push: Update existing pub.leaflet.document records in AT Protocol repository
-//
-// Publishing Workflow (TODO):
-//  1. Post - Create new document:
-//     - Convert note to pub.leaflet.document format
-//     - Upload any embedded images as blobs
-//     - Create record with com.atproto.repo.createRecord
-//     - Store returned rkey and cid in note metadata
-//  2. Push - Update existing document:
-//     - Check if note has leaflet_rkey (indicates previously published)
-//     - Convert updated note to pub.leaflet.document format
-//     - Upload any new images as blobs
-//     - Update record with com.atproto.repo.putRecord
-//     - Update stored cid in note metadata
-//  3. Delete - Remove published document:
-//     - Use com.atproto.repo.deleteRecord with stored rkey
-//     - Clear leaflet metadata from note
-//
-// Blob Upload (TODO):
-//  1. Use com.atproto.repo.uploadBlob for images
-//  2. Returns blob reference with CID
-//  3. Include blob ref in ImageBlock structures
-//
-// Draft vs Published (TODO):
-//  1. Draft documents stored in collection: pub.leaflet.document.draft
-//  2. Published documents in: pub.leaflet.document
-//  3. Moving from draft to published requires:
-//     - Delete from draft collection
-//     - Create in published collection
-//     - Update note metadata with new rkey
+//   - Delete: Remove pub.leaflet.document records from AT Protocol repository
 package services
 
 import (
@@ -467,6 +439,35 @@ func (s *ATProtoService) DeleteDocument(ctx context.Context, rkey string, isDraf
 	}
 
 	return nil
+}
+
+// UploadBlob uploads binary data as a blob to AT Protocol
+func (s *ATProtoService) UploadBlob(ctx context.Context, data []byte, mimeType string) (public.Blob, error) {
+	if !s.IsAuthenticated() {
+		return public.Blob{}, fmt.Errorf("not authenticated")
+	}
+
+	if len(data) == 0 {
+		return public.Blob{}, fmt.Errorf("data cannot be empty")
+	}
+
+	if mimeType == "" {
+		return public.Blob{}, fmt.Errorf("mimeType is required")
+	}
+
+	output, err := atproto.RepoUploadBlob(ctx, s.client, bytes.NewReader(data))
+	if err != nil {
+		return public.Blob{}, fmt.Errorf("failed to upload blob: %w", err)
+	}
+
+	blob := public.Blob{
+		Type:     public.TypeBlob,
+		Ref:      public.CID{Link: output.Blob.Ref.String()},
+		MimeType: output.Blob.MimeType,
+		Size:     int(output.Blob.Size),
+	}
+
+	return blob, nil
 }
 
 // Close cleans up resources

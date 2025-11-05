@@ -44,7 +44,6 @@ func (n *NoteRecord) GetTitle() string {
 }
 
 func (n *NoteRecord) GetDescription() string {
-	// Create a short description from tags and modification time
 	var parts []string
 
 	if len(n.Tags) > 0 {
@@ -80,9 +79,8 @@ func (n *NoteDataSource) Load(ctx context.Context, opts ListOptions) ([]ListItem
 		repoOpts.Archived = &archived
 	}
 
-	// Apply search filter if provided
 	if opts.Search != "" {
-		repoOpts.Content = opts.Search // Search in content
+		repoOpts.Content = opts.Search
 	}
 
 	if opts.Limit > 0 {
@@ -103,7 +101,6 @@ func (n *NoteDataSource) Load(ctx context.Context, opts ListOptions) ([]ListItem
 }
 
 func (n *NoteDataSource) Count(ctx context.Context, opts ListOptions) (int, error) {
-	// For simplicity, load all and count (could be optimized with a separate Count method)
 	items, err := n.Load(ctx, opts)
 	if err != nil {
 		return 0, err
@@ -112,7 +109,6 @@ func (n *NoteDataSource) Count(ctx context.Context, opts ListOptions) (int, erro
 }
 
 func (n *NoteDataSource) Search(ctx context.Context, query string, opts ListOptions) ([]ListItem, error) {
-	// Set search in options and use regular Load
 	opts.Search = query
 	return n.Load(ctx, opts)
 }
@@ -123,11 +119,9 @@ func NewNoteDataList(repo utils.TestNoteRepository, opts DataListOptions, showAr
 		opts.Title = "Notes"
 	}
 
-	// Enable search functionality for notes
 	opts.ShowSearch = true
 	opts.Searchable = true
 
-	// Set up view handler for markdown rendering
 	if opts.ViewHandler == nil {
 		opts.ViewHandler = func(item ListItem) string {
 			if noteRecord, ok := item.(*NoteRecord); ok {
@@ -188,18 +182,17 @@ func formatNoteForView(note *models.Note) string {
 		}
 	}
 
-	// Render markdown
 	renderer, err := glamour.NewTermRenderer(
 		glamour.WithAutoStyle(),
 		glamour.WithWordWrap(80),
 	)
 	if err != nil {
-		return content.String() // Return unrendered if glamour fails
+		return content.String()
 	}
 
 	rendered, err := renderer.Render(content.String())
 	if err != nil {
-		return content.String() // Return unrendered if rendering fails
+		return content.String()
 	}
 
 	return rendered
