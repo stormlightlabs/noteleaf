@@ -40,6 +40,17 @@ The foundation across all domains is implemented. Tasks support CRUD operations,
 - [x] Confirm filtering by tags and `--archived`.
 - [x] Ensure notes can be opened, edited in `$EDITOR`, and deleted.
 
+#### Publication
+
+- [x] Implement authentication with BlueSky/leaflet (AT Protocol).
+    - [ ] Add OAuth2
+- [x] Verify `pub pull` fetches and syncs documents from leaflet.
+- [x] Confirm `pub list` with status filtering (`all`, `published`, `draft`).
+- [ ] Test `pub post` creates new documents with draft/preview/validate modes.
+- [ ] Ensure `pub patch` updates existing documents correctly.
+- [ ] Validate `pub push` handles batch operations (create/update).
+- [ ] Verify markdown conversion to leaflet block format (headings, code, images, facets).
+
 ### Media Domains
 
 #### Books
@@ -92,9 +103,9 @@ The foundation across all domains is implemented. Tasks support CRUD operations,
 
 ### QA
 
-- [ ] Verify **unit tests** for all handlers (TaskHandler, NoteHandler, Media Handlers).
-- [ ] Write **integration tests** covering CLI flows.
-- [ ] Ensure error handling works for:
+- [x] Verify **unit tests** for all handlers (TaskHandler, NoteHandler, Media Handlers).
+- [x] Write **integration tests** covering CLI flows.
+- [x] Ensure error handling works for:
     - Invalid IDs
     - Invalid flags
     - Schema corruption (already tested in repo)
@@ -356,6 +367,9 @@ SQLite persistence, CI with GitHub Actions and Codecov, TUIs with Charm stack, i
 - Installation and usage documentation
 - Contribution guide and developer docs
 - Consistent argument parsing
+
+#### Post v1
+
 - Backup/restore
 - Multiple profiles
 - Optional synchronization
@@ -367,16 +381,16 @@ SQLite persistence, CI with GitHub Actions and Codecov, TUIs with Charm stack, i
 | Tasks    | CRUD                  | Complete  |
 | Tasks    | Projects/tags         | Complete  |
 | Tasks    | Time tracking         | Complete  |
-| Tasks    | Dependencies          | Planned   |
-| Tasks    | Recurrence            | Planned   |
+| Tasks    | Dependencies          | Complete  |
+| Tasks    | Recurrence            | Complete  |
 | Tasks    | Wait/scheduled        | Planned   |
 | Tasks    | Urgency scoring       | Planned   |
 | Notes    | CRUD                  | Complete  |
 | Notes    | Search/tagging        | Planned   |
 | Media    | Books/movies/TV       | Complete  |
-| Media    | Articles              | Planned   |
+| Media    | Articles              | Complete  |
 | Media    | Source/ratings        | Planned   |
-| Articles | Parser + storage      | Planned   |
+| Articles | Parser + storage      | Complete  |
 | System   | SQLite persistence    | Complete  |
 | System   | Synchronization       | Future    |
 | System   | Import/export formats | Future    |

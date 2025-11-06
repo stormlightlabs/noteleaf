@@ -333,3 +333,18 @@ func (r *NoteRepository) GetLeafletNotes(ctx context.Context) ([]*models.Note, e
 	query := "SELECT " + noteColumns + " FROM notes WHERE leaflet_rkey IS NOT NULL ORDER BY modified DESC"
 	return r.queryMany(ctx, query)
 }
+
+// GetNewestPublication returns the most recently published leaflet note
+func (r *NoteRepository) GetNewestPublication(ctx context.Context) (*models.Note, error) {
+	query := "SELECT " + noteColumns + " FROM notes WHERE leaflet_rkey IS NOT NULL ORDER BY published_at DESC LIMIT 1"
+	return r.queryOne(ctx, query)
+}
+
+// DeleteAllLeafletNotes removes all notes with leaflet associations
+func (r *NoteRepository) DeleteAllLeafletNotes(ctx context.Context) error {
+	_, err := r.db.ExecContext(ctx, "DELETE FROM notes WHERE leaflet_rkey IS NOT NULL")
+	if err != nil {
+		return fmt.Errorf("failed to delete leaflet notes: %w", err)
+	}
+	return nil
+}

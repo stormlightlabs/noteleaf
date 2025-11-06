@@ -11,6 +11,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -732,17 +733,21 @@ func TestDataList(t *testing.T) {
 		})
 
 		t.Run("viewing mode", func(t *testing.T) {
+			vp := viewport.New(80, 20)
+			vp.SetContent("# Test Content\nDetails here")
+
 			model := dataListModel{
-				viewing:     true,
-				viewContent: "# Test Content\nDetails here",
-				opts:        DataListOptions{},
+				viewing:      true,
+				viewContent:  "# Test Content\nDetails here",
+				viewViewport: vp,
+				opts:         DataListOptions{},
 			}
 
 			view := model.View()
 			if !strings.Contains(view, "# Test Content") {
 				t.Error("View content not displayed")
 			}
-			if !strings.Contains(view, "Press q/esc/backspace to return") {
+			if !strings.Contains(view, "q/esc: back") {
 				t.Error("Return instructions not displayed")
 			}
 		})

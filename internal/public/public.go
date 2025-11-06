@@ -7,12 +7,15 @@
 //	https://github.com/hyperlink-academy/leaflet/tree/main/lexicons/pub/leaflet/
 package public
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 const (
-	TypeDocument      = "pub.leaflet.document"
-	TypeDocumentDraft = "pub.leaflet.document.draft"
-	TypePublication   = "pub.leaflet.publication"
+	TypeDocument       = "pub.leaflet.document"
+	TypeDocumentDraft  = "pub.leaflet.document.draft"
+	TypePublication    = "pub.leaflet.publication"
 	TypeLinearDocument = "pub.leaflet.pages.linearDocument"
 	TypeBlock          = "pub.leaflet.pages.linearDocument#block"
 
@@ -62,6 +65,87 @@ type BlockWrap struct {
 	Type      string `json:"$type"`
 	Block     any    `json:"block"`               // One of: TextBlock, HeaderBlock, etc.
 	Alignment string `json:"alignment,omitempty"` // #textAlignLeft, etc.
+}
+
+type TypeCheck struct {
+	Type string `json:"$type"`
+}
+
+// UnmarshalJSON custom unmarshaler for BlockWrap to properly type the Block field
+//
+// Matches against field $type to deserialize data
+func (bw *BlockWrap) UnmarshalJSON(data []byte) error {
+	type Alias BlockWrap
+	temp := &struct {
+		Block json.RawMessage `json:"block"`
+		*Alias
+	}{
+		Alias: (*Alias)(bw),
+	}
+
+	if err := json.Unmarshal(data, temp); err != nil {
+		return err
+	}
+
+	var typeCheck struct {
+		Type string `json:"$type"`
+	}
+	if err := json.Unmarshal(temp.Block, &typeCheck); err != nil {
+		return err
+	}
+
+	switch typeCheck.Type {
+	case TypeTextBlock:
+		var block TextBlock
+		if err := json.Unmarshal(temp.Block, &block); err != nil {
+			return err
+		}
+		bw.Block = block
+	case TypeHeaderBlock:
+		var block HeaderBlock
+		if err := json.Unmarshal(temp.Block, &block); err != nil {
+			return err
+		}
+		bw.Block = block
+	case TypeCodeBlock:
+		var block CodeBlock
+		if err := json.Unmarshal(temp.Block, &block); err != nil {
+			return err
+		}
+		bw.Block = block
+	case TypeImageBlock:
+		var block ImageBlock
+		if err := json.Unmarshal(temp.Block, &block); err != nil {
+			return err
+		}
+		bw.Block = block
+	case TypeBlockquoteBlock:
+		var block BlockquoteBlock
+		if err := json.Unmarshal(temp.Block, &block); err != nil {
+			return err
+		}
+		bw.Block = block
+	case TypeUnorderedListBlock:
+		var block UnorderedListBlock
+		if err := json.Unmarshal(temp.Block, &block); err != nil {
+			return err
+		}
+		bw.Block = block
+	case TypeHorizontalRuleBlock:
+		var block HorizontalRuleBlock
+		if err := json.Unmarshal(temp.Block, &block); err != nil {
+			return err
+		}
+		bw.Block = block
+	default:
+		var block map[string]any
+		if err := json.Unmarshal(temp.Block, &block); err != nil {
+			return err
+		}
+		bw.Block = block
+	}
+
+	return nil
 }
 
 // TextBlock represents a text content block (pub.leaflet.blocks.text)
@@ -122,6 +206,58 @@ type ListItem struct {
 	Children []ListItem `json:"children,omitempty"` // Nested list items
 }
 
+// UnmarshalJSON custom unmarshaler for ListItem to properly type the Content field
+func (li *ListItem) UnmarshalJSON(data []byte) error {
+	type Alias ListItem
+	temp := &struct {
+		Content json.RawMessage `json:"content"`
+		*Alias
+	}{
+		Alias: (*Alias)(li),
+	}
+
+	if err := json.Unmarshal(data, temp); err != nil {
+		return err
+	}
+
+	var typeCheck struct {
+		Type string `json:"$type"`
+	}
+	if err := json.Unmarshal(temp.Content, &typeCheck); err != nil {
+		return err
+	}
+
+	switch typeCheck.Type {
+	case TypeTextBlock:
+		var block TextBlock
+		if err := json.Unmarshal(temp.Content, &block); err != nil {
+			return err
+		}
+		li.Content = block
+	case TypeHeaderBlock:
+		var block HeaderBlock
+		if err := json.Unmarshal(temp.Content, &block); err != nil {
+			return err
+		}
+		li.Content = block
+	case TypeImageBlock:
+		var block ImageBlock
+		if err := json.Unmarshal(temp.Content, &block); err != nil {
+			return err
+		}
+		li.Content = block
+	default:
+		// For unknown types, leave as map
+		var block map[string]any
+		if err := json.Unmarshal(temp.Content, &block); err != nil {
+			return err
+		}
+		li.Content = block
+	}
+
+	return nil
+}
+
 // HorizontalRuleBlock represents a horizontal rule/thematic break (pub.leaflet.blocks.horizontalRule)
 type HorizontalRuleBlock struct {
 	Type string `json:"$type"`
@@ -132,6 +268,82 @@ type Facet struct {
 	Type     string         `json:"$type"`
 	Index    ByteSlice      `json:"index"`
 	Features []FacetFeature `json:"features"`
+}
+
+// UnmarshalJSON custom unmarshaler for Facet to properly type the Features field
+func (f *Facet) UnmarshalJSON(data []byte) error {
+	type Alias Facet
+	temp := &struct {
+		Features []json.RawMessage `json:"features"`
+		*Alias
+	}{
+		Alias: (*Alias)(f),
+	}
+
+	if err := json.Unmarshal(data, temp); err != nil {
+		return err
+	}
+
+	f.Features = make([]FacetFeature, 0, len(temp.Features))
+	for _, featureData := range temp.Features {
+		var typeCheck TypeCheck
+		if err := json.Unmarshal(featureData, &typeCheck); err != nil {
+			return err
+		}
+
+		var feature FacetFeature
+		switch typeCheck.Type {
+		case TypeFacetBold:
+			var fb FacetBold
+			if err := json.Unmarshal(featureData, &fb); err != nil {
+				return err
+			}
+			feature = fb
+		case TypeFacetItalic:
+			var fi FacetItalic
+			if err := json.Unmarshal(featureData, &fi); err != nil {
+				return err
+			}
+			feature = fi
+		case TypeFacetCode:
+			var fc FacetCode
+			if err := json.Unmarshal(featureData, &fc); err != nil {
+				return err
+			}
+			feature = fc
+		case TypeFacetLink:
+			var fl FacetLink
+			if err := json.Unmarshal(featureData, &fl); err != nil {
+				return err
+			}
+			feature = fl
+		case TypeFacetStrike:
+			var fs FacetStrikethrough
+			if err := json.Unmarshal(featureData, &fs); err != nil {
+				return err
+			}
+			feature = fs
+		case TypeFacetUnderline:
+			var fu FacetUnderline
+			if err := json.Unmarshal(featureData, &fu); err != nil {
+				return err
+			}
+			feature = fu
+		case TypeFacetHighlight:
+			var fh FacetHighlight
+			if err := json.Unmarshal(featureData, &fh); err != nil {
+				return err
+			}
+			feature = fh
+		default:
+			// Skip unknown feature types
+			continue
+		}
+
+		f.Features = append(f.Features, feature)
+	}
+
+	return nil
 }
 
 // ByteSlice specifies a substring range using UTF-8 byte offsets (pub.leaflet.richtext.facet#byteSlice)

@@ -64,8 +64,13 @@ func AssertErrorContains(t *testing.T, err error, expected, msg string) {
 		t.Errorf("%s: expected error but got none", msg)
 		return
 	}
-	if expected != "" && !ContainsString(err.Error(), expected) {
-		t.Errorf("%s: expected error containing %q, got: %v", msg, expected, err)
+
+	if !ContainsString(err.Error(), expected) {
+		if msg == "" {
+			t.Errorf("expected error containing %q, got: %v", expected, err)
+		} else if expected != "" {
+			t.Errorf("%s: expected error containing %q, got: %v", msg, expected, err)
+		}
 	}
 }
 

@@ -126,6 +126,11 @@ func (h *PublicationHandler) Pull(ctx context.Context) error {
 		return fmt.Errorf("not authenticated - run 'noteleaf pub auth' first")
 	}
 
+	if configDir, err := store.GetConfigDir(); err == nil {
+		logFile := filepath.Join(configDir, "logs", fmt.Sprintf("publication_%s.log", time.Now().Format("2006-01-02")))
+		ui.Infoln("Detailed logs: %s", logFile)
+	}
+
 	ui.Infoln("Fetching documents from leaflet...")
 
 	docs, err := h.atproto.PullDocuments(ctx)
@@ -140,70 +145,52 @@ func (h *PublicationHandler) Pull(ctx context.Context) error {
 
 	ui.Infoln("Found %d document(s). Syncing...\n", len(docs))
 
-	var created, updated int
-
-	for _, doc := range docs {
-		existing, err := h.repos.Notes.GetByLeafletRKey(ctx, doc.Meta.RKey)
-		if err == nil && existing != nil {
-			content, err := documentToMarkdown(doc)
-			if err != nil {
-				ui.Warningln("Skipping document %s: %v", doc.Document.Title, err)
-				continue
-			}
-
-			existing.Title = doc.Document.Title
-			existing.Content = content
-			existing.LeafletCID = &doc.Meta.CID
-			existing.IsDraft = doc.Meta.IsDraft
-
-			if doc.Document.PublishedAt != "" {
-				publishedAt, err := time.Parse(time.RFC3339, doc.Document.PublishedAt)
-				if err == nil {
-					existing.PublishedAt = &publishedAt
-				}
-			}
-
-			if err := h.repos.Notes.Update(ctx, existing); err != nil {
-				ui.Warningln("Failed to update note for document %s: %v", doc.Document.Title, err)
-				continue
-			}
-
-			updated++
-			ui.Infoln("  Updated: %s", doc.Document.Title)
-		} else {
-			content, err := documentToMarkdown(doc)
-			if err != nil {
-				ui.Warningln("Skipping document %s: %v", doc.Document.Title, err)
-				continue
-			}
-
-			note := &models.Note{
-				Title:       doc.Document.Title,
-				Content:     content,
-				LeafletRKey: &doc.Meta.RKey,
-				LeafletCID:  &doc.Meta.CID,
-				IsDraft:     doc.Meta.IsDraft,
-			}
-
-			if doc.Document.PublishedAt != "" {
-				publishedAt, err := time.Parse(time.RFC3339, doc.Document.PublishedAt)
-				if err == nil {
-					note.PublishedAt = &publishedAt
-				}
-			}
-
-			_, err = h.repos.Notes.Create(ctx, note)
-			if err != nil {
-				ui.Warningln("Failed to create note for document %s: %v", doc.Document.Title, err)
-				continue
-			}
-
-			created++
-			ui.Infoln("  Created: %s", doc.Document.Title)
-		}
+	ui.Infoln("Removing existing publications...")
+	if err := h.repos.Notes.DeleteAllLeafletNotes(ctx); err != nil {
+		return fmt.Errorf("failed to delete existing publications: %w", err)
 	}
 
-	ui.Successln("Sync complete: %d created, %d updated", created, updated)
+	var created, failed int
+
+	for _, doc := range docs {
+		content, err := documentToMarkdown(doc)
+		if err != nil {
+			ui.Warningln("Skipping document %s: %v", doc.Document.Title, err)
+			failed++
+			continue
+		}
+
+		note := &models.Note{
+			Title:       doc.Document.Title,
+			Content:     content,
+			LeafletRKey: &doc.Meta.RKey,
+			LeafletCID:  &doc.Meta.CID,
+			IsDraft:     doc.Meta.IsDraft,
+		}
+
+		if doc.Document.PublishedAt != "" {
+			publishedAt, err := time.Parse(time.RFC3339, doc.Document.PublishedAt)
+			if err == nil {
+				note.PublishedAt = &publishedAt
+			}
+		}
+
+		_, err = h.repos.Notes.Create(ctx, note)
+		if err != nil {
+			ui.Warningln("Failed to create note for document %s: %v", doc.Document.Title, err)
+			failed++
+			continue
+		}
+
+		created++
+		ui.Infoln("  Created: %s", doc.Document.Title)
+	}
+
+	if failed > 0 {
+		ui.Successln("Sync complete: %d created, %d failed", created, failed)
+	} else {
+		ui.Successln("Sync complete: %d created", created)
+	}
 	return nil
 }
 
@@ -462,6 +449,43 @@ func (h *PublicationHandler) Browse(ctx context.Context, filter string) error {
 
 	list := ui.NewPublicationDataList(h.repos.Notes, opts, filter)
 	return list.Browse(ctx)
+}
+
+// Read displays a publication's content with formatted markdown rendering.
+// The identifier can be:
+// - empty string: display the newest publication
+// - numeric string: treat as database ID
+// - non-numeric string: treat as AT Protocol rkey
+func (h *PublicationHandler) Read(ctx context.Context, identifier string) error {
+	var note *models.Note
+	var err error
+
+	if identifier == "" {
+		note, err = h.repos.Notes.GetNewestPublication(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get newest publication: %w", err)
+		}
+	} else {
+		var id int64
+		_, scanErr := fmt.Sscanf(identifier, "%d", &id)
+		if scanErr == nil {
+			note, err = h.repos.Notes.Get(ctx, id)
+			if err != nil {
+				return fmt.Errorf("failed to get publication by ID: %w", err)
+			}
+			if !note.HasLeafletAssociation() {
+				return fmt.Errorf("note %d is not a publication", id)
+			}
+		} else {
+			note, err = h.repos.Notes.GetByLeafletRKey(ctx, identifier)
+			if err != nil {
+				return fmt.Errorf("failed to get publication by rkey: %w", err)
+			}
+		}
+	}
+
+	view := ui.NewPublicationView(note, ui.PublicationViewOptions{})
+	return view.Show(ctx)
 }
 
 // prepareDocumentForPublish prepares a note for publication by converting to Leaflet format

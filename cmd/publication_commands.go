@@ -149,6 +149,33 @@ Use filters to show specific subsets:
 	listCmd.Flags().BoolP("interactive", "i", false, "Open interactive TUI browser")
 	root.AddCommand(listCmd)
 
+	readCmd := &cobra.Command{
+		Use:   "read [identifier]",
+		Short: "Read a publication",
+		Long: `Display a publication's content with formatted markdown rendering.
+
+The identifier can be:
+- Omitted: Display the newest publication
+- Database ID: Display publication by note ID (e.g., 42)
+- AT Protocol rkey: Display publication by leaflet rkey
+
+Examples:
+  noteleaf pub read                  # Show newest publication
+  noteleaf pub read 123              # Show publication with note ID 123
+  noteleaf pub read 3jxx...          # Show publication by rkey`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			identifier := ""
+			if len(args) > 0 {
+				identifier = args[0]
+			}
+
+			defer c.handler.Close()
+			return c.handler.Read(cmd.Context(), identifier)
+		},
+	}
+	root.AddCommand(readCmd)
+
 	statusCmd := &cobra.Command{
 		Use:   "status",
 		Short: "Show leaflet authentication status",

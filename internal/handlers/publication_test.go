@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -1964,6 +1965,84 @@ func TestPublicationHandler(t *testing.T) {
 
 			if err != nil && !strings.Contains(err.Error(), "not authenticated") {
 				t.Logf("Got error during push (expected for external service call): %v", err)
+			}
+		})
+	})
+
+	t.Run("Read", func(t *testing.T) {
+		t.Run("returns error when no publications exist", func(t *testing.T) {
+			suite := NewHandlerTestSuite(t)
+			defer suite.Cleanup()
+
+			handler := CreateHandler(t, NewPublicationHandler)
+			ctx := context.Background()
+
+			err := handler.Read(ctx, "")
+			if err == nil {
+				t.Error("Expected error when no publications exist")
+			}
+
+			if !strings.Contains(err.Error(), "note not found") {
+				t.Errorf("Expected 'note not found' error, got '%v'", err)
+			}
+		})
+
+		t.Run("returns error for non-existent numeric ID", func(t *testing.T) {
+			suite := NewHandlerTestSuite(t)
+			defer suite.Cleanup()
+
+			handler := CreateHandler(t, NewPublicationHandler)
+			ctx := context.Background()
+
+			err := handler.Read(ctx, "999")
+			if err == nil {
+				t.Error("Expected error for non-existent ID")
+			}
+
+			if !strings.Contains(err.Error(), "failed to get publication by ID") {
+				t.Errorf("Expected 'failed to get publication by ID' error, got '%v'", err)
+			}
+		})
+
+		t.Run("returns error when note by ID is not a publication", func(t *testing.T) {
+			suite := NewHandlerTestSuite(t)
+			defer suite.Cleanup()
+
+			handler := CreateHandler(t, NewPublicationHandler)
+			ctx := context.Background()
+
+			regularNote := &models.Note{
+				Title:   "Regular Note",
+				Content: "# Not a publication",
+			}
+
+			id, err := handler.repos.Notes.Create(ctx, regularNote)
+			suite.AssertNoError(err, "create regular note")
+
+			err = handler.Read(ctx, fmt.Sprintf("%d", id))
+			if err == nil {
+				t.Error("Expected error when note is not a publication")
+			}
+
+			if !strings.Contains(err.Error(), "not a publication") {
+				t.Errorf("Expected 'not a publication' error, got '%v'", err)
+			}
+		})
+
+		t.Run("returns error for non-existent rkey", func(t *testing.T) {
+			suite := NewHandlerTestSuite(t)
+			defer suite.Cleanup()
+
+			handler := CreateHandler(t, NewPublicationHandler)
+			ctx := context.Background()
+
+			err := handler.Read(ctx, "nonexistent_rkey")
+			if err == nil {
+				t.Error("Expected error for non-existent rkey")
+			}
+
+			if !strings.Contains(err.Error(), "failed to get publication by rkey") {
+				t.Errorf("Expected 'failed to get publication by rkey' error, got '%v'", err)
 			}
 		})
 	})

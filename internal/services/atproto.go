@@ -19,6 +19,7 @@ import (
 	lexutil "github.com/bluesky-social/indigo/lex/util"
 	"github.com/bluesky-social/indigo/repo"
 	"github.com/bluesky-social/indigo/xrpc"
+	"github.com/fxamacker/cbor/v2"
 	"github.com/ipfs/go-cid"
 	"github.com/stormlightlabs/noteleaf/internal/public"
 )
@@ -27,6 +28,35 @@ import (
 type DocumentWithMeta struct {
 	Document public.Document
 	Meta     public.DocumentMeta
+}
+
+// convertCBORToJSONCompatible recursively converts CBOR data structures to JSON-compatible types
+//
+// This converts map[any]any to map[string]any to allow usage of [json.Marshal]
+func convertCBORToJSONCompatible(data any) any {
+	switch v := data.(type) {
+	case map[any]any:
+		result := make(map[string]any, len(v))
+		for key, value := range v {
+			strKey := fmt.Sprintf("%v", key)
+			result[strKey] = convertCBORToJSONCompatible(value)
+		}
+		return result
+	case map[string]any:
+		result := make(map[string]any, len(v))
+		for key, value := range v {
+			result[key] = convertCBORToJSONCompatible(value)
+		}
+		return result
+	case []any:
+		result := make([]any, len(v))
+		for i, item := range v {
+			result[i] = convertCBORToJSONCompatible(item)
+		}
+		return result
+	default:
+		return v
+	}
 }
 
 // PublicationWithMeta combines a publication with its metadata
@@ -212,21 +242,46 @@ func (s *ATProtoService) PullDocuments(ctx context.Context) ([]DocumentWithMeta,
 	var documents []DocumentWithMeta
 	prefix := public.TypeDocument
 
+	documentCount := 0
 	err = r.ForEach(ctx, prefix, func(k string, v cid.Cid) error {
+		documentCount++
+
 		_, recordBytes, err := r.GetRecordBytes(ctx, k)
 		if err != nil {
 			return fmt.Errorf("failed to get record bytes for %s: %w", k, err)
 		}
 
-		var doc public.Document
-		if err := json.Unmarshal(*recordBytes, &doc); err != nil {
-			return fmt.Errorf("failed to unmarshal document %s: %w", k, err)
+		var cborData any
+		if err := cbor.Unmarshal(*recordBytes, &cborData); err != nil {
+			return fmt.Errorf("failed to decode CBOR for document %s: %w", k, err)
+		}
+
+		jsonCompatible := convertCBORToJSONCompatible(cborData)
+
+		jsonBytes, err := json.MarshalIndent(jsonCompatible, "", "  ")
+		if err != nil {
+			return fmt.Errorf("failed to convert CBOR to JSON for document %s: %w", k, err)
 		}
 
 		parts := strings.Split(k, "/")
 		rkey := ""
 		if len(parts) > 0 {
 			rkey = parts[len(parts)-1]
+		}
+
+		var typeCheck public.TypeCheck
+
+		if err := json.Unmarshal(jsonBytes, &typeCheck); err != nil {
+			return fmt.Errorf("failed to check $type for %s: %w", k, err)
+		}
+
+		if typeCheck.Type != public.TypeDocument {
+			return nil
+		}
+
+		var doc public.Document
+		if err := json.Unmarshal(jsonBytes, &doc); err != nil {
+			return fmt.Errorf("failed to unmarshal JSON to Document for %s: %w", k, err)
 		}
 
 		uri := fmt.Sprintf("at://%s/%s", s.session.DID, k)
@@ -291,21 +346,18 @@ func (s *ATProtoService) ListPublications(ctx context.Context) ([]PublicationWit
 		}
 
 		uri := fmt.Sprintf("at://%s/%s", s.session.DID, k)
-
 		publications = append(publications, PublicationWithMeta{
 			Publication: pub,
 			RKey:        rkey,
 			CID:         v.String(),
 			URI:         uri,
 		})
-
 		return nil
 	})
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to iterate over publications: %w", err)
 	}
-
 	return publications, nil
 }
 
@@ -480,7 +532,6 @@ func (s *ATProtoService) UploadBlob(ctx context.Context, data []byte, mimeType s
 		MimeType: output.Blob.MimeType,
 		Size:     int(output.Blob.Size),
 	}
-
 	return blob, nil
 }
 

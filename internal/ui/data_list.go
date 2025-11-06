@@ -9,6 +9,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/stormlightlabs/noteleaf/internal/models"
@@ -157,21 +158,22 @@ type (
 )
 
 type dataListModel struct {
-	items       []ListItem
-	selected    int
-	viewing     bool
-	viewContent string
-	searching   bool
-	searchQuery string
-	err         error
-	loading     bool
-	source      ListSource
-	opts        DataListOptions
-	keys        DataListKeyMap
-	help        help.Model
-	showingHelp bool
-	totalCount  int
-	listOpts    ListOptions
+	items        []ListItem
+	selected     int
+	viewing      bool
+	viewContent  string
+	viewViewport viewport.Model
+	searching    bool
+	searchQuery  string
+	err          error
+	loading      bool
+	source       ListSource
+	opts         DataListOptions
+	keys         DataListKeyMap
+	help         help.Model
+	showingHelp  bool
+	totalCount   int
+	listOpts     ListOptions
 }
 
 func (m dataListModel) Init() tea.Cmd {
@@ -199,6 +201,18 @@ func (m dataListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case key.Matches(msg, m.keys.Help):
 				m.showingHelp = true
 				return m, nil
+			case key.Matches(msg, m.keys.Up):
+				m.viewViewport.ScrollUp(1)
+			case key.Matches(msg, m.keys.Down):
+				m.viewViewport.ScrollDown(1)
+			case msg.String() == "pgup", msg.String() == "b":
+				m.viewViewport.HalfPageUp()
+			case msg.String() == "pgdown", msg.String() == "f":
+				m.viewViewport.HalfPageDown()
+			case msg.String() == "g", msg.String() == "home":
+				m.viewViewport.GotoTop()
+			case msg.String() == "G", msg.String() == "end":
+				m.viewViewport.GotoBottom()
 			}
 			return m, nil
 		}
@@ -279,11 +293,21 @@ func (m dataListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case listViewMsg:
 		m.viewContent = string(msg)
 		m.viewing = true
+		m.viewViewport = viewport.New(80, 20)
+		m.viewViewport.SetContent(m.viewContent)
 	case listErrorMsg:
 		m.err = error(msg)
 		m.loading = false
 	case listCountMsg:
 		m.totalCount = int(msg)
+	case tea.WindowSizeMsg:
+		if m.viewing {
+			headerHeight := 2
+			footerHeight := 3
+			verticalMarginHeight := headerHeight + footerHeight
+			m.viewViewport.Width = msg.Width
+			m.viewViewport.Height = msg.Height - verticalMarginHeight
+		}
 	}
 	return m, nil
 }
@@ -298,9 +322,9 @@ func (m dataListModel) View() string {
 	}
 
 	if m.viewing {
-		s.WriteString(m.viewContent)
+		s.WriteString(m.viewViewport.View())
 		s.WriteString("\n\n")
-		s.WriteString(style.Render("Press q/esc/backspace to return to list, ? for help"))
+		s.WriteString(style.Render("↑/↓/pgup/pgdn: scroll | g/G: top/bottom | q/esc: back | ?: help"))
 		return s.String()
 	}
 

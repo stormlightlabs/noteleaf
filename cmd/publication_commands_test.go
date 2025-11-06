@@ -5,7 +5,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/stormlightlabs/noteleaf/internal/handlers"
+	"github.com/stormlightlabs/noteleaf/internal/shared"
 )
 
 func createTestPublicationHandler(t *testing.T) (*handlers.PublicationHandler, func()) {
@@ -65,6 +67,7 @@ func TestPublicationCommand(t *testing.T) {
 				"auth [handle]",
 				"pull",
 				"list [--published|--draft|--all] [--interactive]",
+				"read [identifier]",
 				"status",
 				"post [note-id]",
 				"patch [note-id]",
@@ -157,6 +160,71 @@ func TestPublicationCommand(t *testing.T) {
 
 			if err != nil {
 				t.Errorf("list with multiple flags failed: %v", err)
+			}
+		})
+	})
+
+	t.Run("Read Command", func(t *testing.T) {
+		t.Run("reads without identifier", func(t *testing.T) {
+			handler, cleanup := createTestPublicationHandler(t)
+			defer cleanup()
+
+			cmd := NewPublicationCommand(handler).Create()
+			cmd.SetArgs([]string{"read"})
+			err := cmd.Execute()
+
+			if err == nil {
+				t.Error("Expected read to fail when no publications exist")
+			}
+
+			shared.AssertErrorContains(t, err, "note not found", "")
+		})
+
+		t.Run("fails with non-existent note ID", func(t *testing.T) {
+			handler, cleanup := createTestPublicationHandler(t)
+			defer cleanup()
+
+			cmd := NewPublicationCommand(handler).Create()
+			cmd.SetArgs([]string{"read", "999"})
+			err := cmd.Execute()
+
+			shared.AssertError(t, err, "read to fail with non-existent ID")
+		})
+
+		t.Run("fails with non-existent rkey", func(t *testing.T) {
+			handler, cleanup := createTestPublicationHandler(t)
+			defer cleanup()
+
+			cmd := NewPublicationCommand(handler).Create()
+			cmd.SetArgs([]string{"read", "3jxxxxxxxxxxxx"})
+			err := cmd.Execute()
+
+			if err == nil {
+				t.Error("Expected read to fail with non-existent rkey")
+			}
+		})
+
+		t.Run("accepts optional identifier argument", func(t *testing.T) {
+			handler, cleanup := createTestPublicationHandler(t)
+			defer cleanup()
+
+			cmd := NewPublicationCommand(handler).Create()
+			subcommands := cmd.Commands()
+
+			var readCmd *cobra.Command
+			for _, subcmd := range subcommands {
+				if strings.HasPrefix(subcmd.Use, "read") {
+					readCmd = subcmd
+					break
+				}
+			}
+
+			if readCmd == nil {
+				t.Fatal("read command not found")
+			}
+
+			if readCmd.Use != "read [identifier]" {
+				t.Errorf("Expected Use to be 'read [identifier]', got '%s'", readCmd.Use)
 			}
 		})
 	})

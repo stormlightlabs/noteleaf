@@ -607,6 +607,46 @@ func TestNoteRepository(t *testing.T) {
 			}
 		})
 
+		t.Run("GetNewestPublication returns most recent published note", func(t *testing.T) {
+			note, err := repo.GetNewestPublication(ctx)
+			shared.AssertNoError(t, err, "get newest publication")
+			shared.AssertNotNil(t, note, "should return a note")
+			shared.AssertFalse(t, note.IsDraft, "newest should not be draft")
+			shared.AssertNotNil(t, note.PublishedAt, "should have published_at")
+		})
+
+		t.Run("GetNewestPublication returns error when no published notes", func(t *testing.T) {
+			emptyDB := CreateTestDB(t)
+			emptyRepo := NewNoteRepository(emptyDB)
+
+			_, err := emptyRepo.GetNewestPublication(ctx)
+			shared.AssertError(t, err, "should error when no published notes exist")
+		})
+
+		t.Run("DeleteAllLeafletNotes removes all leaflet notes", func(t *testing.T) {
+			beforeLeaflet, err := repo.GetLeafletNotes(ctx)
+			shared.AssertNoError(t, err, "get leaflet notes before delete")
+			shared.AssertEqual(t, 3, len(beforeLeaflet), "should have 3 leaflet notes before delete")
+
+			allNotes, err := repo.List(ctx, NoteListOptions{})
+			shared.AssertNoError(t, err, "get all notes before delete")
+			shared.AssertEqual(t, 4, len(allNotes), "should have 4 total notes before delete")
+
+			err = repo.DeleteAllLeafletNotes(ctx)
+			shared.AssertNoError(t, err, "delete all leaflet notes")
+
+			afterLeaflet, err := repo.GetLeafletNotes(ctx)
+			shared.AssertNoError(t, err, "get leaflet notes after delete")
+			shared.AssertEqual(t, 0, len(afterLeaflet), "should have 0 leaflet notes after delete")
+
+			remainingNotes, err := repo.List(ctx, NoteListOptions{})
+			shared.AssertNoError(t, err, "get remaining notes")
+			shared.AssertEqual(t, 1, len(remainingNotes), "should have 1 regular note remaining")
+			if remainingNotes[0].LeafletRKey != nil {
+				t.Error("remaining note should not have leaflet rkey")
+			}
+		})
+
 		t.Run("Context Cancellation", func(t *testing.T) {
 			t.Run("GetByLeafletRKey with cancelled context", func(t *testing.T) {
 				_, err := repo.GetByLeafletRKey(NewCanceledContext(), rkey1)
@@ -625,6 +665,16 @@ func TestNoteRepository(t *testing.T) {
 
 			t.Run("GetLeafletNotes with cancelled context", func(t *testing.T) {
 				_, err := repo.GetLeafletNotes(NewCanceledContext())
+				AssertCancelledContext(t, err)
+			})
+
+			t.Run("GetNewestPublication with cancelled context", func(t *testing.T) {
+				_, err := repo.GetNewestPublication(NewCanceledContext())
+				AssertCancelledContext(t, err)
+			})
+
+			t.Run("DeleteAllLeafletNotes with cancelled context", func(t *testing.T) {
+				err := repo.DeleteAllLeafletNotes(NewCanceledContext())
 				AssertCancelledContext(t, err)
 			})
 		})
