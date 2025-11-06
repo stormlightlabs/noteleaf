@@ -2,10 +2,12 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/fxamacker/cbor/v2"
 	"github.com/stormlightlabs/noteleaf/internal/public"
 )
 
@@ -1437,6 +1439,306 @@ func TestATProtoService(t *testing.T) {
 
 			if svc.IsAuthenticated() {
 				t.Error("Expected IsAuthenticated to return false after close")
+			}
+		})
+	})
+
+	t.Run("CBOR Conversion Functions", func(t *testing.T) {
+		t.Run("convertCBORToJSONCompatible handles simple map", func(t *testing.T) {
+			input := map[any]any{
+				"key1": "value1",
+				"key2": 42,
+				"key3": true,
+			}
+
+			result := convertCBORToJSONCompatible(input)
+
+			mapResult, ok := result.(map[string]any)
+			if !ok {
+				t.Fatal("Expected result to be map[string]any")
+			}
+
+			if mapResult["key1"] != "value1" {
+				t.Errorf("Expected key1='value1', got '%v'", mapResult["key1"])
+			}
+			if mapResult["key2"] != 42 {
+				t.Errorf("Expected key2=42, got %v", mapResult["key2"])
+			}
+			if mapResult["key3"] != true {
+				t.Errorf("Expected key3=true, got %v", mapResult["key3"])
+			}
+		})
+
+		t.Run("convertCBORToJSONCompatible handles nested maps", func(t *testing.T) {
+			input := map[any]any{
+				"outer": map[any]any{
+					"inner": map[any]any{
+						"deep": "value",
+					},
+				},
+			}
+
+			result := convertCBORToJSONCompatible(input)
+
+			mapResult, ok := result.(map[string]any)
+			if !ok {
+				t.Fatal("Expected result to be map[string]any")
+			}
+
+			outer, ok := mapResult["outer"].(map[string]any)
+			if !ok {
+				t.Fatal("Expected outer to be map[string]any")
+			}
+
+			inner, ok := outer["inner"].(map[string]any)
+			if !ok {
+				t.Fatal("Expected inner to be map[string]any")
+			}
+
+			if inner["deep"] != "value" {
+				t.Errorf("Expected deep='value', got '%v'", inner["deep"])
+			}
+		})
+
+		t.Run("convertCBORToJSONCompatible handles arrays", func(t *testing.T) {
+			input := []any{
+				"string",
+				42,
+				map[any]any{"nested": "map"},
+				[]any{"nested", "array"},
+			}
+
+			result := convertCBORToJSONCompatible(input)
+
+			arrayResult, ok := result.([]any)
+			if !ok {
+				t.Fatal("Expected result to be []any")
+			}
+
+			if len(arrayResult) != 4 {
+				t.Fatalf("Expected 4 elements, got %d", len(arrayResult))
+			}
+
+			if arrayResult[0] != "string" {
+				t.Errorf("Expected arrayResult[0]='string', got '%v'", arrayResult[0])
+			}
+
+			nestedMap, ok := arrayResult[2].(map[string]any)
+			if !ok {
+				t.Fatal("Expected arrayResult[2] to be map[string]any")
+			}
+			if nestedMap["nested"] != "map" {
+				t.Errorf("Expected nested='map', got '%v'", nestedMap["nested"])
+			}
+
+			nestedArray, ok := arrayResult[3].([]any)
+			if !ok {
+				t.Fatal("Expected arrayResult[3] to be []any")
+			}
+			if len(nestedArray) != 2 {
+				t.Errorf("Expected nested array length 2, got %d", len(nestedArray))
+			}
+		})
+
+		t.Run("convertJSONToCBORCompatible handles simple map", func(t *testing.T) {
+			input := map[string]any{
+				"key1": "value1",
+				"key2": 42,
+				"key3": true,
+			}
+
+			result := convertJSONToCBORCompatible(input)
+
+			mapResult, ok := result.(map[any]any)
+			if !ok {
+				t.Fatal("Expected result to be map[any]any")
+			}
+
+			if mapResult["key1"] != "value1" {
+				t.Errorf("Expected key1='value1', got '%v'", mapResult["key1"])
+			}
+			if mapResult["key2"] != 42 {
+				t.Errorf("Expected key2=42, got %v", mapResult["key2"])
+			}
+			if mapResult["key3"] != true {
+				t.Errorf("Expected key3=true, got %v", mapResult["key3"])
+			}
+		})
+
+		t.Run("convertJSONToCBORCompatible handles nested maps", func(t *testing.T) {
+			input := map[string]any{
+				"outer": map[string]any{
+					"inner": map[string]any{
+						"deep": "value",
+					},
+				},
+			}
+
+			result := convertJSONToCBORCompatible(input)
+
+			mapResult, ok := result.(map[any]any)
+			if !ok {
+				t.Fatal("Expected result to be map[any]any")
+			}
+
+			outer, ok := mapResult["outer"].(map[any]any)
+			if !ok {
+				t.Fatal("Expected outer to be map[any]any")
+			}
+
+			inner, ok := outer["inner"].(map[any]any)
+			if !ok {
+				t.Fatal("Expected inner to be map[any]any")
+			}
+
+			if inner["deep"] != "value" {
+				t.Errorf("Expected deep='value', got '%v'", inner["deep"])
+			}
+		})
+
+		t.Run("convertJSONToCBORCompatible handles arrays", func(t *testing.T) {
+			input := []any{
+				"string",
+				42,
+				map[string]any{"nested": "map"},
+				[]any{"nested", "array"},
+			}
+
+			result := convertJSONToCBORCompatible(input)
+
+			arrayResult, ok := result.([]any)
+			if !ok {
+				t.Fatal("Expected result to be []any")
+			}
+
+			if len(arrayResult) != 4 {
+				t.Fatalf("Expected 4 elements, got %d", len(arrayResult))
+			}
+
+			if arrayResult[0] != "string" {
+				t.Errorf("Expected arrayResult[0]='string', got '%v'", arrayResult[0])
+			}
+
+			nestedMap, ok := arrayResult[2].(map[any]any)
+			if !ok {
+				t.Fatal("Expected arrayResult[2] to be map[any]any")
+			}
+			if nestedMap["nested"] != "map" {
+				t.Errorf("Expected nested='map', got '%v'", nestedMap["nested"])
+			}
+
+			nestedArray, ok := arrayResult[3].([]any)
+			if !ok {
+				t.Fatal("Expected arrayResult[3] to be []any")
+			}
+			if len(nestedArray) != 2 {
+				t.Errorf("Expected nested array length 2, got %d", len(nestedArray))
+			}
+		})
+
+		t.Run("round-trip conversion preserves data", func(t *testing.T) {
+			original := map[string]any{
+				"title":   "Test Document",
+				"author":  "did:plc:test123",
+				"content": []any{"paragraph1", "paragraph2"},
+				"metadata": map[string]any{
+					"tags":      []any{"test", "document"},
+					"published": true,
+					"count":     42,
+				},
+			}
+
+			cborCompatible := convertJSONToCBORCompatible(original)
+			jsonCompatible := convertCBORToJSONCompatible(cborCompatible)
+
+			originalJSON, err := json.Marshal(original)
+			if err != nil {
+				t.Fatalf("Failed to marshal original: %v", err)
+			}
+
+			resultJSON, err := json.Marshal(jsonCompatible)
+			if err != nil {
+				t.Fatalf("Failed to marshal result: %v", err)
+			}
+
+			if string(originalJSON) != string(resultJSON) {
+				t.Errorf("Round-trip conversion changed data.\nOriginal: %s\nResult: %s", originalJSON, resultJSON)
+			}
+		})
+
+		t.Run("Document conversion through CBOR preserves structure", func(t *testing.T) {
+			doc := public.Document{
+				Type:  public.TypeDocument,
+				Title: "Test Document",
+				Pages: []public.LinearDocument{
+					{
+						Type: public.TypeLinearDocument,
+						Blocks: []public.BlockWrap{
+							{
+								Type: public.TypeBlock,
+								Block: public.TextBlock{
+									Type:      public.TypeTextBlock,
+									Plaintext: "Hello, world!",
+								},
+							},
+						},
+					},
+				},
+				PublishedAt: time.Now().UTC().Format(time.RFC3339),
+			}
+
+			jsonBytes, err := json.Marshal(doc)
+			if err != nil {
+				t.Fatalf("Failed to marshal document to JSON: %v", err)
+			}
+
+			var jsonData map[string]any
+			if err := json.Unmarshal(jsonBytes, &jsonData); err != nil {
+				t.Fatalf("Failed to unmarshal JSON to map: %v", err)
+			}
+
+			cborCompatible := convertJSONToCBORCompatible(jsonData)
+
+			cborBytes, err := cbor.Marshal(cborCompatible)
+			if err != nil {
+				t.Fatalf("Failed to marshal to CBOR: %v", err)
+			}
+
+			var cborData any
+			if err := cbor.Unmarshal(cborBytes, &cborData); err != nil {
+				t.Fatalf("Failed to unmarshal CBOR: %v", err)
+			}
+
+			jsonCompatible := convertCBORToJSONCompatible(cborData)
+
+			finalJSONBytes, err := json.Marshal(jsonCompatible)
+			if err != nil {
+				t.Fatalf("Failed to marshal final JSON: %v", err)
+			}
+
+			var finalDoc public.Document
+			if err := json.Unmarshal(finalJSONBytes, &finalDoc); err != nil {
+				t.Fatalf("Failed to unmarshal final document: %v", err)
+			}
+
+			if finalDoc.Title != doc.Title {
+				t.Errorf("Title changed: expected '%s', got '%s'", doc.Title, finalDoc.Title)
+			}
+
+			if len(finalDoc.Pages) != len(doc.Pages) {
+				t.Errorf("Pages length changed: expected %d, got %d", len(doc.Pages), len(finalDoc.Pages))
+			}
+
+			if len(finalDoc.Pages) > 0 && len(finalDoc.Pages[0].Blocks) > 0 {
+				if textBlock, ok := finalDoc.Pages[0].Blocks[0].Block.(public.TextBlock); ok {
+					expectedBlock := doc.Pages[0].Blocks[0].Block.(public.TextBlock)
+					if textBlock.Plaintext != expectedBlock.Plaintext {
+						t.Errorf("Block plaintext changed: expected '%s', got '%s'",
+							expectedBlock.Plaintext, textBlock.Plaintext)
+					}
+				} else {
+					t.Error("Expected Block to be TextBlock")
+				}
 			}
 		})
 	})

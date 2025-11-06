@@ -59,6 +59,34 @@ func convertCBORToJSONCompatible(data any) any {
 	}
 }
 
+// convertJSONToCBORCompatible recursively converts JSON-compatible data structures to CBOR types
+//
+// This converts map[string]any to map[any]any to allow proper CBOR encoding for AT Protocol
+func convertJSONToCBORCompatible(data any) any {
+	switch v := data.(type) {
+	case map[string]any:
+		result := make(map[any]any, len(v))
+		for key, value := range v {
+			result[key] = convertJSONToCBORCompatible(value)
+		}
+		return result
+	case map[any]any:
+		result := make(map[any]any, len(v))
+		for key, value := range v {
+			result[key] = convertJSONToCBORCompatible(value)
+		}
+		return result
+	case []any:
+		result := make([]any, len(v))
+		for i, item := range v {
+			result[i] = convertJSONToCBORCompatible(item)
+		}
+		return result
+	default:
+		return v
+	}
+}
+
 // PublicationWithMeta combines a publication with its metadata
 type PublicationWithMeta struct {
 	Publication public.Publication
@@ -378,14 +406,26 @@ func (s *ATProtoService) PostDocument(ctx context.Context, doc public.Document, 
 
 	doc.Type = collection
 
-	recordBytes, err := json.Marshal(doc)
+	jsonBytes, err := json.Marshal(doc)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal document: %w", err)
+		return nil, fmt.Errorf("failed to marshal document to JSON: %w", err)
+	}
+
+	var jsonData map[string]any
+	if err := json.Unmarshal(jsonBytes, &jsonData); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal JSON to map: %w", err)
+	}
+
+	cborCompatible := convertJSONToCBORCompatible(jsonData)
+
+	cborBytes, err := cbor.Marshal(cborCompatible)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal to CBOR: %w", err)
 	}
 
 	record := &lexutil.LexiconTypeDecoder{}
-	if err := record.UnmarshalJSON(recordBytes); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal document to lexicon type: %w", err)
+	if err := cbor.Unmarshal(cborBytes, record); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal CBOR to lexicon type: %w", err)
 	}
 
 	input := &atproto.RepoCreateRecord_Input{
@@ -440,14 +480,26 @@ func (s *ATProtoService) PatchDocument(ctx context.Context, rkey string, doc pub
 
 	doc.Type = collection
 
-	recordBytes, err := json.Marshal(doc)
+	jsonBytes, err := json.Marshal(doc)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal document: %w", err)
+		return nil, fmt.Errorf("failed to marshal document to JSON: %w", err)
+	}
+
+	var jsonData map[string]any
+	if err := json.Unmarshal(jsonBytes, &jsonData); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal JSON to map: %w", err)
+	}
+
+	cborCompatible := convertJSONToCBORCompatible(jsonData)
+
+	cborBytes, err := cbor.Marshal(cborCompatible)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal to CBOR: %w", err)
 	}
 
 	record := &lexutil.LexiconTypeDecoder{}
-	if err := record.UnmarshalJSON(recordBytes); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal document to lexicon type: %w", err)
+	if err := cbor.Unmarshal(cborBytes, record); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal CBOR to lexicon type: %w", err)
 	}
 
 	input := &atproto.RepoPutRecord_Input{
