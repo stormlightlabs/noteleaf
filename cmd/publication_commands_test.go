@@ -71,7 +71,7 @@ func TestPublicationCommand(t *testing.T) {
 				"status",
 				"post [note-id]",
 				"patch [note-id]",
-				"push [note-ids...]",
+				"push [note-ids...] [--file files...]",
 			}
 
 			for _, expected := range expectedSubcommands {
