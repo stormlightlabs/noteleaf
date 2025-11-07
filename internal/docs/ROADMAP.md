@@ -4,7 +4,8 @@ Noteleaf is a command-line and TUI tool for managing tasks, notes, media, and ar
 
 ## Core Usability
 
-The foundation across all domains is implemented. Tasks support CRUD operations, projects, tags, contexts, and time tracking. Notes have create, list, read, edit, and remove commands with interactive and static modes. Media queues exist for books, movies, and TV with progress and status management. SQLite persistence is in place with setup, seed, and reset commands. TUIs and colorized output are available.
+The foundation across all domains is implemented. Tasks support CRUD operations, projects, tags, contexts, and time tracking.
+Notes have create, list, read, edit, and remove commands with interactive and static modes. Media queues exist for books, movies, and TV with progress and status management. SQLite persistence is in place with setup, seed, and reset commands. TUIs and colorized output are available.
 
 ## RC
 
@@ -43,7 +44,7 @@ The foundation across all domains is implemented. Tasks support CRUD operations,
 #### Publication
 
 - [x] Implement authentication with BlueSky/leaflet (AT Protocol).
-    - [ ] Add OAuth2
+    - [ ] Add [OAuth2](#publications--authentication)
 - [x] Verify `pub pull` fetches and syncs documents from leaflet.
 - [x] Confirm `pub list` with status filtering (`all`, `published`, `draft`).
 - [ ] Test `pub post` creates new documents with draft/preview/validate modes.
@@ -205,6 +206,36 @@ Features that demonstrate Go proficiency and broaden Noteleaf’s scope.
 - [ ] Enhanced parsing coverage
 - [ ] Export to multiple formats
 - [ ] Linking with tasks and notes
+
+### Publications & Authentication
+
+- [ ] OAuth2 authentication for AT Protocol
+    - [ ] Client metadata server for publishing application details
+    - [ ] DPoP (Demonstrating Proof of Possession) implementation
+        - [ ] ES256 JWT generation with unique JTI nonces
+        - [ ] Server-issued nonce management with 5-minute rotation
+        - [ ] Separate nonce tracking for authorization and resource servers
+    - [ ] PAR (Pushed Authorization Requests) flow
+        - [ ] PKCE code challenge generation
+        - [ ] State token management
+        - [ ] Request URI handling
+    - [ ] Identity resolution and verification
+        - [ ] Bidirectional handle verification
+        - [ ] DID resolution from handles
+        - [ ] Authorization server discovery via .well-known endpoints
+    - [ ] Token lifecycle management
+        - [ ] Access token refresh (5-15 min lifetime recommended)
+        - [ ] Refresh token rotation (180 day max for confidential clients)
+        - [ ] Concurrent request handling to prevent duplicate refreshes
+        - [ ] Secure token storage (encrypted at rest)
+    - [ ] Local callback server for OAuth redirects
+        - [ ] Ephemeral HTTP server on localhost
+        - [ ] Browser launch integration
+        - [ ] Timeout handling for abandoned flows
+    - [ ] Migration path from app passwords to OAuth
+        - [ ] Detect existing app password sessions
+        - [ ] Prompt users to upgrade authentication
+        - [ ] Maintain backward compatibility
 
 ### User Experience
 

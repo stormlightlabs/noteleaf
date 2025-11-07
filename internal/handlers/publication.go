@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/stormlightlabs/noteleaf/internal/models"
@@ -384,9 +385,121 @@ func (h *PublicationHandler) Delete(ctx context.Context, noteID int64) error {
 	return nil
 }
 
+// createNoteFromFile creates a note from a markdown file and returns its ID
+func (h *PublicationHandler) createNoteFromFile(ctx context.Context, filePath string) (int64, error) {
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		return 0, fmt.Errorf("file does not exist: %s", filePath)
+	}
+
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return 0, fmt.Errorf("failed to read file: %w", err)
+	}
+
+	contentStr := string(content)
+	if strings.TrimSpace(contentStr) == "" {
+		return 0, fmt.Errorf("file is empty: %s", filePath)
+	}
+
+	title, noteContent, tags := parseNoteContent(contentStr)
+	if title == "" {
+		title = strings.TrimSuffix(filepath.Base(filePath), filepath.Ext(filePath))
+	}
+
+	note := &models.Note{
+		Title:    title,
+		Content:  noteContent,
+		Tags:     tags,
+		FilePath: filePath,
+	}
+
+	noteID, err := h.repos.Notes.Create(ctx, note)
+	if err != nil {
+		return 0, fmt.Errorf("failed to create note: %w", err)
+	}
+
+	ui.Infoln("Created note from file: %s", filePath)
+	ui.Infoln("  Note: %s (ID: %d)", title, noteID)
+	if len(tags) > 0 {
+		ui.Infoln("  Tags: %s", strings.Join(tags, ", "))
+	}
+
+	return noteID, nil
+}
+
+// parseNoteContent extracts title, content, and tags from markdown content
+func parseNoteContent(content string) (title, noteContent string, tags []string) {
+	lines := strings.Split(content, "\n")
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if after, ok := strings.CutPrefix(line, "# "); ok {
+			title = after
+			break
+		}
+	}
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "<!-- Tags:") && strings.HasSuffix(line, "-->") {
+			tagStr := strings.TrimPrefix(line, "<!-- Tags:")
+			tagStr = strings.TrimSuffix(tagStr, "-->")
+			tagStr = strings.TrimSpace(tagStr)
+
+			if tagStr != "" {
+				for tag := range strings.SplitSeq(tagStr, ",") {
+					tag = strings.TrimSpace(tag)
+					if tag != "" {
+						tags = append(tags, tag)
+					}
+				}
+			}
+		}
+	}
+
+	noteContent = content
+
+	return title, noteContent, tags
+}
+
+// PushFromFiles creates notes from files and pushes them to leaflet
+func (h *PublicationHandler) PushFromFiles(ctx context.Context, filePaths []string, isDraft bool, dryRun bool) error {
+	if len(filePaths) == 0 {
+		return fmt.Errorf("no file paths provided")
+	}
+
+	ui.Infoln("Creating notes from %d file(s)...\n", len(filePaths))
+
+	noteIDs := make([]int64, 0, len(filePaths))
+	var failed int
+
+	for _, filePath := range filePaths {
+		noteID, err := h.createNoteFromFile(ctx, filePath)
+		if err != nil {
+			ui.Warningln("Failed to create note from %s: %v", filePath, err)
+			failed++
+			continue
+		}
+		noteIDs = append(noteIDs, noteID)
+	}
+
+	if len(noteIDs) == 0 {
+		return fmt.Errorf("failed to create any notes from files")
+	}
+
+	ui.Newline()
+	if dryRun {
+		ui.Successln("Created %d note(s) from files. Skipping leaflet push (dry run).", len(noteIDs))
+		ui.Infoln("Note IDs: %v", noteIDs)
+		return nil
+	}
+
+	return h.Push(ctx, noteIDs, isDraft, dryRun)
+}
+
 // Push creates or updates multiple documents on leaflet from local notes
-func (h *PublicationHandler) Push(ctx context.Context, noteIDs []int64, isDraft bool) error {
-	if !h.atproto.IsAuthenticated() {
+func (h *PublicationHandler) Push(ctx context.Context, noteIDs []int64, isDraft bool, dryRun bool) error {
+	if !dryRun && !h.atproto.IsAuthenticated() {
 		return fmt.Errorf("not authenticated - run 'noteleaf pub auth' first")
 	}
 
@@ -394,7 +507,11 @@ func (h *PublicationHandler) Push(ctx context.Context, noteIDs []int64, isDraft 
 		return fmt.Errorf("no note IDs provided")
 	}
 
-	ui.Infoln("Processing %d note(s)...\n", len(noteIDs))
+	if dryRun {
+		ui.Infoln("Dry run: validating %d note(s)...\n", len(noteIDs))
+	} else {
+		ui.Infoln("Processing %d note(s)...\n", len(noteIDs))
+	}
 
 	var created, updated, failed int
 	var errors []string
@@ -408,29 +525,50 @@ func (h *PublicationHandler) Push(ctx context.Context, noteIDs []int64, isDraft 
 			continue
 		}
 
-		if note.HasLeafletAssociation() {
-			err = h.Patch(ctx, noteID)
+		if dryRun {
+			_, _, err := h.prepareDocumentForPublish(ctx, noteID, isDraft, note.HasLeafletAssociation())
 			if err != nil {
-				ui.Warningln("  [%d] Failed to update '%s': %v", noteID, note.Title, err)
+				ui.Warningln("  [%d] Validation failed for '%s': %v", noteID, note.Title, err)
 				errors = append(errors, fmt.Sprintf("note %d (%s): %v", noteID, note.Title, err))
 				failed++
 			} else {
-				updated++
+				ui.Infoln("  [%d] '%s' - validation passed", noteID, note.Title)
+				if note.HasLeafletAssociation() {
+					updated++
+				} else {
+					created++
+				}
 			}
 		} else {
-			err = h.Post(ctx, noteID, isDraft)
-			if err != nil {
-				ui.Warningln("  [%d] Failed to create '%s': %v", noteID, note.Title, err)
-				errors = append(errors, fmt.Sprintf("note %d (%s): %v", noteID, note.Title, err))
-				failed++
+			if note.HasLeafletAssociation() {
+				err = h.Patch(ctx, noteID)
+				if err != nil {
+					ui.Warningln("  [%d] Failed to update '%s': %v", noteID, note.Title, err)
+					errors = append(errors, fmt.Sprintf("note %d (%s): %v", noteID, note.Title, err))
+					failed++
+				} else {
+					updated++
+				}
 			} else {
-				created++
+				err = h.Post(ctx, noteID, isDraft)
+				if err != nil {
+					ui.Warningln("  [%d] Failed to create '%s': %v", noteID, note.Title, err)
+					errors = append(errors, fmt.Sprintf("note %d (%s): %v", noteID, note.Title, err))
+					failed++
+				} else {
+					created++
+				}
 			}
 		}
 	}
 
 	ui.Newline()
-	ui.Successln("Push complete: %d created, %d updated, %d failed", created, updated, failed)
+	if dryRun {
+		ui.Successln("Dry run complete: %d would be created, %d would be updated, %d failed validation", created, updated, failed)
+		ui.Infoln("No changes made to leaflet")
+	} else {
+		ui.Successln("Push complete: %d created, %d updated, %d failed", created, updated, failed)
+	}
 
 	if len(errors) > 0 {
 		return fmt.Errorf("push completed with %d error(s)", failed)

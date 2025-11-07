@@ -296,7 +296,7 @@ Examples:
 	root.AddCommand(patchCmd)
 
 	pushCmd := &cobra.Command{
-		Use:   "push [note-ids...]",
+		Use:   "push [note-ids...] [--file files...]",
 		Short: "Create or update multiple documents on leaflet",
 		Long: `Batch publish or update multiple local notes to leaflet.pub.
 
@@ -307,10 +307,27 @@ For each note:
 This is useful for bulk operations and continuous publishing workflows.
 
 Examples:
-  noteleaf pub push 1 2 3              # Publish/update notes 1, 2, and 3
-  noteleaf pub push 42 99 --draft      # Create/update as drafts`,
-		Args: cobra.MinimumNArgs(1),
+  noteleaf pub push 1 2 3                        # Publish/update notes 1, 2, and 3
+  noteleaf pub push 42 99 --draft                # Create/update as drafts
+  noteleaf pub push --file article.md           # Create note from file and push
+  noteleaf pub push --file a.md b.md --draft    # Create notes from multiple files
+  noteleaf pub push 1 2 --dry-run               # Validate without pushing
+  noteleaf pub push --file article.md --dry-run # Create note but don't push`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			isDraft, _ := cmd.Flags().GetBool("draft")
+			dryRun, _ := cmd.Flags().GetBool("dry-run")
+			files, _ := cmd.Flags().GetStringSlice("file")
+
+			defer c.handler.Close()
+
+			if len(files) > 0 {
+				return c.handler.PushFromFiles(cmd.Context(), files, isDraft, dryRun)
+			}
+
+			if len(args) == 0 {
+				return fmt.Errorf("no note IDs or files provided")
+			}
+
 			noteIDs := make([]int64, len(args))
 			for i, arg := range args {
 				id, err := parseNoteID(arg)
@@ -320,15 +337,13 @@ Examples:
 				noteIDs[i] = id
 			}
 
-			isDraft, _ := cmd.Flags().GetBool("draft")
-
-			defer c.handler.Close()
-			return c.handler.Push(cmd.Context(), noteIDs, isDraft)
+			return c.handler.Push(cmd.Context(), noteIDs, isDraft, dryRun)
 		},
 	}
 	pushCmd.Flags().Bool("draft", false, "Create/update as drafts instead of publishing")
+	pushCmd.Flags().Bool("dry-run", false, "Create note records but skip leaflet push")
+	pushCmd.Flags().StringSliceP("file", "f", []string{}, "Create notes from markdown files before pushing")
 	root.AddCommand(pushCmd)
-
 	return root
 }
 

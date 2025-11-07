@@ -1662,7 +1662,7 @@ func TestPublicationHandler(t *testing.T) {
 			handler := CreateHandler(t, NewPublicationHandler)
 			ctx := context.Background()
 
-			err := handler.Push(ctx, []int64{1, 2, 3}, false)
+			err := handler.Push(ctx, []int64{1, 2, 3}, false, false)
 			if err == nil {
 				t.Error("Expected error when not authenticated")
 			}
@@ -1694,7 +1694,7 @@ func TestPublicationHandler(t *testing.T) {
 				t.Fatalf("Failed to restore session: %v", err)
 			}
 
-			err = handler.Push(ctx, []int64{}, false)
+			err = handler.Push(ctx, []int64{}, false, false)
 			if err == nil {
 				t.Error("Expected error when no note IDs provided")
 			}
@@ -1726,7 +1726,7 @@ func TestPublicationHandler(t *testing.T) {
 				t.Fatalf("Failed to restore session: %v", err)
 			}
 
-			err = handler.Push(ctx, []int64{999}, false)
+			err = handler.Push(ctx, []int64{999}, false, false)
 			if err == nil {
 				t.Error("Expected error when note not found")
 			}
@@ -1773,7 +1773,7 @@ func TestPublicationHandler(t *testing.T) {
 				t.Fatalf("Failed to restore session: %v", err)
 			}
 
-			err = handler.Push(ctx, []int64{id1, id2}, false)
+			err = handler.Push(ctx, []int64{id1, id2}, false, false)
 
 			if err != nil && !strings.Contains(err.Error(), "not authenticated") {
 				t.Logf("Got error during push (expected for external service call): %v", err)
@@ -1830,7 +1830,7 @@ func TestPublicationHandler(t *testing.T) {
 				t.Fatalf("Failed to restore session: %v", err)
 			}
 
-			err = handler.Push(ctx, []int64{id1, id2}, false)
+			err = handler.Push(ctx, []int64{id1, id2}, false, false)
 
 			if err != nil && !strings.Contains(err.Error(), "not authenticated") {
 				t.Logf("Got error during push (expected for external service call): %v", err)
@@ -1882,7 +1882,7 @@ func TestPublicationHandler(t *testing.T) {
 				t.Fatalf("Failed to restore session: %v", err)
 			}
 
-			err = handler.Push(ctx, []int64{newID, existingID}, false)
+			err = handler.Push(ctx, []int64{newID, existingID}, false, false)
 
 			if err != nil && !strings.Contains(err.Error(), "not authenticated") {
 				t.Logf("Got error during push (expected for external service call): %v", err)
@@ -1920,7 +1920,7 @@ func TestPublicationHandler(t *testing.T) {
 			}
 
 			invalidID := int64(999)
-			err = handler.Push(ctx, []int64{id1, invalidID}, false)
+			err = handler.Push(ctx, []int64{id1, invalidID}, false, false)
 
 			if err == nil {
 				t.Error("Expected error due to invalid note ID")
@@ -1961,7 +1961,7 @@ func TestPublicationHandler(t *testing.T) {
 				t.Fatalf("Failed to restore session: %v", err)
 			}
 
-			err = handler.Push(ctx, []int64{id}, true)
+			err = handler.Push(ctx, []int64{id}, true, false)
 
 			if err != nil && !strings.Contains(err.Error(), "not authenticated") {
 				t.Logf("Got error during push (expected for external service call): %v", err)
