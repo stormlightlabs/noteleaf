@@ -506,6 +506,87 @@ func TestATProtoService(t *testing.T) {
 		})
 	})
 
+	t.Run("GetDefaultPublication", func(t *testing.T) {
+		t.Run("returns error when not authenticated", func(t *testing.T) {
+			svc := NewATProtoService()
+			ctx := context.Background()
+
+			uri, err := svc.GetDefaultPublication(ctx)
+			if err == nil {
+				t.Error("Expected error when getting default publication without authentication")
+			}
+			if uri != "" {
+				t.Errorf("Expected empty URI, got %s", uri)
+			}
+			if !strings.Contains(err.Error(), "not authenticated") {
+				t.Errorf("Expected 'not authenticated' error, got '%v'", err)
+			}
+		})
+
+		t.Run("returns error when session not authenticated", func(t *testing.T) {
+			svc := NewATProtoService()
+			ctx := context.Background()
+			svc.session = &Session{
+				Handle:        "test.bsky.social",
+				Authenticated: false,
+			}
+
+			uri, err := svc.GetDefaultPublication(ctx)
+			if err == nil {
+				t.Error("Expected error when getting default publication with unauthenticated session")
+			}
+			if uri != "" {
+				t.Errorf("Expected empty URI, got %s", uri)
+			}
+		})
+
+		t.Run("returns error when no publications exist", func(t *testing.T) {
+			svc := NewATProtoService()
+			svc.session = &Session{
+				DID:           "did:plc:test123",
+				Handle:        "test.bsky.social",
+				AccessJWT:     "access_token",
+				RefreshJWT:    "refresh_token",
+				Authenticated: true,
+			}
+			ctx := context.Background()
+
+			_, err := svc.GetDefaultPublication(ctx)
+			if err == nil {
+				t.Error("Expected error when getting default publication")
+			}
+			// With invalid credentials, we expect either auth error or no publications error
+			if !strings.Contains(err.Error(), "no publications found") &&
+				!strings.Contains(err.Error(), "Authentication") &&
+				!strings.Contains(err.Error(), "AuthMissing") &&
+				!strings.Contains(err.Error(), "failed to fetch repository") {
+				t.Errorf("Expected authentication or 'no publications found' error, got '%v'", err)
+			}
+		})
+
+		t.Run("returns error when context cancelled", func(t *testing.T) {
+			svc := NewATProtoService()
+			svc.session = &Session{
+				DID:           "did:plc:test123",
+				Handle:        "test.bsky.social",
+				AccessJWT:     "access_token",
+				RefreshJWT:    "refresh_token",
+				Authenticated: true,
+			}
+
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+
+			uri, err := svc.GetDefaultPublication(ctx)
+			if err == nil {
+				t.Error("Expected error when context is cancelled")
+			}
+			if uri != "" {
+				t.Errorf("Expected empty URI when error occurs, got %s", uri)
+			}
+		})
+	})
+
 	t.Run("Authentication Error Scenarios", func(t *testing.T) {
 		t.Run("returns error with context timeout", func(t *testing.T) {
 			svc := NewATProtoService()
@@ -1153,11 +1234,13 @@ func TestATProtoService(t *testing.T) {
 			defaultPDSURL := svc.pdsURL
 
 			session := &Session{
-				DID:        "did:plc:test123",
-				Handle:     "test.bsky.social",
-				AccessJWT:  "access_token",
-				RefreshJWT: "refresh_token",
-				PDSURL:     "",
+				DID:           "did:plc:test123",
+				Handle:        "test.bsky.social",
+				AccessJWT:     "access_token",
+				RefreshJWT:    "refresh_token",
+				PDSURL:        "",
+				ExpiresAt:     time.Now().Add(2 * time.Hour),
+				Authenticated: true,
 			}
 
 			err := svc.RestoreSession(session)

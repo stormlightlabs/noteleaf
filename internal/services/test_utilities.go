@@ -264,17 +264,18 @@ func TestTVSearch(t *testing.T, service *TVService, query string, expectedTitleF
 
 // MockATProtoService is a mock implementation of ATProtoService for testing
 type MockATProtoService struct {
-	AuthenticateFunc   func(ctx context.Context, handle, password string) error
-	GetSessionFunc     func() (*Session, error)
-	IsAuthenticatedVal bool
-	RestoreSessionFunc func(session *Session) error
-	PullDocumentsFunc  func(ctx context.Context) ([]DocumentWithMeta, error)
-	PostDocumentFunc   func(ctx context.Context, doc public.Document, isDraft bool) (*DocumentWithMeta, error)
-	PatchDocumentFunc  func(ctx context.Context, rkey string, doc public.Document, isDraft bool) (*DocumentWithMeta, error)
-	DeleteDocumentFunc func(ctx context.Context, rkey string, isDraft bool) error
-	UploadBlobFunc     func(ctx context.Context, data []byte, mimeType string) (public.Blob, error)
-	CloseFunc          func() error
-	Session            *Session // Exported for test access
+	AuthenticateFunc          func(ctx context.Context, handle, password string) error
+	GetSessionFunc            func() (*Session, error)
+	IsAuthenticatedVal        bool
+	RestoreSessionFunc        func(session *Session) error
+	PullDocumentsFunc         func(ctx context.Context) ([]DocumentWithMeta, error)
+	PostDocumentFunc          func(ctx context.Context, doc public.Document, isDraft bool) (*DocumentWithMeta, error)
+	PatchDocumentFunc         func(ctx context.Context, rkey string, doc public.Document, isDraft bool) (*DocumentWithMeta, error)
+	DeleteDocumentFunc        func(ctx context.Context, rkey string, isDraft bool) error
+	UploadBlobFunc            func(ctx context.Context, data []byte, mimeType string) (public.Blob, error)
+	GetDefaultPublicationFunc func(ctx context.Context) (string, error)
+	CloseFunc                 func() error
+	Session                   *Session // Exported for test access
 }
 
 // NewMockATProtoService creates a new mock AT Proto service
@@ -395,6 +396,19 @@ func (m *MockATProtoService) UploadBlob(ctx context.Context, data []byte, mimeTy
 		MimeType: mimeType,
 		Size:     len(data),
 	}, nil
+}
+
+// GetDefaultPublication mocks getting the default publication
+func (m *MockATProtoService) GetDefaultPublication(ctx context.Context) (string, error) {
+	if m.GetDefaultPublicationFunc != nil {
+		return m.GetDefaultPublicationFunc(ctx)
+	}
+
+	// Default returns a mock publication URI
+	if !m.IsAuthenticatedVal {
+		return "", errors.New("not authenticated")
+	}
+	return "at://did:plc:test123/pub.leaflet.publication/mock_pub_rkey", nil
 }
 
 // Close mocks cleanup

@@ -189,6 +189,63 @@ func TestPublicationHandler(t *testing.T) {
 		})
 	})
 
+	t.Run("GetLastAuthenticatedHandle", func(t *testing.T) {
+		t.Run("returns empty string when no config", func(t *testing.T) {
+			handler := &PublicationHandler{
+				config: nil,
+			}
+
+			handle := handler.GetLastAuthenticatedHandle()
+			if handle != "" {
+				t.Errorf("Expected empty string, got '%s'", handle)
+			}
+		})
+
+		t.Run("returns empty string when handle not set", func(t *testing.T) {
+			handler := &PublicationHandler{
+				config: &store.Config{},
+			}
+
+			handle := handler.GetLastAuthenticatedHandle()
+			if handle != "" {
+				t.Errorf("Expected empty string, got '%s'", handle)
+			}
+		})
+
+		t.Run("returns handle from config", func(t *testing.T) {
+			expectedHandle := "test.bsky.social"
+			handler := &PublicationHandler{
+				config: &store.Config{
+					ATProtoHandle: expectedHandle,
+				},
+			}
+
+			handle := handler.GetLastAuthenticatedHandle()
+			if handle != expectedHandle {
+				t.Errorf("Expected '%s', got '%s'", expectedHandle, handle)
+			}
+		})
+
+		t.Run("returns handle after successful authentication", func(t *testing.T) {
+			suite := NewHandlerTestSuite(t)
+			defer suite.Cleanup()
+
+			handler := CreateHandler(t, NewPublicationHandler)
+			ctx := context.Background()
+
+			mock := services.SetupSuccessfulAuthMocks()
+			handler.atproto = mock
+
+			err := handler.Auth(ctx, "user.bsky.social", "password123")
+			suite.AssertNoError(err, "authentication should succeed")
+
+			handle := handler.GetLastAuthenticatedHandle()
+			if handle != "user.bsky.social" {
+				t.Errorf("Expected 'user.bsky.social', got '%s'", handle)
+			}
+		})
+	})
+
 	t.Run("NewPublicationHandler", func(t *testing.T) {
 		t.Run("creates handler successfully", func(t *testing.T) {
 			suite := NewHandlerTestSuite(t)
@@ -1120,7 +1177,9 @@ func TestPublicationHandler(t *testing.T) {
 			id, err := handler.repos.Notes.Create(ctx, note)
 			suite.AssertNoError(err, "create note")
 
-			session := &services.Session{
+			mock := services.NewMockATProtoService()
+			mock.IsAuthenticatedVal = true
+			mock.Session = &services.Session{
 				DID:           "did:plc:test123",
 				Handle:        "test.bsky.social",
 				AccessJWT:     "access_token",
@@ -1129,11 +1188,7 @@ func TestPublicationHandler(t *testing.T) {
 				ExpiresAt:     time.Now().Add(2 * time.Hour),
 				Authenticated: true,
 			}
-
-			err = handler.atproto.RestoreSession(session)
-			if err != nil {
-				t.Fatalf("Failed to restore session: %v", err)
-			}
+			handler.atproto = mock
 
 			err = handler.PostPreview(ctx, id, false, "", false)
 			suite.AssertNoError(err, "preview should succeed")
@@ -1154,7 +1209,9 @@ func TestPublicationHandler(t *testing.T) {
 			id, err := handler.repos.Notes.Create(ctx, note)
 			suite.AssertNoError(err, "create note")
 
-			session := &services.Session{
+			mock := services.NewMockATProtoService()
+			mock.IsAuthenticatedVal = true
+			mock.Session = &services.Session{
 				DID:           "did:plc:test123",
 				Handle:        "test.bsky.social",
 				AccessJWT:     "access_token",
@@ -1163,11 +1220,7 @@ func TestPublicationHandler(t *testing.T) {
 				ExpiresAt:     time.Now().Add(2 * time.Hour),
 				Authenticated: true,
 			}
-
-			err = handler.atproto.RestoreSession(session)
-			if err != nil {
-				t.Fatalf("Failed to restore session: %v", err)
-			}
+			handler.atproto = mock
 
 			err = handler.PostPreview(ctx, id, true, "", false)
 			suite.AssertNoError(err, "preview draft should succeed")
@@ -1207,7 +1260,9 @@ func TestPublicationHandler(t *testing.T) {
 			id, err := handler.repos.Notes.Create(ctx, note)
 			suite.AssertNoError(err, "create note")
 
-			session := &services.Session{
+			mock := services.NewMockATProtoService()
+			mock.IsAuthenticatedVal = true
+			mock.Session = &services.Session{
 				DID:           "did:plc:test123",
 				Handle:        "test.bsky.social",
 				AccessJWT:     "access_token",
@@ -1216,11 +1271,7 @@ func TestPublicationHandler(t *testing.T) {
 				ExpiresAt:     time.Now().Add(2 * time.Hour),
 				Authenticated: true,
 			}
-
-			err = handler.atproto.RestoreSession(session)
-			if err != nil {
-				t.Fatalf("Failed to restore session: %v", err)
-			}
+			handler.atproto = mock
 
 			err = handler.PostValidate(ctx, id, false, "", false)
 			suite.AssertNoError(err, "validation should succeed")
@@ -1339,7 +1390,9 @@ func TestPublicationHandler(t *testing.T) {
 			id, err := handler.repos.Notes.Create(ctx, note)
 			suite.AssertNoError(err, "create note")
 
-			session := &services.Session{
+			mock := services.NewMockATProtoService()
+			mock.IsAuthenticatedVal = true
+			mock.Session = &services.Session{
 				DID:           "did:plc:test123",
 				Handle:        "test.bsky.social",
 				AccessJWT:     "access_token",
@@ -1348,11 +1401,7 @@ func TestPublicationHandler(t *testing.T) {
 				ExpiresAt:     time.Now().Add(2 * time.Hour),
 				Authenticated: true,
 			}
-
-			err = handler.atproto.RestoreSession(session)
-			if err != nil {
-				t.Fatalf("Failed to restore session: %v", err)
-			}
+			handler.atproto = mock
 
 			err = handler.PatchPreview(ctx, id, "", false)
 			suite.AssertNoError(err, "preview should succeed")
@@ -1397,7 +1446,9 @@ func TestPublicationHandler(t *testing.T) {
 			id, err := handler.repos.Notes.Create(ctx, note)
 			suite.AssertNoError(err, "create note")
 
-			session := &services.Session{
+			mock := services.NewMockATProtoService()
+			mock.IsAuthenticatedVal = true
+			mock.Session = &services.Session{
 				DID:           "did:plc:test123",
 				Handle:        "test.bsky.social",
 				AccessJWT:     "access_token",
@@ -1406,11 +1457,7 @@ func TestPublicationHandler(t *testing.T) {
 				ExpiresAt:     time.Now().Add(2 * time.Hour),
 				Authenticated: true,
 			}
-
-			err = handler.atproto.RestoreSession(session)
-			if err != nil {
-				t.Fatalf("Failed to restore session: %v", err)
-			}
+			handler.atproto = mock
 
 			err = handler.PatchValidate(ctx, id, "", false)
 			suite.AssertNoError(err, "validation should succeed")

@@ -10,10 +10,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/log"
 	"github.com/stormlightlabs/noteleaf/internal/models"
 	"github.com/stormlightlabs/noteleaf/internal/public"
 	"github.com/stormlightlabs/noteleaf/internal/repo"
 	"github.com/stormlightlabs/noteleaf/internal/services"
+	"github.com/stormlightlabs/noteleaf/internal/shared"
 	"github.com/stormlightlabs/noteleaf/internal/store"
 	"github.com/stormlightlabs/noteleaf/internal/ui"
 )
@@ -24,6 +26,7 @@ type PublicationHandler struct {
 	config  *store.Config
 	repos   *repo.Repositories
 	atproto services.ATProtoClient
+	debug   *log.Logger
 }
 
 // NewPublicationHandler creates a new publication handler
@@ -41,10 +44,21 @@ func NewPublicationHandler() (*PublicationHandler, error) {
 	repos := repo.NewRepositories(db.DB)
 	atproto := services.NewATProtoService()
 
+	d, _ := store.GetConfigDir()
+	debug := shared.NewDebugLoggerWithFile(d)
+
 	if config.ATProtoDID != "" && config.ATProtoAccessJWT != "" && config.ATProtoRefreshJWT != "" {
 		session, err := sessionFromConfig(config)
 		if err == nil {
-			_ = atproto.RestoreSession(session)
+			if err := atproto.RestoreSession(session); err == nil {
+				updatedSession, _ := atproto.GetSession()
+				if updatedSession != nil {
+					config.ATProtoAccessJWT = updatedSession.AccessJWT
+					config.ATProtoRefreshJWT = updatedSession.RefreshJWT
+					config.ATProtoExpiresAt = updatedSession.ExpiresAt.Format("2006-01-02T15:04:05Z07:00")
+					_ = store.SaveConfig(config)
+				}
+			}
 		}
 	}
 
@@ -53,6 +67,7 @@ func NewPublicationHandler() (*PublicationHandler, error) {
 		config:  config,
 		repos:   repos,
 		atproto: atproto,
+		debug:   debug,
 	}, nil
 }
 
@@ -272,7 +287,6 @@ func (h *PublicationHandler) Post(ctx context.Context, noteID int64, isDraft boo
 	if err != nil {
 		return err
 	}
-
 	ui.Infoln("Creating document '%s' on leaflet...", note.Title)
 
 	result, err := h.atproto.PostDocument(ctx, *doc, isDraft)
@@ -665,10 +679,22 @@ func (h *PublicationHandler) prepareDocumentForPublish(ctx context.Context, note
 		return nil, nil, fmt.Errorf("failed to convert markdown to leaflet format: %w", err)
 	}
 
+	publicationURI, err := h.atproto.GetDefaultPublication(ctx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get publication: %w", err)
+	}
+
+	docType := public.TypeDocument
+	if isDraft {
+		docType = public.TypeDocumentDraft
+	}
+
 	doc := &public.Document{
+		Type:        docType,
 		Author:      session.DID,
 		Title:       note.Title,
 		Description: "",
+		Publication: publicationURI,
 		Pages: []public.LinearDocument{
 			{
 				Type:   public.TypeLinearDocument,
@@ -901,6 +927,14 @@ func (h *PublicationHandler) GetAuthStatus() string {
 		return "Authenticated (session details unavailable)"
 	}
 	return "Not authenticated"
+}
+
+// GetLastAuthenticatedHandle returns the last authenticated handle from config
+func (h *PublicationHandler) GetLastAuthenticatedHandle() string {
+	if h.config != nil && h.config.ATProtoHandle != "" {
+		return h.config.ATProtoHandle
+	}
+	return ""
 }
 
 // extractNoteDirectory extracts the directory path from a note's FilePath

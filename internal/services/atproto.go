@@ -117,6 +117,7 @@ type ATProtoClient interface {
 	PatchDocument(ctx context.Context, rkey string, doc public.Document, isDraft bool) (*DocumentWithMeta, error)
 	DeleteDocument(ctx context.Context, rkey string, isDraft bool) error
 	UploadBlob(ctx context.Context, data []byte, mimeType string) (public.Blob, error)
+	GetDefaultPublication(ctx context.Context) (string, error)
 	Close() error
 }
 
@@ -127,6 +128,15 @@ type ATProtoService struct {
 	session  *Session
 	pdsURL   string // Personal Data Server URL
 	client   *xrpc.Client
+
+	// TODO: Future enhancement - integrate OS keychain for secure password storage
+	// Consider using keyring libraries like:
+	//   - github.com/zalando/go-keyring (cross-platform)
+	//   - keychain access on macOS (Security.framework)
+	//   - Windows Credential Manager (credman)
+	//   - Linux Secret Service API (libsecret)
+	// This would allow storing app passwords securely in the system keychain
+	// instead of requiring re-authentication every time JWTs expire.
 }
 
 // NewATProtoService creates a new AT Protocol service
@@ -195,6 +205,7 @@ func (s *ATProtoService) IsAuthenticated() bool {
 }
 
 // RestoreSession restores a previously authenticated session from stored credentials
+// and automatically refreshes the token if expired
 func (s *ATProtoService) RestoreSession(session *Session) error {
 	if session == nil {
 		return fmt.Errorf("session cannot be nil")
@@ -218,10 +229,21 @@ func (s *ATProtoService) RestoreSession(session *Session) error {
 		s.client.Host = session.PDSURL
 	}
 
+	// Check if token is expired or about to expire (within 5 minutes)
+	if time.Now().Add(5 * time.Minute).After(session.ExpiresAt) {
+		ctx := context.Background()
+		if err := s.RefreshToken(ctx); err != nil {
+			// Token refresh failed - session may be invalid
+			// User will need to re-authenticate
+			return fmt.Errorf("session expired and refresh failed: %w", err)
+		}
+	}
+
 	return nil
 }
 
 // RefreshToken refreshes the access token using the refresh token
+// This extends the session without requiring the user to re-authenticate
 func (s *ATProtoService) RefreshToken(ctx context.Context) error {
 	if s.session == nil || s.session.RefreshJWT == "" {
 		return fmt.Errorf("no session available to refresh")
@@ -239,6 +261,9 @@ func (s *ATProtoService) RefreshToken(ctx context.Context) error {
 		return fmt.Errorf("failed to refresh session: %w", err)
 	}
 
+	// TODO: Consider increasing token lifetime for better UX
+	// Current: 2 hours - requires frequent re-authentication
+	// Consider: Store in OS keychain to enable longer sessions without security risk
 	expiresAt := time.Now().Add(2 * time.Hour)
 	s.session.AccessJWT = output.AccessJwt
 	s.session.RefreshJWT = output.RefreshJwt
@@ -362,15 +387,27 @@ func (s *ATProtoService) ListPublications(ctx context.Context) ([]PublicationWit
 			return fmt.Errorf("failed to get record bytes for %s: %w", k, err)
 		}
 
-		var pub public.Publication
-		if err := json.Unmarshal(*recordBytes, &pub); err != nil {
-			return fmt.Errorf("failed to unmarshal publication %s: %w", k, err)
+		var cborData any
+		if err := cbor.Unmarshal(*recordBytes, &cborData); err != nil {
+			return fmt.Errorf("failed to decode CBOR for document %s: %w", k, err)
+		}
+
+		jsonCompatible := convertCBORToJSONCompatible(cborData)
+
+		jsonBytes, err := json.MarshalIndent(jsonCompatible, "", "  ")
+		if err != nil {
+			return fmt.Errorf("failed to convert CBOR to JSON for document %s: %w", k, err)
 		}
 
 		parts := strings.Split(k, "/")
 		rkey := ""
 		if len(parts) > 0 {
 			rkey = parts[len(parts)-1]
+		}
+
+		var pub public.Publication
+		if err := json.Unmarshal(jsonBytes, &pub); err != nil {
+			return fmt.Errorf("failed to unmarshal publication %s: %w", k, err)
 		}
 
 		uri := fmt.Sprintf("at://%s/%s", s.session.DID, k)
@@ -389,6 +426,22 @@ func (s *ATProtoService) ListPublications(ctx context.Context) ([]PublicationWit
 	return publications, nil
 }
 
+// GetDefaultPublication returns the URI of the first available publication for the authenticated user
+//
+// Returns an error if no publications exist
+func (s *ATProtoService) GetDefaultPublication(ctx context.Context) (string, error) {
+	publications, err := s.ListPublications(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	if len(publications) == 0 {
+		return "", fmt.Errorf("no publications found - create a publication on leaflet.pub first")
+	}
+
+	return publications[0].URI, nil
+}
+
 // PostDocument creates a new document in the user's repository
 func (s *ATProtoService) PostDocument(ctx context.Context, doc public.Document, isDraft bool) (*DocumentWithMeta, error) {
 	if !s.IsAuthenticated() {
@@ -405,45 +458,24 @@ func (s *ATProtoService) PostDocument(ctx context.Context, doc public.Document, 
 	}
 
 	doc.Type = collection
-
 	jsonBytes, err := json.Marshal(doc)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal document to JSON: %w", err)
+		return nil, fmt.Errorf("marshal: %w", err)
 	}
 
-	var jsonData map[string]any
-	if err := json.Unmarshal(jsonBytes, &jsonData); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal JSON to map: %w", err)
+	var m map[string]any
+	if err := json.Unmarshal(jsonBytes, &m); err != nil {
+		return nil, fmt.Errorf("unmarshal: %w", err)
 	}
+	m["$type"] = collection
 
-	cborCompatible := convertJSONToCBORCompatible(jsonData)
-
-	cborBytes, err := cbor.Marshal(cborCompatible)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal to CBOR: %w", err)
-	}
-
-	record := &lexutil.LexiconTypeDecoder{}
-	if err := cbor.Unmarshal(cborBytes, record); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal CBOR to lexicon type: %w", err)
-	}
-
-	input := &atproto.RepoCreateRecord_Input{
-		Repo:       s.session.DID,
-		Collection: collection,
-		Record:     record,
-	}
-
-	output, err := atproto.RepoCreateRecord(ctx, s.client, input)
+	output, err := repoCreateRecord(ctx, s.client, s.session.DID, collection, m)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create record: %w", err)
 	}
 
 	parts := strings.Split(output.Uri, "/")
-	rkey := ""
-	if len(parts) > 0 {
-		rkey = parts[len(parts)-1]
-	}
+	rkey := parts[len(parts)-1]
 
 	meta := public.DocumentMeta{
 		RKey:      rkey,
@@ -591,4 +623,31 @@ func (s *ATProtoService) UploadBlob(ctx context.Context, data []byte, mimeType s
 func (s *ATProtoService) Close() error {
 	s.session = nil
 	return nil
+}
+
+type RepoCreateRecordOutput struct {
+	Cid string `json:"cid"`
+	Uri string `json:"uri"`
+}
+
+func repoCreateRecord(ctx context.Context, client *xrpc.Client, repo, collection string, record map[string]any) (*RepoCreateRecordOutput, error) {
+	body := map[string]any{
+		"repo":       repo,
+		"collection": collection,
+		"record":     record,
+	}
+
+	var out RepoCreateRecordOutput
+	if err := client.LexDo(
+		ctx,
+		lexutil.Procedure,
+		"application/json",
+		"com.atproto.repo.createRecord",
+		nil,
+		body,
+		&out,
+	); err != nil {
+		return nil, fmt.Errorf("repoCreateRecord failed: %w", err)
+	}
+	return &out, nil
 }

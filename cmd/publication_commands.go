@@ -59,6 +59,14 @@ If credentials are not provided via flags, use the interactive input.`,
 				handle = args[0]
 			}
 
+			// Auto-fill with last authenticated handle if available
+			if handle == "" {
+				lastHandle := c.handler.GetLastAuthenticatedHandle()
+				if lastHandle != "" {
+					handle = lastHandle
+				}
+			}
+
 			password, _ := cmd.Flags().GetString("password")
 
 			if handle != "" && password != "" {

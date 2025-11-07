@@ -30,10 +30,12 @@ func (c *MovieCommand) Create() *cobra.Command {
 		Short: "Manage movie watch queue",
 		Long: `Track movies you want to watch.
 
-Search TMDB for movies and add them to your queue. Mark movies as watched when
-completed. Maintains a history of your movie watching activity.`,
+Search for movies and add them to your queue. Mark movies as watched
+when completed. Maintains a history of your movie watching activity.`,
 	}
 
+	// TODO: add colors
+	// TODO: fix critic score parsing
 	addCmd := &cobra.Command{
 		Use:   "add [search query...]",
 		Short: "Search and add movie to watch queue",
@@ -54,6 +56,7 @@ Use the -i flag for an interactive interface with navigation keys.`,
 	addCmd.Flags().BoolP("interactive", "i", false, "Use interactive interface for movie selection")
 	root.AddCommand(addCmd)
 
+	// TODO: add interactive list view
 	root.AddCommand(&cobra.Command{
 		Use:   "list [--all|--watched|--queued]",
 		Short: "List movies in queue with status filtering",
@@ -122,9 +125,9 @@ func (c *TVCommand) Create() *cobra.Command {
 		Short: "Manage TV show watch queue",
 		Long: `Track TV shows and episodes.
 
-Search TMDB for TV shows and add them to your queue. Track which shows you're
-currently watching, mark episodes as watched, and maintain a complete history
-of your viewing activity.`,
+Search for TV shows and add them to your queue. Track which shows you're currently
+watching, mark episodes as watched, and maintain a complete history of your viewing
+activity.`,
 	}
 
 	addCmd := &cobra.Command{

@@ -9,7 +9,6 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 )
 
 // AuthFormOptions configures the auth form display
@@ -171,53 +170,36 @@ func (m *authFormModel) updateInputs(msg tea.Msg) tea.Cmd {
 func (m authFormModel) View() string {
 	var b strings.Builder
 
-	titleStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("6")).
-		MarginBottom(1)
-
-	labelStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("7"))
-
-	helpStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("8")).
-		MarginTop(1)
-
-	errorStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("9"))
-
-	b.WriteString(titleStyle.Render("AT Protocol Authentication"))
+	b.WriteString(TitleStyle.Render("AT Protocol Authentication"))
 	b.WriteString("\n\n")
 
-	b.WriteString(labelStyle.Render("BlueSky Handle:"))
+	b.WriteString(TextStyle.Render("BlueSky Handle:"))
 	b.WriteString("\n")
 	if m.handleLocked {
-		lockedStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("8"))
-		b.WriteString(lockedStyle.Render(m.handleInput.Value()))
-		b.WriteString(lockedStyle.Render(" (locked)"))
+		b.WriteString(MutedStyle.Render(m.handleInput.Value()))
+		b.WriteString(MutedStyle.Render(" (locked)"))
 	} else {
 		b.WriteString(m.handleInput.View())
 	}
 	b.WriteString("\n\n")
 
-	b.WriteString(labelStyle.Render("App Password:"))
+	b.WriteString(TextStyle.Render("App Password:"))
 	b.WriteString("\n")
 	b.WriteString(m.passwordInput.View())
 	b.WriteString("\n\n")
 
 	if m.handleInput.Value() == "" {
-		b.WriteString(errorStyle.Render("Handle is required"))
+		b.WriteString(ErrorStyle.Render("Handle is required"))
 		b.WriteString("\n")
 	}
 	if m.passwordInput.Value() == "" {
-		b.WriteString(errorStyle.Render("Password is required"))
+		b.WriteString(ErrorStyle.Render("Password is required"))
 		b.WriteString("\n")
 	}
 
 	b.WriteString("\n")
 	helpText := "tab/shift+tab: navigate • enter/ctrl+s: submit • esc/ctrl+c: cancel"
-	b.WriteString(helpStyle.Render(helpText))
+	b.WriteString(MutedStyle.MarginTop(1).Render(helpText))
 
 	return b.String()
 }
