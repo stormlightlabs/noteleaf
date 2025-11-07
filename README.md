@@ -30,3 +30,53 @@ go install
 ### First Steps
 
 For a comprehensive walkthrough including task management, time tracking, notes, and media tracking, see the [Quickstart Guide](website/docs/Quickstart.md).
+
+## Development
+
+Noteleaf uses [Task](https://taskfile.dev) for build automation. Development builds include additional tooling commands not available in production builds.
+
+### Building
+
+```sh
+# Production build
+task build
+
+# Development build (with version info and dev tools)
+task build:dev
+
+# Run tests
+task test
+task cov # ...with coverage
+```
+
+### Development Tools
+
+Dev builds (`task build:dev`) include a `tools` subcommand with maintenance utilities:
+
+**Documentation Generation:**
+
+```sh
+# Generate Docusaurus documentation
+noteleaf tools docgen --format docusaurus --out website/docs/manual
+
+# Generate man pages
+noteleaf tools docgen --format man --out docs/manual
+```
+
+**Data Synchronization:**
+
+```sh
+# Fetch Leaflet lexicons from GitHub
+noteleaf tools fetch lexicons
+
+# Fetch from a specific commit
+noteleaf tools fetch lexicons --sha abc123def
+
+# Generic GitHub repository archive fetcher
+noteleaf tools fetch gh-repo \
+  --repo owner/repo \
+  --path schemas/ \
+  --output local/schemas/
+```
+
+Production builds (`task build:rc`, `task build:prod`) use the `-tags prod` flag to exclude dev tools.

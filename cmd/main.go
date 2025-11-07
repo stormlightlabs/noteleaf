@@ -14,7 +14,6 @@ import (
 	"github.com/stormlightlabs/noteleaf/internal/ui"
 	"github.com/stormlightlabs/noteleaf/internal/utils"
 	"github.com/stormlightlabs/noteleaf/internal/version"
-	"github.com/stormlightlabs/noteleaf/tools"
 )
 
 var (
@@ -251,7 +250,7 @@ history of completed media.`,
 		root.AddCommand(cmd)
 	}
 
-	root.AddCommand(tools.NewDocGenCommand(root))
+	registerTools(root)
 
 	opts := []fang.Option{
 		fang.WithVersion(version.String()),

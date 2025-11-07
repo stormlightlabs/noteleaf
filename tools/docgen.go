@@ -1,3 +1,5 @@
+//go:build !prod
+
 package tools
 
 import (
@@ -324,7 +326,7 @@ func findCommand(root *cobra.Command, path []string) *cobra.Command {
 	}
 
 	for _, cmd := range root.Commands() {
-		if cmd.Name() == path[0] || contains(cmd.Aliases, path[0]) {
+		if cmd.Name() == path[0] || slices.Contains(cmd.Aliases, path[0]) {
 			if len(path) == 1 {
 				return cmd
 			}
@@ -333,9 +335,4 @@ func findCommand(root *cobra.Command, path []string) *cobra.Command {
 	}
 
 	return nil
-}
-
-// contains checks if a string is in a slice
-func contains(slice []string, str string) bool {
-	return slices.Contains(slice, str)
 }

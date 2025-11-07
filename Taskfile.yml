@@ -51,7 +51,7 @@ tasks:
       - echo "Built {{.BUILD_DIR}}/{{.BINARY_NAME}}"
 
   build:dev:
-    desc: Build binary with dev version (includes git commit hash)
+    desc: Build binary with dev version (includes git commit hash and dev tools)
     vars:
       VERSION: "{{.GIT_DESCRIBE}}"
       LDFLAGS: "-X {{.VERSION_PKG}}.Version={{.VERSION}} -X {{.VERSION_PKG}}.Commit={{.GIT_COMMIT}} -X {{.VERSION_PKG}}.BuildDate={{.BUILD_DATE}}"
@@ -61,7 +61,7 @@ tasks:
       - 'echo "Built {{.BUILD_DIR}}/{{.BINARY_NAME}} (version: {{.VERSION}})"'
 
   build:rc:
-    desc: Build release candidate binary (requires git tag with -rc suffix)
+    desc: Build release candidate binary (requires git tag with -rc suffix, excludes dev tools)
     vars:
       VERSION: "{{.GIT_TAG}}"
       LDFLAGS: "-X {{.VERSION_PKG}}.Version={{.VERSION}} -X {{.VERSION_PKG}}.Commit={{.GIT_COMMIT}} -X {{.VERSION_PKG}}.BuildDate={{.BUILD_DATE}}"
@@ -72,11 +72,11 @@ tasks:
         msg: "Git tag must contain '-rc' for release candidate builds (e.g., v1.0.0-rc1)"
     cmds:
       - mkdir -p {{.BUILD_DIR}}
-      - go build -ldflags "{{.LDFLAGS}}" -o {{.BUILD_DIR}}/{{.BINARY_NAME}} {{.CMD_DIR}}
+      - go build -tags prod -ldflags "{{.LDFLAGS}}" -o {{.BUILD_DIR}}/{{.BINARY_NAME}} {{.CMD_DIR}}
       - 'echo "Built {{.BUILD_DIR}}/{{.BINARY_NAME}} (version: {{.VERSION}})"'
 
   build:prod:
-    desc: Build production binary (requires clean semver git tag)
+    desc: Build production binary (requires clean semver git tag, excludes dev tools)
     vars:
       VERSION: "{{.GIT_TAG}}"
       LDFLAGS: "-X {{.VERSION_PKG}}.Version={{.VERSION}} -X {{.VERSION_PKG}}.Commit={{.GIT_COMMIT}} -X {{.VERSION_PKG}}.BuildDate={{.BUILD_DATE}}"
@@ -89,7 +89,7 @@ tasks:
         msg: "Working directory must be clean (no uncommitted changes) for production builds"
     cmds:
       - mkdir -p {{.BUILD_DIR}}
-      - go build -ldflags "{{.LDFLAGS}}" -o {{.BUILD_DIR}}/{{.BINARY_NAME}} {{.CMD_DIR}}
+      - go build -tags prod -ldflags "{{.LDFLAGS}}" -o {{.BUILD_DIR}}/{{.BINARY_NAME}} {{.CMD_DIR}}
       - 'echo "Built {{.BUILD_DIR}}/{{.BINARY_NAME}} (version: {{.VERSION}})"'
 
   clean:
