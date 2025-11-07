@@ -214,15 +214,22 @@ Examples:
 			isDraft, _ := cmd.Flags().GetBool("draft")
 			preview, _ := cmd.Flags().GetBool("preview")
 			validate, _ := cmd.Flags().GetBool("validate")
+			output, _ := cmd.Flags().GetString("output")
+			plaintext, _ := cmd.Flags().GetBool("plaintext")
+			txt, _ := cmd.Flags().GetBool("txt")
+
+			if txt {
+				plaintext = true
+			}
 
 			defer c.handler.Close()
 
 			if preview {
-				return c.handler.PostPreview(cmd.Context(), noteID, isDraft)
+				return c.handler.PostPreview(cmd.Context(), noteID, isDraft, output, plaintext)
 			}
 
 			if validate {
-				return c.handler.PostValidate(cmd.Context(), noteID, isDraft)
+				return c.handler.PostValidate(cmd.Context(), noteID, isDraft, output, plaintext)
 			}
 
 			return c.handler.Post(cmd.Context(), noteID, isDraft)
@@ -231,6 +238,9 @@ Examples:
 	postCmd.Flags().Bool("draft", false, "Create as draft instead of publishing")
 	postCmd.Flags().Bool("preview", false, "Show what would be posted without actually posting")
 	postCmd.Flags().Bool("validate", false, "Validate markdown conversion without posting")
+	postCmd.Flags().StringP("output", "o", "", "Write document to file (defaults to JSON format)")
+	postCmd.Flags().Bool("plaintext", false, "Use plaintext format for output file")
+	postCmd.Flags().Bool("txt", false, "Alias for --plaintext")
 	root.AddCommand(postCmd)
 
 	patchCmd := &cobra.Command{
@@ -257,15 +267,22 @@ Examples:
 
 			preview, _ := cmd.Flags().GetBool("preview")
 			validate, _ := cmd.Flags().GetBool("validate")
+			output, _ := cmd.Flags().GetString("output")
+			plaintext, _ := cmd.Flags().GetBool("plaintext")
+			txt, _ := cmd.Flags().GetBool("txt")
+
+			if txt {
+				plaintext = true
+			}
 
 			defer c.handler.Close()
 
 			if preview {
-				return c.handler.PatchPreview(cmd.Context(), noteID)
+				return c.handler.PatchPreview(cmd.Context(), noteID, output, plaintext)
 			}
 
 			if validate {
-				return c.handler.PatchValidate(cmd.Context(), noteID)
+				return c.handler.PatchValidate(cmd.Context(), noteID, output, plaintext)
 			}
 
 			return c.handler.Patch(cmd.Context(), noteID)
@@ -273,6 +290,9 @@ Examples:
 	}
 	patchCmd.Flags().Bool("preview", false, "Show what would be updated without actually patching")
 	patchCmd.Flags().Bool("validate", false, "Validate markdown conversion without patching")
+	patchCmd.Flags().StringP("output", "o", "", "Write document to file (defaults to JSON format)")
+	patchCmd.Flags().Bool("plaintext", false, "Use plaintext format for output file")
+	patchCmd.Flags().Bool("txt", false, "Alias for --plaintext")
 	root.AddCommand(patchCmd)
 
 	pushCmd := &cobra.Command{

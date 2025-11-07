@@ -493,7 +493,7 @@ func TestPublicationAdapter(t *testing.T) {
 		}
 	})
 
-	t.Run("formatPublicationForView", func(t *testing.T) {
+	t.Run("buildPublicationMarkdown", func(t *testing.T) {
 		t.Run("formats published note with all metadata", func(t *testing.T) {
 			rkey := "test-rkey"
 			cid := "test-cid"
@@ -510,25 +510,19 @@ func TestPublicationAdapter(t *testing.T) {
 				LeafletCID:  &cid,
 			}
 
-			result := formatPublicationForView(note)
+			result := buildPublicationMarkdown(note)
 
 			if !strings.Contains(result, "Test Article") {
-				t.Errorf("Formatted view should contain title\nGot: %s", result)
+				t.Error("Markdown should contain title")
 			}
 			if !strings.Contains(result, "published") {
-				t.Errorf("Formatted view should contain status 'published'\nGot: %s", result)
+				t.Error("Markdown should contain status 'published'")
 			}
 			if !strings.Contains(result, "2024-01-15") {
-				t.Errorf("Formatted view should contain published date\nGot: %s", result)
+				t.Error("Markdown should contain published date")
 			}
-			if !strings.Contains(result, "Modified") && !strings.Contains(result, "2024-01-16") {
-				t.Errorf("Formatted view should contain modified date\nGot: %s", result)
-			}
-			if !strings.Contains(result, "test-rkey") {
-				t.Error("Formatted view should contain rkey")
-			}
-			if !strings.Contains(result, "test-cid") {
-				t.Error("Formatted view should contain cid")
+			if !strings.Contains(result, "2024-01-16") {
+				t.Error("Markdown should contain modified date")
 			}
 		})
 
@@ -541,19 +535,19 @@ func TestPublicationAdapter(t *testing.T) {
 				Modified: time.Date(2024, 1, 20, 14, 0, 0, 0, time.UTC),
 			}
 
-			result := formatPublicationForView(note)
+			result := buildPublicationMarkdown(note)
 
 			if !strings.Contains(result, "Draft Article") {
-				t.Error("Formatted view should contain title")
+				t.Error("Markdown should contain title")
 			}
 			if !strings.Contains(result, "draft") {
-				t.Error("Formatted view should contain status 'draft'")
+				t.Error("Markdown should contain status 'draft'")
 			}
 			if strings.Contains(result, "Published:") {
-				t.Error("Formatted draft view should not contain published date")
+				t.Error("Draft markdown should not contain published date")
 			}
 			if !strings.Contains(result, "2024-01-20 14:00") {
-				t.Error("Formatted view should contain modified date")
+				t.Error("Markdown should contain modified date")
 			}
 		})
 
@@ -566,13 +560,13 @@ func TestPublicationAdapter(t *testing.T) {
 				Modified: time.Now(),
 			}
 
-			result := formatPublicationForView(note)
+			result := buildPublicationMarkdown(note)
 
 			if !strings.Contains(result, "Plain Content") {
-				t.Error("Formatted view should contain title")
+				t.Error("Markdown should contain title")
 			}
 			if !strings.Contains(result, "This content has no markdown header") {
-				t.Error("Formatted view should contain full content")
+				t.Error("Markdown should contain full content")
 			}
 		})
 
@@ -585,14 +579,14 @@ func TestPublicationAdapter(t *testing.T) {
 				Modified: time.Now(),
 			}
 
-			result := formatPublicationForView(note)
+			result := buildPublicationMarkdown(note)
 
 			titleCount := strings.Count(result, "Article Title")
 			if titleCount < 1 {
-				t.Error("Formatted view should contain title at least once")
+				t.Error("Markdown should contain title at least once")
 			}
 			if !strings.Contains(result, "Content after title") {
-				t.Error("Formatted view should contain content after title")
+				t.Error("Markdown should contain content after title")
 			}
 		})
 	})

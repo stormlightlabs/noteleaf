@@ -170,8 +170,8 @@ func NewPublicationListFromList(repo utils.TestNoteRepository, output io.Writer,
 	return NewPublicationDataList(repo, opts, filter)
 }
 
-// formatPublicationForView formats a publication for display with glamour
-func formatPublicationForView(note *models.Note) string {
+// buildPublicationMarkdown builds markdown content for a publication without rendering
+func buildPublicationMarkdown(note *models.Note) string {
 	var content strings.Builder
 
 	content.WriteString("# " + note.Title + "\n\n")
@@ -180,20 +180,20 @@ func formatPublicationForView(note *models.Note) string {
 	if note.IsDraft {
 		status = "draft"
 	}
-	content.WriteString("**Status:** " + status + "\n")
+	content.WriteString("- **Status:** " + status + "\n")
 
 	if note.PublishedAt != nil {
-		content.WriteString("**Published:** " + note.PublishedAt.Format("2006-01-02 15:04") + "\n")
+		content.WriteString("- **Published:** " + note.PublishedAt.Format("2006-01-02 15:04") + "\n")
 	}
 
-	content.WriteString("**Modified:** " + note.Modified.Format("2006-01-02 15:04") + "\n")
+	content.WriteString("- **Modified:** " + note.Modified.Format("2006-01-02 15:04") + "\n")
 
 	if note.LeafletRKey != nil {
-		content.WriteString("**RKey:** `" + *note.LeafletRKey + "`\n")
+		content.WriteString("- **RKey:** `" + ObfuscateMiddle(*note.LeafletRKey, 3, 3) + "`\n")
 	}
 
 	if note.LeafletCID != nil {
-		content.WriteString("**CID:** `" + *note.LeafletCID + "`\n")
+		content.WriteString("- **CID:** `" + ObfuscateMiddle(*note.LeafletCID, 3, 3) + "`\n")
 	}
 
 	content.WriteString("\n---\n\n")
@@ -208,17 +208,24 @@ func formatPublicationForView(note *models.Note) string {
 		}
 	}
 
+	return content.String()
+}
+
+// formatPublicationForView formats a publication for display with glamour
+func formatPublicationForView(note *models.Note) string {
+	markdown := buildPublicationMarkdown(note)
+
 	renderer, err := glamour.NewTermRenderer(
-		glamour.WithAutoStyle(),
+		glamour.WithStandardStyle("tokyo-night"),
 		glamour.WithWordWrap(80),
 	)
 	if err != nil {
-		return content.String()
+		return markdown
 	}
 
-	rendered, err := renderer.Render(content.String())
+	rendered, err := renderer.Render(markdown)
 	if err != nil {
-		return content.String()
+		return markdown
 	}
 
 	return rendered

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
+	"unicode/utf8"
 
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
@@ -173,54 +173,15 @@ func (m publicationViewModel) View() string {
 	return lipgloss.JoinVertical(lipgloss.Left, title, "", content, "", help)
 }
 
-// buildPublicationMarkdown creates the markdown content for rendering
-func buildPublicationMarkdown(note *models.Note) string {
-	var content strings.Builder
-
-	content.WriteString("# " + note.Title + "\n\n")
-
-	status := "published"
-	if note.IsDraft {
-		status = "draft"
-	}
-	content.WriteString("**Status:** " + status + "\n")
-
-	if note.PublishedAt != nil {
-		content.WriteString("**Published:** " + note.PublishedAt.Format("2006-01-02 15:04") + "\n")
-	}
-
-	content.WriteString("**Modified:** " + note.Modified.Format("2006-01-02 15:04") + "\n")
-
-	if note.LeafletRKey != nil {
-		content.WriteString("**RKey:** `" + *note.LeafletRKey + "`\n")
-	}
-
-	if note.LeafletCID != nil {
-		content.WriteString("**CID:** `" + *note.LeafletCID + "`\n")
-	}
-
-	content.WriteString("\n---\n\n")
-
-	noteContent := strings.TrimSpace(note.Content)
-	if !strings.HasPrefix(noteContent, "# ") {
-		content.WriteString(noteContent)
-	} else {
-		lines := strings.Split(noteContent, "\n")
-		if len(lines) > 1 {
-			content.WriteString(strings.Join(lines[1:], "\n"))
-		}
-	}
-
-	return content.String()
-}
-
 // formatPublicationContent renders markdown with glamour for viewport display
 func formatPublicationContent(note *models.Note) (string, error) {
 	markdown := buildPublicationMarkdown(note)
 
 	renderer, err := glamour.NewTermRenderer(
 		glamour.WithAutoStyle(),
-		glamour.WithWordWrap(80),
+		glamour.WithStandardStyle("tokyo-night"),
+		glamour.WithPreservedNewLines(),
+		glamour.WithWordWrap(79),
 	)
 	if err != nil {
 		return markdown, fmt.Errorf("failed to create renderer: %w", err)
@@ -276,4 +237,48 @@ func (pv *PublicationView) staticShow(context.Context) error {
 
 	fmt.Fprint(pv.opts.Output, content)
 	return nil
+}
+
+// ObfuscateMiddle returns a string where the middle portion is replaced by "..."
+// TODO: move to package utils or shared
+func ObfuscateMiddle(s string, left, right int) string {
+	if s == "" {
+		return s
+	}
+	if left < 0 {
+		left = 0
+	}
+	if right < 0 {
+		right = 0
+	}
+
+	n := utf8.RuneCountInString(s)
+	if left+right >= n {
+		return s
+	}
+
+	var (
+		prefixRunes = make([]rune, 0, left)
+		suffixRunes = make([]rune, 0, right)
+	)
+	i := 0
+	for _, r := range s {
+		if i >= left {
+			break
+		}
+		prefixRunes = append(prefixRunes, r)
+		i++
+	}
+
+	if right > 0 {
+		allRunes := []rune(s)
+		start := max(n-right, 0)
+		suffixRunes = append(suffixRunes, allRunes[start:]...)
+	}
+
+	const repl = "..."
+	if right == 0 {
+		return string(prefixRunes) + repl
+	}
+	return string(prefixRunes) + repl + string(suffixRunes)
 }

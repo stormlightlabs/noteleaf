@@ -1019,7 +1019,7 @@ func TestPublicationHandler(t *testing.T) {
 			handler := CreateHandler(t, NewPublicationHandler)
 			ctx := context.Background()
 
-			err := handler.PostPreview(ctx, 1, false)
+			err := handler.PostPreview(ctx, 1, false, "", false)
 			if err == nil {
 				t.Error("Expected error when not authenticated")
 			}
@@ -1051,7 +1051,7 @@ func TestPublicationHandler(t *testing.T) {
 				t.Fatalf("Failed to restore session: %v", err)
 			}
 
-			err = handler.PostPreview(ctx, 999, false)
+			err = handler.PostPreview(ctx, 999, false, "", false)
 			if err == nil {
 				t.Error("Expected error when note does not exist")
 			}
@@ -1095,7 +1095,7 @@ func TestPublicationHandler(t *testing.T) {
 				t.Fatalf("Failed to restore session: %v", err)
 			}
 
-			err = handler.PostPreview(ctx, id, false)
+			err = handler.PostPreview(ctx, id, false, "", false)
 			if err == nil {
 				t.Error("Expected error when note already published")
 			}
@@ -1135,7 +1135,7 @@ func TestPublicationHandler(t *testing.T) {
 				t.Fatalf("Failed to restore session: %v", err)
 			}
 
-			err = handler.PostPreview(ctx, id, false)
+			err = handler.PostPreview(ctx, id, false, "", false)
 			suite.AssertNoError(err, "preview should succeed")
 		})
 
@@ -1169,7 +1169,7 @@ func TestPublicationHandler(t *testing.T) {
 				t.Fatalf("Failed to restore session: %v", err)
 			}
 
-			err = handler.PostPreview(ctx, id, true)
+			err = handler.PostPreview(ctx, id, true, "", false)
 			suite.AssertNoError(err, "preview draft should succeed")
 		})
 	})
@@ -1182,7 +1182,7 @@ func TestPublicationHandler(t *testing.T) {
 			handler := CreateHandler(t, NewPublicationHandler)
 			ctx := context.Background()
 
-			err := handler.PostValidate(ctx, 1, false)
+			err := handler.PostValidate(ctx, 1, false, "", false)
 			if err == nil {
 				t.Error("Expected error when not authenticated")
 			}
@@ -1222,7 +1222,7 @@ func TestPublicationHandler(t *testing.T) {
 				t.Fatalf("Failed to restore session: %v", err)
 			}
 
-			err = handler.PostValidate(ctx, id, false)
+			err = handler.PostValidate(ctx, id, false, "", false)
 			suite.AssertNoError(err, "validation should succeed")
 		})
 	})
@@ -1235,7 +1235,7 @@ func TestPublicationHandler(t *testing.T) {
 			handler := CreateHandler(t, NewPublicationHandler)
 			ctx := context.Background()
 
-			err := handler.PatchPreview(ctx, 1)
+			err := handler.PatchPreview(ctx, 1, "", false)
 			if err == nil {
 				t.Error("Expected error when not authenticated")
 			}
@@ -1267,7 +1267,7 @@ func TestPublicationHandler(t *testing.T) {
 				t.Fatalf("Failed to restore session: %v", err)
 			}
 
-			err = handler.PatchPreview(ctx, 999)
+			err = handler.PatchPreview(ctx, 999, "", false)
 			if err == nil {
 				t.Error("Expected error when note does not exist")
 			}
@@ -1307,7 +1307,7 @@ func TestPublicationHandler(t *testing.T) {
 				t.Fatalf("Failed to restore session: %v", err)
 			}
 
-			err = handler.PatchPreview(ctx, id)
+			err = handler.PatchPreview(ctx, id, "", false)
 			if err == nil {
 				t.Error("Expected error when note not published")
 			}
@@ -1354,7 +1354,7 @@ func TestPublicationHandler(t *testing.T) {
 				t.Fatalf("Failed to restore session: %v", err)
 			}
 
-			err = handler.PatchPreview(ctx, id)
+			err = handler.PatchPreview(ctx, id, "", false)
 			suite.AssertNoError(err, "preview should succeed")
 		})
 	})
@@ -1367,7 +1367,7 @@ func TestPublicationHandler(t *testing.T) {
 			handler := CreateHandler(t, NewPublicationHandler)
 			ctx := context.Background()
 
-			err := handler.PatchValidate(ctx, 1)
+			err := handler.PatchValidate(ctx, 1, "", false)
 			if err == nil {
 				t.Error("Expected error when not authenticated")
 			}
@@ -1412,7 +1412,7 @@ func TestPublicationHandler(t *testing.T) {
 				t.Fatalf("Failed to restore session: %v", err)
 			}
 
-			err = handler.PatchValidate(ctx, id)
+			err = handler.PatchValidate(ctx, id, "", false)
 			suite.AssertNoError(err, "validation should succeed")
 		})
 	})

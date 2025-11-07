@@ -3,7 +3,9 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -549,8 +551,55 @@ func (h *PublicationHandler) prepareDocumentForPublish(ctx context.Context, note
 	return note, doc, nil
 }
 
+// writeDocumentOutput writes document to a file in JSON or plaintext format
+func writeDocumentOutput(doc *public.Document, note *models.Note, outputPath string, plaintext bool) error {
+	var content []byte
+	var err error
+
+	if plaintext {
+		status := "published"
+		if note != nil && note.IsDraft {
+			status = "draft"
+		}
+
+		output := "Document Preview\n"
+		output += "================\n\n"
+		output += fmt.Sprintf("Title: %s\n", doc.Title)
+		output += fmt.Sprintf("Status: %s\n", status)
+		if note != nil {
+			output += fmt.Sprintf("Note ID: %d\n", note.ID)
+			if note.LeafletRKey != nil {
+				output += fmt.Sprintf("RKey: %s\n", *note.LeafletRKey)
+			}
+		}
+		output += fmt.Sprintf("Pages: %d\n", len(doc.Pages))
+		if len(doc.Pages) > 0 {
+			output += fmt.Sprintf("Blocks: %d\n", len(doc.Pages[0].Blocks))
+		}
+		if doc.PublishedAt != "" {
+			output += fmt.Sprintf("PublishedAt: %s\n", doc.PublishedAt)
+		}
+		if doc.Author != "" {
+			output += fmt.Sprintf("Author: %s\n", doc.Author)
+		}
+
+		content = []byte(output)
+	} else {
+		content, err = json.MarshalIndent(doc, "", "  ")
+		if err != nil {
+			return fmt.Errorf("failed to marshal document to JSON: %w", err)
+		}
+	}
+
+	if err := os.WriteFile(outputPath, content, 0644); err != nil {
+		return fmt.Errorf("failed to write output to %s: %w", outputPath, err)
+	}
+
+	return nil
+}
+
 // PostPreview shows what would be posted without actually posting
-func (h *PublicationHandler) PostPreview(ctx context.Context, noteID int64, isDraft bool) error {
+func (h *PublicationHandler) PostPreview(ctx context.Context, noteID int64, isDraft bool, outputPath string, plaintext bool) error {
 	if !h.atproto.IsAuthenticated() {
 		return fmt.Errorf("not authenticated - run 'noteleaf pub auth' first")
 	}
@@ -574,13 +623,25 @@ func (h *PublicationHandler) PostPreview(ctx context.Context, noteID int64, isDr
 		ui.Infoln("  PublishedAt: %s", doc.PublishedAt)
 	}
 	ui.Infoln("  Note ID: %d", note.ID)
+
+	if outputPath != "" {
+		if err := writeDocumentOutput(doc, note, outputPath, plaintext); err != nil {
+			return err
+		}
+		format := "JSON"
+		if plaintext {
+			format = "plaintext"
+		}
+		ui.Successln("Output written to %s (%s format)", outputPath, format)
+	}
+
 	ui.Successln("Preview complete - no changes made")
 
 	return nil
 }
 
 // PostValidate validates markdown conversion without posting
-func (h *PublicationHandler) PostValidate(ctx context.Context, noteID int64, isDraft bool) error {
+func (h *PublicationHandler) PostValidate(ctx context.Context, noteID int64, isDraft bool, outputPath string, plaintext bool) error {
 	if !h.atproto.IsAuthenticated() {
 		return fmt.Errorf("not authenticated - run 'noteleaf pub auth' first")
 	}
@@ -595,11 +656,22 @@ func (h *PublicationHandler) PostValidate(ctx context.Context, noteID int64, isD
 	ui.Infoln("  Title: %s", doc.Title)
 	ui.Infoln("  Blocks converted: %d", len(doc.Pages[0].Blocks))
 
+	if outputPath != "" {
+		if err := writeDocumentOutput(doc, note, outputPath, plaintext); err != nil {
+			return err
+		}
+		format := "JSON"
+		if plaintext {
+			format = "plaintext"
+		}
+		ui.Successln("Output written to %s (%s format)", outputPath, format)
+	}
+
 	return nil
 }
 
 // PatchPreview shows what would be patched without actually patching
-func (h *PublicationHandler) PatchPreview(ctx context.Context, noteID int64) error {
+func (h *PublicationHandler) PatchPreview(ctx context.Context, noteID int64, outputPath string, plaintext bool) error {
 	if !h.atproto.IsAuthenticated() {
 		return fmt.Errorf("not authenticated - run 'noteleaf pub auth' first")
 	}
@@ -628,13 +700,25 @@ func (h *PublicationHandler) PatchPreview(ctx context.Context, noteID int64) err
 	if doc.PublishedAt != "" {
 		ui.Infoln("  PublishedAt: %s", doc.PublishedAt)
 	}
+
+	if outputPath != "" {
+		if err := writeDocumentOutput(doc, note, outputPath, plaintext); err != nil {
+			return err
+		}
+		format := "JSON"
+		if plaintext {
+			format = "plaintext"
+		}
+		ui.Successln("Output written to %s (%s format)", outputPath, format)
+	}
+
 	ui.Successln("Preview complete - no changes made")
 
 	return nil
 }
 
 // PatchValidate validates markdown conversion without patching
-func (h *PublicationHandler) PatchValidate(ctx context.Context, noteID int64) error {
+func (h *PublicationHandler) PatchValidate(ctx context.Context, noteID int64, outputPath string, plaintext bool) error {
 	if !h.atproto.IsAuthenticated() {
 		return fmt.Errorf("not authenticated - run 'noteleaf pub auth' first")
 	}
@@ -654,6 +738,17 @@ func (h *PublicationHandler) PatchValidate(ctx context.Context, noteID int64) er
 	ui.Infoln("  Title: %s", doc.Title)
 	ui.Infoln("  RKey: %s", *note.LeafletRKey)
 	ui.Infoln("  Blocks converted: %d", len(doc.Pages[0].Blocks))
+
+	if outputPath != "" {
+		if err := writeDocumentOutput(doc, note, outputPath, plaintext); err != nil {
+			return err
+		}
+		format := "JSON"
+		if plaintext {
+			format = "plaintext"
+		}
+		ui.Successln("Output written to %s (%s format)", outputPath, format)
+	}
 
 	return nil
 }
