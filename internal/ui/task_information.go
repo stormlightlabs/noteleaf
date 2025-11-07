@@ -44,33 +44,21 @@ const (
 	PriorityNonePattern = "☆☆☆"
 )
 
+// Type aliases for status and priority styles (now defined in palette.go)
 var (
-	// Gray
-	TodoStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-	// Blue
-	InProgressStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("12"))
-	// Red
-	BlockedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
-	// Green
-	DoneStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
-	// Dark Gray
-	AbandonedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-	// Light Gray
-	PendingStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("7"))
-	// Green
-	CompletedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
-	// Dark Red
-	DeletedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
-	// Bright Red - highest urgency
-	PriorityHighStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
-	// Yellow - medium urgency
-	PriorityMediumStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("11"))
-	// Cyan - low urgency
-	PriorityLowStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("14"))
-	// Gray - no priority
-	PriorityNoneStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-	// For legacy A-Z and numeric priorities
-	PriorityLegacyStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("13")) // Magenta
+	TodoStyle           = StatusTodo
+	InProgressStyle     = StatusInProgress
+	BlockedStyle        = StatusBlocked
+	DoneStyle           = StatusDone
+	AbandonedStyle      = StatusAbandoned
+	PendingStyle        = StatusPending
+	CompletedStyle      = StatusCompleted
+	DeletedStyle        = StatusDeleted
+	PriorityHighStyle   = PriorityHigh
+	PriorityMediumStyle = PriorityMedium
+	PriorityLowStyle    = PriorityLow
+	PriorityNoneStyle   = PriorityNone
+	PriorityLegacyStyle = PriorityLegacy
 )
 
 // GetStatusSymbol returns the unicode symbol for a given status

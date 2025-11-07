@@ -112,7 +112,7 @@ func (h *ArticleHandler) Close() error {
 func (h *ArticleHandler) Add(ctx context.Context, url string) error {
 	existing, err := h.repos.Articles.GetByURL(ctx, url)
 	if err == nil {
-		ui.Warningln("Article already exists: %s (ID: %d)", ui.TitleColorStyle.Render(existing.Title), existing.ID)
+		ui.Warningln("Article already exists: %s (ID: %d)", ui.TableTitleStyle.Render(existing.Title), existing.ID)
 		return nil
 	}
 
@@ -153,9 +153,9 @@ func (h *ArticleHandler) Add(ctx context.Context, url string) error {
 
 	ui.Infoln("Article saved successfully!")
 	ui.Infoln("ID: %d", id)
-	ui.Infoln("Title: %s", ui.TitleColorStyle.Render(article.Title))
+	ui.Infoln("Title: %s", ui.TableTitleStyle.Render(article.Title))
 	if article.Author != "" {
-		ui.Infoln("Author: %s", ui.HeaderColorStyle.Render(article.Author))
+		ui.Infoln("Author: %s", ui.TableHeaderStyle.Render(article.Author))
 	}
 	if article.Date != "" {
 		ui.Infoln("Date: %s", article.Date)
@@ -187,9 +187,9 @@ func (h *ArticleHandler) List(ctx context.Context, query string, author string, 
 	ui.Infoln("Found %d article(s):\n", len(articles))
 	for _, article := range articles {
 		ui.Infoln("ID: %d", article.ID)
-		ui.Infoln("Title: %s", ui.TitleColorStyle.Render(article.Title))
+		ui.Infoln("Title: %s", ui.TableTitleStyle.Render(article.Title))
 		if article.Author != "" {
-			ui.Infoln("Author: %s", ui.HeaderColorStyle.Render(article.Author))
+			ui.Infoln("Author: %s", ui.TableHeaderStyle.Render(article.Author))
 		}
 		if article.Date != "" {
 			ui.Infoln("Date: %s", article.Date)
@@ -208,9 +208,9 @@ func (h *ArticleHandler) View(ctx context.Context, id int64) error {
 		return fmt.Errorf("failed to get article: %w", err)
 	}
 
-	ui.Infoln("Title: %s", ui.TitleColorStyle.Render(article.Title))
+	ui.Infoln("Title: %s", ui.TableTitleStyle.Render(article.Title))
 	if article.Author != "" {
-		ui.Infoln("Author: %s", ui.HeaderColorStyle.Render(article.Author))
+		ui.Infoln("Author: %s", ui.TableHeaderStyle.Render(article.Author))
 	}
 	if article.Date != "" {
 		ui.Infoln("Date: %s", article.Date)
@@ -302,7 +302,7 @@ func (h *ArticleHandler) Help() error {
 	if err != nil {
 		return fmt.Errorf("failed to get storage directory: %w", err)
 	}
-	ui.Headerln("%s %s", ui.HeaderColorStyle.Render("Storage directory:"), dir)
+	ui.Headerln("%s %s", ui.TableHeaderStyle.Render("Storage directory:"), dir)
 
 	return nil
 }

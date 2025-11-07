@@ -157,9 +157,9 @@ func (m taskViewModel) View() string {
 		return m.help.View(m.keys)
 	}
 
-	title := TitleColorStyle.Render(fmt.Sprintf("Task %d", m.task.ID))
+	title := TableTitleStyle.Render(fmt.Sprintf("Task %d", m.task.ID))
 	content := m.viewport.View()
-	help := lipgloss.NewStyle().Foreground(lipgloss.Color(Squid.Hex())).Render(m.help.View(m.keys))
+	help := MutedStyle.Render(m.help.View(m.keys))
 
 	return lipgloss.JoinVertical(lipgloss.Left, title, "", content, "", help)
 }

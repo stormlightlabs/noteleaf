@@ -10,7 +10,6 @@ import (
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/stormlightlabs/noteleaf/internal/models"
 )
 
@@ -258,7 +257,7 @@ func (m dataTableModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m dataTableModel) View() string {
 	var s strings.Builder
 
-	style := lipgloss.NewStyle().Foreground(lipgloss.Color(Squid.Hex()))
+	style := MutedStyle
 
 	if m.showingHelp {
 		return m.help.View(m.keys)
@@ -271,7 +270,7 @@ func (m dataTableModel) View() string {
 		return s.String()
 	}
 
-	s.WriteString(TitleColorStyle.Render(m.opts.Title))
+	s.WriteString(TableTitleStyle.Render(m.opts.Title))
 	if m.totalCount > 0 {
 		s.WriteString(fmt.Sprintf(" (%d total)", m.totalCount))
 	}
@@ -300,11 +299,11 @@ func (m dataTableModel) View() string {
 		headerParts[i] = fmt.Sprintf(format, field.Title)
 	}
 	headerLine := fmt.Sprintf("   %s", strings.Join(headerParts, " "))
-	s.WriteString(HeaderColorStyle.Render(headerLine))
+	s.WriteString(TableHeaderStyle.Render(headerLine))
 	s.WriteString("\n")
 
 	totalWidth := 3 + len(strings.Join(headerParts, " "))
-	s.WriteString(HeaderColorStyle.Render(strings.Repeat("─", totalWidth)))
+	s.WriteString(TableHeaderStyle.Render(strings.Repeat("─", totalWidth)))
 	s.WriteString("\n")
 
 	for i, record := range m.records {
@@ -335,7 +334,7 @@ func (m dataTableModel) View() string {
 		line := fmt.Sprintf("%s%s", prefix, strings.Join(rowParts, " "))
 
 		if i == m.selected {
-			s.WriteString(SelectedColorStyle.Render(line))
+			s.WriteString(TableSelectedStyle.Render(line))
 		} else {
 			s.WriteString(style.Render(line))
 		}

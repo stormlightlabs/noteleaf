@@ -162,9 +162,9 @@ func (m publicationViewModel) View() string {
 		status = "draft"
 	}
 
-	title := TitleColorStyle.Render(fmt.Sprintf("%s (%s)", m.note.Title, status))
+	title := TableTitleStyle.Render(fmt.Sprintf("%s (%s)", m.note.Title, status))
 	content := m.viewport.View()
-	help := lipgloss.NewStyle().Foreground(lipgloss.Color(Squid.Hex())).Render(m.help.View(m.keys))
+	help := MutedStyle.Render(m.help.View(m.keys))
 
 	if !m.ready {
 		return "\n  Initializing..."

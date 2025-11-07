@@ -350,13 +350,13 @@ func (m taskEditModel) View() string {
 
 	var content strings.Builder
 
-	title := TitleColorStyle.Render("Edit Task")
+	title := TableTitleStyle.Render("Edit Task")
 	content.WriteString(title + "\n\n")
 
 	for i, field := range m.fields {
 		fieldStyle := lipgloss.NewStyle()
 		if i == m.currentField && m.mode == fieldNavigation {
-			fieldStyle = SelectedColorStyle
+			fieldStyle = TableSelectedStyle
 		}
 
 		switch field {
@@ -427,7 +427,7 @@ func (m taskEditModel) renderStatusPicker() string {
 	for i, status := range statusOptions {
 		style := lipgloss.NewStyle()
 		if i == m.statusIndex {
-			style = SelectedColorStyle
+			style = TableSelectedStyle
 		}
 
 		line := fmt.Sprintf("%s %s", FormatStatusIndicator(status), status)
@@ -460,7 +460,7 @@ func (m taskEditModel) renderPriorityPicker() string {
 	for i, priority := range options {
 		style := lipgloss.NewStyle()
 		if i == m.priorityIndex {
-			style = SelectedColorStyle
+			style = TableSelectedStyle
 		}
 
 		var line string

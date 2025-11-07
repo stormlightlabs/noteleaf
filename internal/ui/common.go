@@ -1,6 +1,3 @@
-// TODO: create variants of colored output without icons
-// TODO: refactor existing (relevant) calls to old styles
-// TODO: k v wrappers
 package ui
 
 import (
@@ -9,12 +6,14 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+// Style constructor helpers
 func newStyle() lipgloss.Style              { return lipgloss.NewStyle() }
 func newPStyle(v, h int) lipgloss.Style     { return lipgloss.NewStyle().Padding(v, h) }
 func newBoldStyle() lipgloss.Style          { return newStyle().Bold(true) }
 func newPBoldStyle(v, h int) lipgloss.Style { return newPStyle(v, h).Bold(true) }
 func newEmStyle() lipgloss.Style            { return newStyle().Italic(true) }
 
+// Rendering helpers (private, used by public API)
 func success(msg string) string      { return SuccessStyle.Render("✓ " + msg) }
 func errorMsg(msg string) string     { return ErrorStyle.Render("✗ " + msg) }
 func warning(msg string) string      { return WarningStyle.Render("⚠ " + msg) }
@@ -25,7 +24,10 @@ func subtitle(msg string) string     { return SubtitleStyle.Render(msg) }
 func box(content string) string      { return BoxStyle.Render(content) }
 func errorBox(content string) string { return ErrorBoxStyle.Render(content) }
 func text(content string) string     { return TextStyle.Render(content) }
+func muted(content string) string    { return MutedStyle.Render(content) }
+func accent(content string) string   { return AccentStyle.Render(content) }
 func header(content string) string   { return HeaderStyle.Render(content) }
+func primary(content string) string  { return PrimaryStyle.Render(content) }
 
 // Success prints a formatted success message
 func Success(format string, a ...any) {
@@ -121,4 +123,34 @@ func Newline()                         { fmt.Println() }
 func Plain(format string, a ...any)    { fmt.Print(text(fmt.Sprintf(format, a...))) }
 func Plainln(format string, a ...any)  { fmt.Println(text(fmt.Sprintf(format, a...))) }
 func Header(format string, a ...any)   { fmt.Print(header(fmt.Sprintf(format, a...))) }
-func Headerln(format string, a ...any) { fmt.Print(header(fmt.Sprintf(format, a...))) }
+func Headerln(format string, a ...any) { fmt.Println(header(fmt.Sprintf(format, a...))) }
+
+// Muted prints muted/secondary text
+func Muted(format string, a ...any) {
+	fmt.Print(muted(fmt.Sprintf(format, a...)))
+}
+
+// Mutedln prints muted/secondary text with a newline
+func Mutedln(format string, a ...any) {
+	fmt.Println(muted(fmt.Sprintf(format, a...)))
+}
+
+// Accent prints accent-colored text
+func Accent(format string, a ...any) {
+	fmt.Print(accent(fmt.Sprintf(format, a...)))
+}
+
+// Accentln prints accent-colored text with a newline
+func Accentln(format string, a ...any) {
+	fmt.Println(accent(fmt.Sprintf(format, a...)))
+}
+
+// Primary prints primary-colored text
+func Primary(format string, a ...any) {
+	fmt.Print(primary(fmt.Sprintf(format, a...)))
+}
+
+// Primaryln prints primary-colored text with a newline
+func Primaryln(format string, a ...any) {
+	fmt.Println(primary(fmt.Sprintf(format, a...)))
+}

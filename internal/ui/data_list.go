@@ -11,7 +11,6 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/stormlightlabs/noteleaf/internal/models"
 )
 
@@ -315,7 +314,7 @@ func (m dataListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m dataListModel) View() string {
 	var s strings.Builder
 
-	style := lipgloss.NewStyle().Foreground(lipgloss.Color(Squid.Hex()))
+	style := MutedStyle
 
 	if m.showingHelp {
 		return m.help.View(m.keys)
@@ -328,7 +327,7 @@ func (m dataListModel) View() string {
 		return s.String()
 	}
 
-	s.WriteString(TitleColorStyle.Render(m.opts.Title))
+	s.WriteString(TableTitleStyle.Render(m.opts.Title))
 	if m.totalCount > 0 {
 		s.WriteString(fmt.Sprintf(" (%d total)", m.totalCount))
 	}
@@ -434,7 +433,7 @@ func defaultItemRenderer(item ListItem, selected bool) string {
 	}
 
 	if selected {
-		return SelectedColorStyle.Render(line)
+		return TableSelectedStyle.Render(line)
 	}
 	return line
 }
