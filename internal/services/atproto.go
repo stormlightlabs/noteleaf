@@ -24,67 +24,15 @@ import (
 	"github.com/stormlightlabs/noteleaf/internal/public"
 )
 
+type MutateRecordOutput struct {
+	Cid string `json:"cid"`
+	Uri string `json:"uri"`
+}
+
 // DocumentWithMeta combines a document with its repository metadata
 type DocumentWithMeta struct {
 	Document public.Document
 	Meta     public.DocumentMeta
-}
-
-// convertCBORToJSONCompatible recursively converts CBOR data structures to JSON-compatible types
-//
-// This converts map[any]any to map[string]any to allow usage of [json.Marshal]
-func convertCBORToJSONCompatible(data any) any {
-	switch v := data.(type) {
-	case map[any]any:
-		result := make(map[string]any, len(v))
-		for key, value := range v {
-			strKey := fmt.Sprintf("%v", key)
-			result[strKey] = convertCBORToJSONCompatible(value)
-		}
-		return result
-	case map[string]any:
-		result := make(map[string]any, len(v))
-		for key, value := range v {
-			result[key] = convertCBORToJSONCompatible(value)
-		}
-		return result
-	case []any:
-		result := make([]any, len(v))
-		for i, item := range v {
-			result[i] = convertCBORToJSONCompatible(item)
-		}
-		return result
-	default:
-		return v
-	}
-}
-
-// convertJSONToCBORCompatible recursively converts JSON-compatible data structures to CBOR types
-//
-// This converts map[string]any to map[any]any to allow proper CBOR encoding for AT Protocol
-func convertJSONToCBORCompatible(data any) any {
-	switch v := data.(type) {
-	case map[string]any:
-		result := make(map[any]any, len(v))
-		for key, value := range v {
-			result[key] = convertJSONToCBORCompatible(value)
-		}
-		return result
-	case map[any]any:
-		result := make(map[any]any, len(v))
-		for key, value := range v {
-			result[key] = convertJSONToCBORCompatible(value)
-		}
-		return result
-	case []any:
-		result := make([]any, len(v))
-		for i, item := range v {
-			result[i] = convertJSONToCBORCompatible(item)
-		}
-		return result
-	default:
-		return v
-	}
 }
 
 // PublicationWithMeta combines a publication with its metadata
@@ -476,7 +424,6 @@ func (s *ATProtoService) PostDocument(ctx context.Context, doc public.Document, 
 
 	parts := strings.Split(output.Uri, "/")
 	rkey := parts[len(parts)-1]
-
 	meta := public.DocumentMeta{
 		RKey:      rkey,
 		CID:       output.Cid,
@@ -484,11 +431,7 @@ func (s *ATProtoService) PostDocument(ctx context.Context, doc public.Document, 
 		IsDraft:   isDraft,
 		FetchedAt: time.Now(),
 	}
-
-	return &DocumentWithMeta{
-		Document: doc,
-		Meta:     meta,
-	}, nil
+	return &DocumentWithMeta{Document: doc, Meta: meta}, nil
 }
 
 // PatchDocument updates an existing document in the user's repository
@@ -511,43 +454,23 @@ func (s *ATProtoService) PatchDocument(ctx context.Context, rkey string, doc pub
 	}
 
 	doc.Type = collection
-
 	jsonBytes, err := json.Marshal(doc)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal document to JSON: %w", err)
+		return nil, fmt.Errorf("marshal: %w", err)
 	}
 
-	var jsonData map[string]any
-	if err := json.Unmarshal(jsonBytes, &jsonData); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal JSON to map: %w", err)
+	var m map[string]any
+	if err := json.Unmarshal(jsonBytes, &m); err != nil {
+		return nil, fmt.Errorf("unmarshal: %w", err)
 	}
+	m["$type"] = collection
 
-	cborCompatible := convertJSONToCBORCompatible(jsonData)
-
-	cborBytes, err := cbor.Marshal(cborCompatible)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal to CBOR: %w", err)
-	}
-
-	record := &lexutil.LexiconTypeDecoder{}
-	if err := cbor.Unmarshal(cborBytes, record); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal CBOR to lexicon type: %w", err)
-	}
-
-	input := &atproto.RepoPutRecord_Input{
-		Repo:       s.session.DID,
-		Collection: collection,
-		Rkey:       rkey,
-		Record:     record,
-	}
-
-	output, err := atproto.RepoPutRecord(ctx, s.client, input)
+	output, err := repoPutRecord(ctx, s.client, s.session.DID, collection, rkey, m)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update record: %w", err)
 	}
 
 	uri := fmt.Sprintf("at://%s/%s/%s", s.session.DID, collection, rkey)
-
 	meta := public.DocumentMeta{
 		RKey:      rkey,
 		CID:       output.Cid,
@@ -555,11 +478,7 @@ func (s *ATProtoService) PatchDocument(ctx context.Context, rkey string, doc pub
 		IsDraft:   isDraft,
 		FetchedAt: time.Now(),
 	}
-
-	return &DocumentWithMeta{
-		Document: doc,
-		Meta:     meta,
-	}, nil
+	return &DocumentWithMeta{Document: doc, Meta: meta}, nil
 }
 
 // DeleteDocument removes a document from the user's repository
@@ -625,19 +544,14 @@ func (s *ATProtoService) Close() error {
 	return nil
 }
 
-type RepoCreateRecordOutput struct {
-	Cid string `json:"cid"`
-	Uri string `json:"uri"`
-}
-
-func repoCreateRecord(ctx context.Context, client *xrpc.Client, repo, collection string, record map[string]any) (*RepoCreateRecordOutput, error) {
+func repoCreateRecord(ctx context.Context, client *xrpc.Client, repo, collection string, record map[string]any) (*MutateRecordOutput, error) {
 	body := map[string]any{
 		"repo":       repo,
 		"collection": collection,
 		"record":     record,
 	}
 
-	var out RepoCreateRecordOutput
+	var out MutateRecordOutput
 	if err := client.LexDo(
 		ctx,
 		lexutil.Procedure,
@@ -650,4 +564,84 @@ func repoCreateRecord(ctx context.Context, client *xrpc.Client, repo, collection
 		return nil, fmt.Errorf("repoCreateRecord failed: %w", err)
 	}
 	return &out, nil
+}
+
+func repoPutRecord(ctx context.Context, client *xrpc.Client, repo, collection, rkey string, record map[string]any) (*MutateRecordOutput, error) {
+	body := map[string]any{
+		"repo":       repo,
+		"collection": collection,
+		"rkey":       rkey,
+		"record":     record,
+	}
+
+	var out MutateRecordOutput
+	if err := client.LexDo(
+		ctx,
+		lexutil.Procedure,
+		"application/json",
+		"com.atproto.repo.putRecord",
+		nil,
+		body,
+		&out,
+	); err != nil {
+		return nil, fmt.Errorf("repoPutRecord failed: %w", err)
+	}
+	return &out, nil
+}
+
+// convertCBORToJSONCompatible recursively converts CBOR data structures to JSON-compatible types
+//
+// This converts map[any]any to map[string]any to allow usage of [json.Marshal]
+func convertCBORToJSONCompatible(data any) any {
+	switch v := data.(type) {
+	case map[any]any:
+		result := make(map[string]any, len(v))
+		for key, value := range v {
+			strKey := fmt.Sprintf("%v", key)
+			result[strKey] = convertCBORToJSONCompatible(value)
+		}
+		return result
+	case map[string]any:
+		result := make(map[string]any, len(v))
+		for key, value := range v {
+			result[key] = convertCBORToJSONCompatible(value)
+		}
+		return result
+	case []any:
+		result := make([]any, len(v))
+		for i, item := range v {
+			result[i] = convertCBORToJSONCompatible(item)
+		}
+		return result
+	default:
+		return v
+	}
+}
+
+// convertJSONToCBORCompatible recursively converts JSON-compatible data structures to CBOR types
+//
+// This converts map[string]any to map[any]any to allow proper CBOR encoding for AT Protocol
+func convertJSONToCBORCompatible(data any) any {
+	switch v := data.(type) {
+	case map[string]any:
+		result := make(map[any]any, len(v))
+		for key, value := range v {
+			result[key] = convertJSONToCBORCompatible(value)
+		}
+		return result
+	case map[any]any:
+		result := make(map[any]any, len(v))
+		for key, value := range v {
+			result[key] = convertJSONToCBORCompatible(value)
+		}
+		return result
+	case []any:
+		result := make([]any, len(v))
+		for i, item := range v {
+			result[i] = convertJSONToCBORCompatible(item)
+		}
+		return result
+	default:
+		return v
+	}
 }

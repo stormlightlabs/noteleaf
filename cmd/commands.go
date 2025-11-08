@@ -105,7 +105,6 @@ Default shows queued movies only.`,
 			return c.handler.Remove(cmd.Context(), args[0])
 		},
 	})
-
 	return root
 }
 
@@ -150,6 +149,7 @@ Use the -i flag for an interactive interface with navigation keys.`,
 	addCmd.Flags().BoolP("interactive", "i", false, "Use interactive interface for TV show selection")
 	root.AddCommand(addCmd)
 
+	// TODO: Add interactive list view
 	root.AddCommand(&cobra.Command{
 		Use:   "list [--all|--queued|--watching|--watched]",
 		Short: "List TV shows in queue with status filtering",
