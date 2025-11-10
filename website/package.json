@@ -12,16 +12,21 @@
     "serve": "docusaurus serve",
     "write-translations": "docusaurus write-translations",
     "write-heading-ids": "docusaurus write-heading-ids",
-    "typecheck": "tsc"
+    "typecheck": "tsc",
+    "generate-social-card": "node generate-social-card.mjs"
   },
   "dependencies": {
     "@docusaurus/core": "3.9.1",
     "@docusaurus/preset-classic": "3.9.1",
+    "@fontsource/lato": "^5.1.0",
     "@mdx-js/react": "^3.0.0",
     "clsx": "^2.0.0",
     "prism-react-renderer": "^2.3.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "satori": "^0.14.1",
+    "satori-html": "^0.3.2",
+    "sharp": "^0.33.5"
   },
   "devDependencies": {
     "@docusaurus/module-type-aliases": "3.9.1",

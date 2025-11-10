@@ -1,30 +1,88 @@
 /**
- * Any CSS included here will be global. The classic template
- * bundles Infima by default. Infima is a CSS framework designed to
- * work well for content-centric websites.
+ * Noteleaf Documentation Site Styles
+ * Using color palette from internal/ui/palette.go
+ * Font: Lato
  */
 
-/* You can override the default Infima variables here. */
+@import '@fontsource/lato/300.css';
+@import '@fontsource/lato/400.css';
+@import '@fontsource/lato/700.css';
+@import '@fontsource/lato/900.css';
+
 :root {
-  --ifm-color-primary: #2e8555;
-  --ifm-color-primary-dark: #29784c;
-  --ifm-color-primary-darker: #277148;
-  --ifm-color-primary-darkest: #205d3b;
-  --ifm-color-primary-light: #33925d;
-  --ifm-color-primary-lighter: #359962;
-  --ifm-color-primary-lightest: #3cad6e;
+  /* Noteleaf Color Palette - Light Mode */
+  --ifm-color-primary: #00A4FF; /* Malibu - Blue primary */
+  --ifm-color-primary-dark: #0094e6;
+  --ifm-color-primary-darker: #008ad9;
+  --ifm-color-primary-darkest: #0072b3;
+  --ifm-color-primary-light: #1aadff;
+  --ifm-color-primary-lighter: #33b7ff;
+  --ifm-color-primary-lightest: #66c9ff;
+
+  --ifm-color-success: #00FFB2; /* Julep - Green */
+  --ifm-color-info: #5CDFEA; /* Lichen - Teal */
+  --ifm-color-warning: #FF985A; /* Tang - Orange */
+  --ifm-color-danger: #EB4268; /* Sriracha - Red */
+
+  /* Background colors - Light mode uses lighter values */
+  --ifm-background-color: #FFFAF1; /* Butter */
+  --ifm-background-surface-color: #F1EFEF; /* Salt */
+
+  /* Text colors */
+  --ifm-font-color-base: #201F26; /* Pepper */
+  --ifm-font-color-secondary: #605F6B; /* Oyster */
+
+  /* Code blocks */
+  --ifm-code-background: #F1EFEF; /* Salt */
   --ifm-code-font-size: 95%;
-  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
+
+  /* Font family */
+  --ifm-font-family-base: 'Lato', sans-serif;
+
+  --docusaurus-highlighted-code-line-bg: rgba(0, 164, 255, 0.1);
 }
 
-/* For readability concerns, you should choose a lighter palette in dark mode. */
 [data-theme='dark'] {
-  --ifm-color-primary: #25c2a0;
-  --ifm-color-primary-dark: #21af90;
-  --ifm-color-primary-darker: #1fa588;
-  --ifm-color-primary-darkest: #1a8870;
-  --ifm-color-primary-light: #29d5b0;
-  --ifm-color-primary-lighter: #32d8b4;
-  --ifm-color-primary-lightest: #4fddbf;
-  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
+  /* Noteleaf Color Palette - Dark Mode */
+  --ifm-color-primary: #00A4FF; /* Malibu - Blue primary */
+  --ifm-color-primary-dark: #0094e6;
+  --ifm-color-primary-darker: #008ad9;
+  --ifm-color-primary-darkest: #0072b3;
+  --ifm-color-primary-light: #1aadff;
+  --ifm-color-primary-lighter: #33b7ff;
+  --ifm-color-primary-lightest: #66c9ff;
+
+  --ifm-color-success: #00FFB2; /* Julep - Green */
+  --ifm-color-info: #5CDFEA; /* Lichen - Teal */
+  --ifm-color-warning: #FF985A; /* Tang - Orange */
+  --ifm-color-danger: #EB4268; /* Sriracha - Red */
+
+  /* Background colors - Dark mode */
+  --ifm-background-color: #201F26; /* Pepper - Darkest base */
+  --ifm-background-surface-color: #2d2c35; /* BBQ - Secondary background */
+
+  /* Card/elevated backgrounds */
+  --ifm-card-background-color: #3A3943; /* Charcoal - Tertiary */
+
+  /* Text colors */
+  --ifm-font-color-base: #F1EFEF; /* Salt - Primary text */
+  --ifm-font-color-secondary: #BFBCC8; /* Smoke - Secondary text */
+  --ifm-font-color-base-inverse: #201F26; /* Pepper */
+
+  /* Headings */
+  --ifm-heading-color: #00A4FF; /* Malibu */
+
+  /* Code blocks */
+  --ifm-code-background: #2d2c35; /* BBQ */
+  --ifm-pre-background: #2d2c35; /* BBQ */
+
+  /* Borders */
+  --ifm-color-emphasis-300: #4D4C57; /* Iron */
+  --ifm-hr-background-color: #4D4C57; /* Iron */
+
+  /* Links */
+  --ifm-link-color: #5CDFEA; /* Lichen - Accent */
+  --ifm-link-hover-color: #00FFB2; /* Julep - Success */
+
+  --docusaurus-highlighted-code-line-bg: rgba(0, 164, 255, 0.15);
 }
