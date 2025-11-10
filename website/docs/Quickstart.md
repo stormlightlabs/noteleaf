@@ -1,3 +1,11 @@
+---
+id: quickstart
+title: Quickstart Guide
+sidebar_label: Quickstart
+sidebar_position: 1
+description: Install Noteleaf and learn the essentials in minutes.
+---
+
 # Quickstart Guide
 
 This guide will walk you through installing Noteleaf and getting productive with tasks, notes, and media tracking in under 15 minutes.

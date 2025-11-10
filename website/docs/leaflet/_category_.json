@@ -1,0 +1,9 @@
+{
+    "label": "Leaflet Publishing",
+    "position": 5,
+    "link": {
+        "type": "generated-index",
+        "title": "Leaflet Publishing",
+        "description": "Publish and sync documents with leaflet.pub and the AT Protocol."
+    }
+}

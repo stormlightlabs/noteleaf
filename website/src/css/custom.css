@@ -1,13 +1,4 @@
-/**
- * Noteleaf Documentation Site Styles
- * Using color palette from internal/ui/palette.go
- * Font: Lato
- */
 
-@import '@fontsource/lato/300.css';
-@import '@fontsource/lato/400.css';
-@import '@fontsource/lato/700.css';
-@import '@fontsource/lato/900.css';
 
 :root {
   /* Noteleaf Color Palette - Light Mode */
@@ -35,9 +26,6 @@
   /* Code blocks */
   --ifm-code-background: #F1EFEF; /* Salt */
   --ifm-code-font-size: 95%;
-
-  /* Font family */
-  --ifm-font-family-base: 'Lato', sans-serif;
 
   --docusaurus-highlighted-code-line-bg: rgba(0, 164, 255, 0.1);
 }

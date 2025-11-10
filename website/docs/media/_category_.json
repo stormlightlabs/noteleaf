@@ -1,0 +1,9 @@
+{
+    "label": "Media",
+    "position": 5,
+    "link": {
+        "type": "generated-index",
+        "title": "Media Tracking",
+        "description": "Track books, movies, and TV shows without leaving the terminal."
+    }
+}

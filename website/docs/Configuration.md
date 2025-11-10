@@ -1,3 +1,11 @@
+---
+id: configuration
+title: Configuration
+sidebar_label: Configuration
+sidebar_position: 6
+description: Reference for configuration locations, defaults, and options.
+---
+
 # Configuration
 
 Noteleaf stores its configuration in a TOML file. The configuration file location depends on your operating system and can be overridden with environment variables.
@@ -31,6 +39,17 @@ Set `NOTELEAF_CONFIG` to use a custom configuration file location:
 ```sh
 export NOTELEAF_CONFIG=/path/to/custom/config.toml
 ```
+
+### File Structure
+
+Configuration is stored as [TOML](https://toml.io). Each key maps 1:1 with the fields shown by `noteleaf config show`. A minimal file looks like:
+
+```toml
+date_format = "2006-01-02"
+color_scheme = "default"
+```
+
+There is no required ordering—the parser loads the file, applies defaults for missing keys, and writes a normalized version whenever you run `noteleaf config set ...`. This means you can edit the file manually or stick entirely to CLI helpers.
 
 ## Configuration Options
 
@@ -318,6 +337,32 @@ Token expiration timestamp (managed automatically).
 **Type:** String (ISO8601)
 **Default:** None
 
+## Editor Integration
+
+The `editor` key wires Noteleaf into your preferred text editor. Resolution order:
+
+1. `editor` inside `.noteleaf.conf.toml`
+2. `$EDITOR` environment variable
+3. System default (usually `vi` on Unix)
+
+Where it is used:
+
+- `noteleaf note edit <id>` always opens the configured editor.
+- `noteleaf note create -e` or `--editor` lets you capture inline text and immediately refine it in the editor.
+- Interactive creation (`noteleaf note create -i`) respects the same setting when you choose to open the note.
+
+Example configuration:
+
+```toml
+editor = "nvim"
+```
+
+If you frequently switch editors, leave the config empty and export `$EDITOR` before launching Noteleaf:
+
+```sh
+EDITOR="zed" noteleaf note edit 5
+```
+
 ## Managing Configuration
 
 ### View Current Configuration
@@ -389,16 +434,64 @@ sync_enabled = false
 
 ## Environment Variables
 
-Noteleaf respects the following environment variables:
+Environment overrides are resolved before configuration values. Set them when you need temporary behavior (CI jobs, alternate workspaces, etc.).
 
-- `NOTELEAF_CONFIG` - Custom path to configuration file
-- `NOTELEAF_DATA_DIR` - Custom path to data directory
-- `EDITOR` - Default text editor (fallback if `editor` config not set)
+| Variable | Purpose | Notes |
+|----------|---------|-------|
+| `NOTELEAF_CONFIG` | Absolute path to the TOML file | Overrides platform defaults. Parent directories are created automatically. |
+| `NOTELEAF_DATA_DIR` | Root directory for the SQLite DB, notes, articles, and attachments | Useful for portable installs (USB drive, synced folder). |
+| `EDITOR` | Fallback editor when the `editor` config key is empty | Checked by all note-related commands. |
 
-Example:
+Usage example:
 
 ```sh
-export NOTELEAF_CONFIG=~/.config/noteleaf/config.toml
-export NOTELEAF_DATA_DIR=~/Documents/noteleaf-data
-export EDITOR=nvim
+export NOTELEAF_CONFIG=~/.config/noteleaf/work.conf.toml
+export NOTELEAF_DATA_DIR=~/Sync/workspace-data
+export EDITOR=helix
 ```
+
+Because `NOTELEAF_DATA_DIR` cascades to the article and note directories, a single export is all you need to relocate the entire knowledge base.
+
+## Customization
+
+### Themes and Colors
+
+The `color_scheme` option controls how Fang (the underlying Cobra replacement) styles command help and certain UI components. Right now the only valid value is `"default"`, which maps to Noteleaf’s Iceberg-inspired palette. Future releases will add explicit `light`/`dark` options; until then customization requires overriding your terminal theme or building Noteleaf from source with changes in `internal/ui/palette.go`.
+
+```toml
+color_scheme = "default"  # leave blank to adopt upcoming auto-mode
+```
+
+### Keyboard Shortcuts
+
+All interactive views share the same key map:
+
+| Keys | Action |
+|------|--------|
+| `↑ / k`, `↓ / j` | Move selection |
+| `enter` | Open the selected row |
+| `v` | View details in a side panel (where supported) |
+| `/` | Search/filter (live) |
+| `r` | Reload data |
+| `?` | Show full help, including custom actions for the current view |
+| `q`, `ctrl+c` | Quit the view |
+| `esc`, `backspace` | Exit search/help/detail panels |
+| `1-9` | Jump directly to the corresponding row index |
+
+Press `?` inside any list/table to confirm the bindings—this uses Bubble Tea’s built-in help component so it always reflects the current screen.
+
+### Output Formats
+
+- `export_format` sets the default for future export commands (currently `json`).
+- Task commands support JSON today: `noteleaf todo view 12 --json` or `noteleaf todo list --static --json`.
+- The `--format` flag on `noteleaf todo view` switches between `detailed` and `brief` layouts, which is handy when scripting.
+
+Examples:
+
+```sh
+noteleaf todo view 12 --format brief --json | jq '.status'
+noteleaf todo list --static --json > tasks.json
+noteleaf config set export_format "csv"   # prepare for upcoming exporters
+```
+
+Even when there is no dedicated exporter yet, the SQLite database lives in the open, so you can always run your own `SELECT ...` queries or use `sqlite-utils` to produce CSV/JSON.

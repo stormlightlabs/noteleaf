@@ -1,0 +1,9 @@
+{
+    "label": "Tasks",
+    "position": 3,
+    "link": {
+        "type": "generated-index",
+        "title": "Task Management",
+        "description": "Deep dives into scheduling, tracking, and organizing work."
+    }
+}
