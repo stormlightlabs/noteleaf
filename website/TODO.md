@@ -2,19 +2,6 @@
 
 This document tracks documentation coverage for the Noteleaf website. The goal is to provide comprehensive documentation for both the productivity system features and the leaflet.pub publishing capabilities.
 
-## TUI (Terminal UI)
-
-- [ ] Interactive Mode
-  - [ ] Navigation
-  - [ ] Keyboard shortcuts
-  - [ ] Selection and actions
-  - [ ] Help screens
-- [ ] Static Mode
-  - [ ] Command-line output
-  - [ ] Scripting with Noteleaf
-  - [ ] Output formatting
-  - [ ] JSON output
-
 ## Integration and Workflows
 
 - [ ] External Integrations
@@ -31,27 +18,6 @@ This document tracks documentation coverage for the Noteleaf website. The goal i
   - [ ] Exporting data
   - [ ] Backup and restore
   - [ ] Migration from other tools
-
-## CLI Reference
-
-- [ ] Command Structure
-  - [ ] Global flags
-  - [ ] Command hierarchy
-  - [ ] Help system
-- [ ] Commands by Category
-  - [ ] `task` commands
-  - [ ] `note` commands
-  - [ ] `media` commands (book, movie, tv)
-  - [ ] `article` commands
-  - [ ] `pub` commands (leaflet publishing)
-  - [ ] `config` commands
-  - [ ] `setup` commands
-  - [ ] `status` commands
-- [ ] Development Tools
-  - [ ] `tools` subcommand
-  - [ ] Documentation generation
-  - [ ] Lexicon fetching
-  - [ ] Database utilities
 
 ## Development
 

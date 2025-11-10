@@ -1,11 +1,105 @@
 .features {
   display: flex;
-  align-items: center;
-  padding: 2rem 0;
+  align-items: stretch;
+  padding: 3rem 0;
   width: 100%;
+  background: var(--ifm-background-surface-color);
 }
 
-.featureSvg {
-  height: 200px;
-  width: 200px;
+.featureCard {
+  border-radius: 1.25rem;
+  padding: 2rem 1.75rem;
+  min-height: 220px;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  background: var(--ifm-background-color);
+  margin-bottom: 1.5rem;
+}
+
+.featureCardPrimary {
+  border-top: 4px solid var(--ifm-color-primary);
+}
+
+.featureCardSuccess {
+  border-top: 4px solid var(--ifm-color-success);
+}
+
+.featureCardInfo {
+  border-top: 4px solid var(--ifm-color-info);
+}
+
+.featureCardWarning {
+  border-top: 4px solid var(--ifm-color-warning);
+}
+
+.featureCardAccent {
+  border-top: 4px solid #00ffb2;
+}
+
+.featureCardPlum {
+  border-top: 4px solid #c259ff;
+}
+
+.featureCardDanger {
+  border-top: 4px solid #eb4268;
+}
+
+.featureTitle {
+  font-size: 1.3rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: 0.75rem;
+}
+
+.featureCopy {
+  font-size: 1.05rem;
+  line-height: 1.6;
+  color: var(--ifm-font-color-secondary);
+  margin: 0;
+}
+
+.featureCardPrimary .featureTitle {
+  background: linear-gradient(120deg, var(--ifm-color-primary), #66c9ff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.featureCardSuccess .featureTitle {
+  background: linear-gradient(120deg, var(--ifm-color-success), #1ccb92);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.featureCardInfo .featureTitle {
+  background: linear-gradient(120deg, var(--ifm-color-info), #8ef7f5);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.featureCardWarning .featureTitle {
+  background: linear-gradient(120deg, var(--ifm-color-warning), #ffbd85);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.featureCardAccent .featureTitle {
+  background: linear-gradient(120deg, #5cdf8a, #00ffb2);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.featureCardPlum .featureTitle {
+  background: linear-gradient(120deg, #c259ff, #ff66c4);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.featureCardDanger .featureTitle {
+  background: linear-gradient(120deg, #eb4268, #ff7b8d);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.features :global(.container) {
+  background: transparent;
 }

@@ -74,3 +74,8 @@
 
   --docusaurus-highlighted-code-line-bg: rgba(0, 164, 255, 0.15);
 }
+
+.footer {
+  background: var(--ifm-background-color);
+  color: var(--ifm-font-color-base);
+}
