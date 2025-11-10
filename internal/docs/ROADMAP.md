@@ -47,10 +47,10 @@ Notes have create, list, read, edit, and remove commands with interactive and st
     - [ ] Add [OAuth2](#publications--authentication)
 - [x] Verify `pub pull` fetches and syncs documents from leaflet.
 - [x] Confirm `pub list` with status filtering (`all`, `published`, `draft`).
-- [ ] Test `pub post` creates new documents with draft/preview/validate modes.
-- [ ] Ensure `pub patch` updates existing documents correctly.
-- [ ] Validate `pub push` handles batch operations (create/update).
-- [ ] Verify markdown conversion to leaflet block format (headings, code, images, facets).
+- [x] Test `pub post` creates new documents with draft/preview/validate modes.
+- [x] Ensure `pub patch` updates existing documents correctly.
+- [x] Validate `pub push` handles batch operations (create/update).
+- [x] Verify markdown conversion to leaflet block format (headings, code, images, facets).
 
 ### Media Domains
 
@@ -200,6 +200,17 @@ Features that demonstrate Go proficiency and broaden Noteleaf’s scope.
 - [ ] External imports (Goodreads, IMDB, Letterboxd)
 - [ ] Cross-referencing across media types
 - [ ] Analytics: velocity, completion rates
+- [ ] Books (Open Library integration enhancements)
+    - [ ] Author detail fetching (full names, bio)
+    - [ ] Edition-specific metadata
+    - [ ] Cover image download and caching
+    - [ ] Reading progress tracking
+    - [ ] Personal reading lists sync
+- [ ] Movies/TV (external API integration)
+    - [ ] Movie databases (TMDb, OMDb)
+    - [ ] Rotten Tomatoes integration
+- [ ] Music
+    - [ ] Music services (MusicBrainz, Album of the Year)
 
 ### Articles
 
@@ -232,10 +243,14 @@ Features that demonstrate Go proficiency and broaden Noteleaf’s scope.
         - [ ] Ephemeral HTTP server on localhost
         - [ ] Browser launch integration
         - [ ] Timeout handling for abandoned flows
-    - [ ] Migration path from app passwords to OAuth
-        - [ ] Detect existing app password sessions
-        - [ ] Prompt users to upgrade authentication
-        - [ ] Maintain backward compatibility
+    - [ ] Support both OAuth & App Passwords but recommend OAuth
+- [ ] Leaflet.pub enhancements
+    - [ ] Multiple Publications: Manage separate publications for different topics
+    - [ ] Image Upload: Automatically upload images to blob storage and embed in documents
+    - [ ] Status Management: Publish drafts and unpublish documents from CLI
+    - [ ] Metadata Editing: Update document titles, summaries, and tags
+    - [ ] Backlink Support: Parse and resolve cross-references between documents
+    - [ ] Offline Mode: Queue posts and patches for later upload
 
 ### User Experience
 
@@ -243,6 +258,9 @@ Features that demonstrate Go proficiency and broaden Noteleaf’s scope.
 - [ ] Manpages and docs generator
 - [ ] Theming and customizable output
 - [ ] Calendar integration
+- [ ] Task synchronization services
+- [ ] Git repository linking
+- [ ] Note export to other platforms
 
 ### Tasks
 
@@ -274,7 +292,8 @@ Features that demonstrate Go proficiency and broaden Noteleaf’s scope.
 
 ### Local API Server
 
-A local HTTP server daemon that exposes Noteleaf data for web UIs and extensions. Runs on the user's machine and provides programmatic access to tasks, notes, and media.
+A local HTTP server daemon that exposes Noteleaf data for web UIs and extensions.
+Runs on the user's machine and provides programmatic access to tasks, notes, and media.
 
 #### Architecture
 
@@ -402,26 +421,40 @@ SQLite persistence, CI with GitHub Actions and Codecov, TUIs with Charm stack, i
 #### Post v1
 
 - Backup/restore
+    - [ ] Automated backups
+    - [ ] Backup scheduling and rotation
 - Multiple profiles
 - Optional synchronization
+    - [ ] Sync service
+- Import/Export
+    - [ ] CSV export for tasks
+    - [ ] Markdown export for tasks
+    - [ ] Bulk export commands
+    - [ ] Migration utilities (TaskWarrior, todo.txt, etc.)
+    - [ ] Git integration for notes/data versioning
 
 ## v1 Feature Matrix
 
-| Domain   | Feature               | Status    |
-|----------|-----------------------|-----------|
-| Tasks    | CRUD                  | Complete  |
-| Tasks    | Projects/tags         | Complete  |
-| Tasks    | Time tracking         | Complete  |
-| Tasks    | Dependencies          | Complete  |
-| Tasks    | Recurrence            | Complete  |
-| Tasks    | Wait/scheduled        | Planned   |
-| Tasks    | Urgency scoring       | Planned   |
-| Notes    | CRUD                  | Complete  |
-| Notes    | Search/tagging        | Planned   |
-| Media    | Books/movies/TV       | Complete  |
-| Media    | Articles              | Complete  |
-| Media    | Source/ratings        | Planned   |
-| Articles | Parser + storage      | Complete  |
-| System   | SQLite persistence    | Complete  |
-| System   | Synchronization       | Future    |
-| System   | Import/export formats | Future    |
+| Domain       | Feature                    | Status    |
+|--------------|----------------------------|-----------|
+| Tasks        | CRUD                       | Complete  |
+| Tasks        | Projects/tags              | Complete  |
+| Tasks        | Time tracking              | Complete  |
+| Tasks        | Dependencies               | Complete  |
+| Tasks        | Recurrence                 | Complete  |
+| Tasks        | Wait/scheduled             | Planned   |
+| Tasks        | Urgency scoring            | Planned   |
+| Notes        | CRUD                       | Complete  |
+| Notes        | Search/tagging             | Planned   |
+| Publications | AT Protocol sync           | Complete  |
+| Publications | Post/patch/push            | Complete  |
+| Publications | Markdown conversion        | Complete  |
+| Publications | OAuth2                     | Future    |
+| Media        | Books/movies/TV            | Complete  |
+| Media        | Articles                   | Complete  |
+| Media        | Source/ratings             | Planned   |
+| Articles     | Parser + storage           | Complete  |
+| System       | SQLite persistence         | Complete  |
+| System       | Configuration management   | Complete  |
+| System       | Synchronization            | Future    |
+| System       | Import/export formats      | Future    |

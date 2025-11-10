@@ -1,0 +1,6 @@
+{
+    "[typescript]": { "editor.defaultFormatter": "dprint.dprint" },
+    "[typescriptreact]": { "editor.defaultFormatter": "dprint.dprint" },
+    "[javascript]": { "editor.defaultFormatter": "dprint.dprint" },
+    "[javascriptreact]": { "editor.defaultFormatter": "dprint.dprint" }
+}

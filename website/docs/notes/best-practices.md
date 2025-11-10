@@ -11,7 +11,7 @@ sidebar_position: 8
 
 **Tag consistently**: Establish a tagging taxonomy early and stick to it. Review tags periodically with `noteleaf note tags`.
 
-**Link liberally**: Reference related notes, tasks, and articles. Future features will leverage these connections.
+**Link liberally**: Reference related notes, tasks, and articles using markdown links and references.
 
 **Short, focused notes**: Better to have many small notes than few giant ones. Easier to link and reuse.
 

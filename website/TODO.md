@@ -4,31 +4,31 @@ This document tracks documentation coverage for the Noteleaf website. The goal i
 
 ## Integration and Workflows
 
-- [ ] External Integrations
-  - [ ] Open Library API
-  - [ ] Leaflet.pub API
-  - [ ] ATProto authentication
+- [x] External Integrations
+  - [x] Open Library API
+  - [x] Leaflet.pub API
+  - [x] ATProto authentication
 - [ ] Workflows and Examples
   - [ ] Daily task review workflow
   - [ ] Note-taking for research
   - [ ] Reading list management
   - [ ] Publishing a blog post to leaflet.pub
   - [ ] Linking tasks, notes, and media
-- [ ] Import/Export
-  - [ ] Exporting data
-  - [ ] Backup and restore
-  - [ ] Migration from other tools
+- [x] Import/Export
+  - [x] Exporting data
+  - [x] Backup and restore
+  - [x] Migration from other tools
 
 ## Development
 
-- [ ] Building Noteleaf
-  - [ ] Development vs production builds
-  - [ ] Build tags
-  - [ ] Task automation (Taskfile)
-- [ ] Testing
-  - [ ] Running tests
-  - [ ] Coverage reports
-  - [ ] Test patterns and scaffolding
+- [x] Building Noteleaf
+  - [x] Development vs production builds
+  - [x] Build tags
+  - [x] Task automation (Taskfile)
+- [x] Testing
+  - [x] Running tests
+  - [x] Coverage reports
+  - [x] Test patterns and scaffolding
 - [ ] Contributing
   - [ ] Code organization
   - [ ] Adding new commands
@@ -54,14 +54,6 @@ This document tracks documentation coverage for the Noteleaf website. The goal i
   - [ ] Zettelkasten method
   - [ ] Research notes
   - [ ] Meeting notes
-- [ ] Publishing Tutorials
-  - [ ] Writing a blog post
-  - [ ] Creating a publication
-  - [ ] Managing drafts
-- [ ] Advanced Tutorials
-  - [ ] Scripting with Noteleaf
-  - [ ] Custom automation
-  - [ ] Data analysis
 
 ## Appendices
 

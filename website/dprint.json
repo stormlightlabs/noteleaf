@@ -1,0 +1,6 @@
+{
+  "typescript": { "preferSingleLine": true, "jsx.bracketPosition": "sameLine" },
+  "json": { "preferSingleLine": true, "lineWidth": 121, "indentWidth": 2 },
+  "excludes": ["**/node_modules"],
+  "plugins": ["https://plugins.dprint.dev/typescript-0.95.8.wasm", "https://plugins.dprint.dev/json-0.20.0.wasm"]
+}
