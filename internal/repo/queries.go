@@ -20,20 +20,20 @@ const (
 )
 
 const (
-	taskColumns     = "id, uuid, description, status, priority, project, context, tags, due, entry, modified, end, start, annotations, recur, until, parent_uuid"
+	taskColumns     = "id, uuid, description, status, priority, project, context, tags, due, wait, scheduled, entry, modified, end, start, annotations, recur, until, parent_uuid"
 	queryTaskByID   = "SELECT " + taskColumns + " FROM tasks WHERE id = ?"
 	queryTaskByUUID = "SELECT " + taskColumns + " FROM tasks WHERE uuid = ?"
 	queryTaskInsert = `
 		INSERT INTO tasks (
 			uuid, description, status, priority, project, context,
-			tags, due, entry, modified, end, start, annotations,
+			tags, due, wait, scheduled, entry, modified, end, start, annotations,
 			recur, until, parent_uuid
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	queryTaskUpdate = `
 		UPDATE tasks SET
 			uuid = ?, description = ?, status = ?, priority = ?, project = ?, context = ?,
-			tags = ?, due = ?, modified = ?, end = ?, start = ?, annotations = ?,
+			tags = ?, due = ?, wait = ?, scheduled = ?, modified = ?, end = ?, start = ?, annotations = ?,
 			recur = ?, until = ?, parent_uuid = ?
 		WHERE id = ?`
 	queryTaskDelete = "DELETE FROM tasks WHERE id = ?"

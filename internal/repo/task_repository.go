@@ -71,7 +71,7 @@ func (r *TaskRepository) scanTask(s scanner) (*models.Task, error) {
 	if err := s.Scan(
 		&task.ID, &task.UUID, &task.Description, &task.Status, &priority,
 		&project, &context, &tags,
-		&task.Due, &task.Entry, &task.Modified, &task.End, &task.Start, &annotations,
+		&task.Due, &task.Wait, &task.Scheduled, &task.Entry, &task.Modified, &task.End, &task.Start, &annotations,
 		&task.Recur, &task.Until, &parentUUID,
 	); err != nil {
 		return nil, err
@@ -160,7 +160,7 @@ func (r *TaskRepository) Create(ctx context.Context, task *models.Task) (int64, 
 
 	result, err := r.db.ExecContext(ctx, queryTaskInsert,
 		task.UUID, task.Description, task.Status, task.Priority, task.Project, task.Context,
-		tags, task.Due, task.Entry, task.Modified, task.End, task.Start, annotations,
+		tags, task.Due, task.Wait, task.Scheduled, task.Entry, task.Modified, task.End, task.Start, annotations,
 		task.Recur, task.Until, task.ParentUUID,
 	)
 	if err != nil {
@@ -213,7 +213,7 @@ func (r *TaskRepository) Update(ctx context.Context, task *models.Task) error {
 
 	if _, err = r.db.ExecContext(ctx, queryTaskUpdate,
 		task.UUID, task.Description, task.Status, task.Priority, task.Project, task.Context,
-		tags, task.Due, task.Modified, task.End, task.Start, annotations,
+		tags, task.Due, task.Wait, task.Scheduled, task.Modified, task.End, task.Start, annotations,
 		task.Recur, task.Until, task.ParentUUID,
 		task.ID,
 	); err != nil {
@@ -518,7 +518,7 @@ func (r *TaskRepository) GetContexts(ctx context.Context) ([]ContextSummary, err
 func (r *TaskRepository) GetTasksByTag(ctx context.Context, tag string) ([]*models.Task, error) {
 	query := `
 		SELECT t.id, t.uuid, t.description, t.status, t.priority, t.project, t.context,
-		       t.tags, t.due, t.entry, t.modified, t.end, t.start, t.annotations,
+		       t.tags, t.due, t.wait, t.scheduled, t.entry, t.modified, t.end, t.start, t.annotations,
 		       t.recur, t.until, t.parent_uuid
 		FROM tasks t, json_each(t.tags)
 		WHERE t.tags != '' AND t.tags IS NOT NULL AND json_each.value = ?
@@ -684,7 +684,7 @@ func (r *TaskRepository) PopulateDependencies(ctx context.Context, task *models.
 func (r *TaskRepository) GetDependents(ctx context.Context, blockingUUID string) ([]*models.Task, error) {
 	query := `
 		SELECT t.id, t.uuid, t.description, t.status, t.priority, t.project, t.context,
-		       t.tags, t.due, t.entry, t.modified, t.end, t.start, t.annotations, t.recur, t.until, t.parent_uuid
+		       t.tags, t.due, t.wait, t.scheduled, t.entry, t.modified, t.end, t.start, t.annotations, t.recur, t.until, t.parent_uuid
 		FROM tasks t JOIN task_dependencies d ON t.uuid = d.task_uuid WHERE d.depends_on_uuid = ?`
 
 	tasks, err := r.queryMany(ctx, query, blockingUUID)
@@ -704,7 +704,7 @@ func (r *TaskRepository) GetDependents(ctx context.Context, blockingUUID string)
 func (r *TaskRepository) GetBlockedTasks(ctx context.Context, blockingUUID string) ([]*models.Task, error) {
 	query := `
 		SELECT t.id, t.uuid, t.description, t.status, t.priority, t.project, t.context,
-		       t.tags, t.due, t.entry, t.modified, t.end, t.start, t.annotations, t.recur, t.until, t.parent_uuid
+		       t.tags, t.due, t.wait, t.scheduled, t.entry, t.modified, t.end, t.start, t.annotations, t.recur, t.until, t.parent_uuid
 		FROM tasks t
 		JOIN task_dependencies d ON t.uuid = d.task_uuid
 		WHERE d.depends_on_uuid = ?`

@@ -33,6 +33,7 @@ time tracking. Tasks can be filtered by status, priority, project, or context.`,
 		&cobra.Group{ID: "task-ops", Title: "Basic Operations"},
 		&cobra.Group{ID: "task-meta", Title: "Metadata"},
 		&cobra.Group{ID: "task-tracking", Title: "Tracking"},
+		&cobra.Group{ID: "task-reports", Title: "Reports & Views"},
 	)
 
 	for _, init := range []func(*handlers.TaskHandler) *cobra.Command{
@@ -56,6 +57,14 @@ time tracking. Tasks can be filtered by status, priority, project, or context.`,
 	} {
 		cmd := init(c.handler)
 		cmd.GroupID = "task-tracking"
+		root.AddCommand(cmd)
+	}
+
+	for _, init := range []func(*handlers.TaskHandler) *cobra.Command{
+		nextActionsCmd, reportCompletedCmd, reportWaitingCmd, reportBlockedCmd, calendarCmd,
+	} {
+		cmd := init(c.handler)
+		cmd.GroupID = "task-reports"
 		root.AddCommand(cmd)
 	}
 
@@ -84,6 +93,8 @@ Examples:
 			project, _ := c.Flags().GetString("project")
 			context, _ := c.Flags().GetString("context")
 			due, _ := c.Flags().GetString("due")
+			wait, _ := c.Flags().GetString("wait")
+			scheduled, _ := c.Flags().GetString("scheduled")
 			recur, _ := c.Flags().GetString("recur")
 			until, _ := c.Flags().GetString("until")
 			parent, _ := c.Flags().GetString("parent")
@@ -91,11 +102,13 @@ Examples:
 			tags, _ := c.Flags().GetStringSlice("tags")
 
 			defer h.Close()
-			return h.Create(c.Context(), description, priority, project, context, due, recur, until, parent, dependsOn, tags)
+			// TODO: Make a CreateTask struct
+			return h.Create(c.Context(), description, priority, project, context, due, wait, scheduled, recur, until, parent, dependsOn, tags)
 		},
 	}
 	addCommonTaskFlags(cmd)
 	addDueDateFlag(cmd)
+	addWaitScheduledFlags(cmd)
 	addRecurrenceFlags(cmd)
 	addParentFlag(cmd)
 	addDependencyFlags(cmd)
@@ -120,9 +133,11 @@ Use --all to show all tasks, otherwise only pending tasks are shown.`,
 			priority, _ := c.Flags().GetString("priority")
 			project, _ := c.Flags().GetString("project")
 			context, _ := c.Flags().GetString("context")
+			sortBy, _ := c.Flags().GetString("sort")
 
 			defer h.Close()
-			return h.List(c.Context(), static, showAll, status, priority, project, context)
+			// TODO: TaskFilter struct
+			return h.List(c.Context(), static, showAll, status, priority, project, context, sortBy)
 		},
 	}
 	cmd.Flags().BoolP("interactive", "i", false, "Force interactive mode (default)")
@@ -132,6 +147,7 @@ Use --all to show all tasks, otherwise only pending tasks are shown.`,
 	cmd.Flags().String("priority", "", "Filter by priority")
 	cmd.Flags().String("project", "", "Filter by project")
 	cmd.Flags().String("context", "", "Filter by context")
+	cmd.Flags().String("sort", "", "Sort by (urgency)")
 
 	return cmd
 }
@@ -449,6 +465,85 @@ configured.`,
 
 	root.AddCommand(setCmd, clearCmd, showCmd)
 	return root
+}
+
+func nextActionsCmd(h *handlers.TaskHandler) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:     "next",
+		Short:   "Show next actions (actionable tasks sorted by urgency)",
+		Aliases: []string{"na"},
+		Long: `Display actionable tasks sorted by urgency score.
+
+Shows tasks that can be worked on now (not waiting, not blocked, not completed),
+ordered by their computed urgency based on priority, due date, age, and other factors.`,
+		RunE: func(c *cobra.Command, args []string) error {
+			limit, _ := c.Flags().GetInt("limit")
+			defer h.Close()
+			return h.NextActions(c.Context(), limit)
+		},
+	}
+	cmd.Flags().IntP("limit", "n", 10, "Limit number of tasks shown")
+	return cmd
+}
+
+func reportCompletedCmd(h *handlers.TaskHandler) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "completed",
+		Short: "Show completed tasks",
+		Long:  "Display tasks that have been completed, sorted by completion date.",
+		RunE: func(c *cobra.Command, args []string) error {
+			limit, _ := c.Flags().GetInt("limit")
+			defer h.Close()
+			return h.ReportCompleted(c.Context(), limit)
+		},
+	}
+	cmd.Flags().IntP("limit", "n", 20, "Limit number of tasks shown")
+	return cmd
+}
+
+func reportWaitingCmd(h *handlers.TaskHandler) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "waiting",
+		Short: "Show waiting tasks",
+		Long:  "Display tasks that are waiting for a specific date before becoming actionable.",
+		RunE: func(c *cobra.Command, args []string) error {
+			defer h.Close()
+			return h.ReportWaiting(c.Context())
+		},
+	}
+	return cmd
+}
+
+func reportBlockedCmd(h *handlers.TaskHandler) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "blocked",
+		Short: "Show blocked tasks",
+		Long:  "Display tasks that are blocked by dependencies on other tasks.",
+		RunE: func(c *cobra.Command, args []string) error {
+			defer h.Close()
+			return h.ReportBlocked(c.Context())
+		},
+	}
+	return cmd
+}
+
+func calendarCmd(h *handlers.TaskHandler) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:     "calendar",
+		Short:   "Show tasks in calendar view",
+		Aliases: []string{"cal"},
+		Long: `Display tasks with due dates in a calendar format.
+
+Shows tasks organized by week and day, making it easy to see upcoming deadlines
+and plan your work schedule.`,
+		RunE: func(c *cobra.Command, args []string) error {
+			weeks, _ := c.Flags().GetInt("weeks")
+			defer h.Close()
+			return h.Calendar(c.Context(), weeks)
+		},
+	}
+	cmd.Flags().IntP("weeks", "w", 4, "Number of weeks to show")
+	return cmd
 }
 
 func taskDependCmd(h *handlers.TaskHandler) *cobra.Command {

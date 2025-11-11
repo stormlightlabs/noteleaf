@@ -31,3 +31,8 @@ func addOutputFlags(cmd *cobra.Command) {
 func addDueDateFlag(cmd *cobra.Command) {
 	cmd.Flags().StringP("due", "d", "", "Set due date (YYYY-MM-DD)")
 }
+
+func addWaitScheduledFlags(cmd *cobra.Command) {
+	cmd.Flags().StringP("wait", "w", "", "Task not actionable until date (YYYY-MM-DD)")
+	cmd.Flags().StringP("scheduled", "s", "", "Task scheduled to start on date (YYYY-MM-DD)")
+}

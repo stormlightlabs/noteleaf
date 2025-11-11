@@ -112,6 +112,8 @@ type Task struct {
 	Context     string     `json:"context,omitempty"`
 	Tags        []string   `json:"tags,omitempty"`
 	Due         *time.Time `json:"due,omitempty"`
+	Wait        *time.Time `json:"wait,omitempty"`      // Task is not actionable until this date
+	Scheduled   *time.Time `json:"scheduled,omitempty"` // Task is scheduled to start on this date
 	Entry       time.Time  `json:"entry"`
 	Modified    time.Time  `json:"modified"`
 	End         *time.Time `json:"end,omitempty"`   // Completion time
@@ -342,6 +344,29 @@ func (t *Task) IsOverdue(now time.Time) bool {
 // HasDueDate returns true if the task has a due date set.
 func (t *Task) HasDueDate() bool { return t.Due != nil }
 
+// IsWaiting returns true if the task has a wait date and it hasn't passed yet.
+func (t *Task) IsWaiting(now time.Time) bool {
+	return t.Wait != nil && now.Before(*t.Wait)
+}
+
+// HasWaitDate returns true if the task has a wait date set.
+func (t *Task) HasWaitDate() bool { return t.Wait != nil }
+
+// IsScheduled returns true if the task has a scheduled date.
+func (t *Task) IsScheduled() bool { return t.Scheduled != nil }
+
+// IsActionable returns true if the task can be worked on now.
+// A task is actionable if it's not waiting, not blocked, and not completed.
+func (t *Task) IsActionable(now time.Time) bool {
+	if t.IsCompleted() || t.IsDone() || t.IsAbandoned() || t.IsBlocked() {
+		return false
+	}
+	if t.IsWaiting(now) {
+		return false
+	}
+	return true
+}
+
 // IsRecurring returns true if the task has recurrence defined.
 func (t *Task) IsRecurring() bool { return t.Recur != "" }
 
@@ -358,19 +383,87 @@ func (t *Task) Blocks(other *Task) bool {
 	return slices.Contains(other.DependsOn, t.UUID)
 }
 
-// Urgency computes a score based on priority, due date, and tags.
-// This can be expanded later with weights.
+// Urgency computes a comprehensive score based on multiple factors.
+// Higher score means more urgent. Score components:
+// - Priority: 0-10 based on priority weight
+// - Due date: 0-12 based on proximity (overdue gets highest)
+// - Scheduled: 0-4 if scheduled soon
+// - Age: 0-2 for old tasks
+// - Tags: 0.5 per tag (capped at 2.0)
+// - Waiting: -5.0 if not yet actionable
+// - Blocked: -3.0 if has incomplete dependencies
 func (t *Task) Urgency(now time.Time) float64 {
+	if !t.IsActionable(now) {
+		if t.IsWaiting(now) {
+			return -5.0
+		}
+		if t.IsBlocked() {
+			return -3.0
+		}
+		return -10.0
+	}
+
 	score := 0.0
-	if t.Priority != "" {
-		score += 1.0
+
+	if t.HasPriority() {
+		weight := t.GetPriorityWeight()
+		if weight >= 20 {
+			score += float64(weight-15) / 2.0
+		} else if weight > 0 {
+			score += float64(weight) * 2.0
+		}
 	}
-	if t.IsOverdue(now) {
+
+	if t.HasDueDate() {
+		daysUntilDue := t.Due.Sub(now).Hours() / 24.0
+		if daysUntilDue < 0 {
+			overdueDays := -daysUntilDue
+			score += 12.0 + min(overdueDays*0.5, 3.0)
+		} else if daysUntilDue <= 1 {
+			score += 10.0
+		} else if daysUntilDue <= 3 {
+			score += 8.0
+		} else if daysUntilDue <= 7 {
+			score += 6.0
+		} else if daysUntilDue <= 14 {
+			score += 4.0
+		} else if daysUntilDue <= 30 {
+			score += 2.0
+		}
+	}
+
+	if t.IsScheduled() {
+		daysUntilScheduled := t.Scheduled.Sub(now).Hours() / 24.0
+		if daysUntilScheduled <= 0 {
+			score += 4.0
+		} else if daysUntilScheduled <= 1 {
+			score += 3.0
+		} else if daysUntilScheduled <= 3 {
+			score += 2.0
+		} else if daysUntilScheduled <= 7 {
+			score += 1.0
+		}
+	}
+
+	age := now.Sub(t.Entry).Hours() / 24.0
+	if age > 90 {
 		score += 2.0
-	}
-	if len(t.Tags) > 0 {
+	} else if age > 30 {
+		score += 1.5
+	} else if age > 14 {
+		score += 1.0
+	} else if age > 7 {
 		score += 0.5
 	}
+
+	if len(t.Tags) > 0 {
+		score += min(float64(len(t.Tags))*0.5, 2.0)
+	}
+
+	if t.Project != "" {
+		score += 0.5
+	}
+
 	return score
 }
 

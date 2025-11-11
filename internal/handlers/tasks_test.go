@@ -77,7 +77,7 @@ func TestTaskHandler(t *testing.T) {
 
 		t.Run("creates task successfully", func(t *testing.T) {
 			desc := "Buy groceries and cook dinner"
-			err := handler.Create(ctx, desc, "", "", "", "", "", "", "", "", []string{})
+			err := handler.Create(ctx, desc, "", "", "", "", "", "", "", "", "", "", []string{})
 			shared.AssertNoError(t, err, "CreateTask should succeed")
 
 			tasks, err := handler.repos.Tasks.GetPending(ctx)
@@ -104,7 +104,7 @@ func TestTaskHandler(t *testing.T) {
 
 		t.Run("fails with empty description", func(t *testing.T) {
 			desc := ""
-			err := handler.Create(ctx, desc, "", "", "", "", "", "", "", "", []string{})
+			err := handler.Create(ctx, desc, "", "", "", "", "", "", "", "", "", "", []string{})
 			shared.AssertError(t, err, "Expected error for empty description")
 			shared.AssertContains(t, err.Error(), "task description required", "Error message should mention required description")
 		})
@@ -116,7 +116,7 @@ func TestTaskHandler(t *testing.T) {
 			due := "2024-12-31"
 			tags := []string{"urgent", "work"}
 
-			err := handler.Create(ctx, description, priority, project, "test-context", due, "", "", "", "", tags)
+			err := handler.Create(ctx, description, priority, project, "test-context", due, "", "", "", "", "", "", tags)
 			if err != nil {
 				t.Errorf("CreateTask with flags failed: %v", err)
 			}
@@ -171,7 +171,7 @@ func TestTaskHandler(t *testing.T) {
 			desc := "Task with invalid date"
 			invalidDue := "invalid-date"
 
-			err := handler.Create(ctx, desc, "", "", "", invalidDue, "", "", "", "", []string{})
+			err := handler.Create(ctx, desc, "", "", "", invalidDue, "", "", "", "", "", "", []string{})
 			if err == nil {
 				t.Error("Expected error for invalid due date format")
 			}
@@ -185,7 +185,7 @@ func TestTaskHandler(t *testing.T) {
 			ctx, cancel := context.WithCancel(ctx)
 			cancel()
 
-			err := handler.Create(ctx, "Test task", "", "", "", "", "", "", "", "", []string{})
+			err := handler.Create(ctx, "Test task", "", "", "", "", "", "", "", "", "", "", []string{})
 			if err == nil {
 				t.Error("Expected error when repository Create fails")
 			}
@@ -229,35 +229,35 @@ func TestTaskHandler(t *testing.T) {
 		}
 
 		t.Run("lists pending tasks by default (static mode)", func(t *testing.T) {
-			err := handler.List(ctx, true, false, "", "", "", "")
+			err := handler.List(ctx, true, false, "", "", "", "", "")
 			if err != nil {
 				t.Errorf("ListTasks failed: %v", err)
 			}
 		})
 
 		t.Run("filters by status (static mode)", func(t *testing.T) {
-			err := handler.List(ctx, true, false, "completed", "", "", "")
+			err := handler.List(ctx, true, false, "completed", "", "", "", "")
 			if err != nil {
 				t.Errorf("ListTasks with status filter failed: %v", err)
 			}
 		})
 
 		t.Run("filters by priority (static mode)", func(t *testing.T) {
-			err := handler.List(ctx, true, false, "", "A", "", "")
+			err := handler.List(ctx, true, false, "", "A", "", "", "")
 			if err != nil {
 				t.Errorf("ListTasks with priority filter failed: %v", err)
 			}
 		})
 
 		t.Run("filters by project (static mode)", func(t *testing.T) {
-			err := handler.List(ctx, true, false, "", "", "work", "")
+			err := handler.List(ctx, true, false, "", "", "work", "", "")
 			if err != nil {
 				t.Errorf("ListTasks with project filter failed: %v", err)
 			}
 		})
 
 		t.Run("show all tasks (static mode)", func(t *testing.T) {
-			err := handler.List(ctx, true, true, "", "", "", "")
+			err := handler.List(ctx, true, true, "", "", "", "", "")
 			if err != nil {
 				t.Errorf("ListTasks with show all failed: %v", err)
 			}
@@ -1479,12 +1479,12 @@ func TestTaskHandler(t *testing.T) {
 		}
 		defer handler.Close()
 
-		err = handler.Create(ctx, "Test Task 1", "high", "test-project", "test-context", "", "", "", "", "", []string{"tag1"})
+		err = handler.Create(ctx, "Test Task 1", "high", "test-project", "test-context", "", "", "", "", "", "", "", []string{"tag1"})
 		if err != nil {
 			t.Fatalf("Failed to create test task: %v", err)
 		}
 
-		err = handler.Create(ctx, "Test Task 2", "medium", "test-project", "test-context", "", "", "", "", "", []string{"tag2"})
+		err = handler.Create(ctx, "Test Task 2", "medium", "test-project", "test-context", "", "", "", "", "", "", "", []string{"tag2"})
 		if err != nil {
 			t.Fatalf("Failed to create test task: %v", err)
 		}

@@ -1,0 +1,2 @@
+ALTER TABLE tasks DROP COLUMN wait;
+ALTER TABLE tasks DROP COLUMN scheduled;

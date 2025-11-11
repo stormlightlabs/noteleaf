@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -51,7 +52,7 @@ func (h *TaskHandler) Close() error {
 }
 
 // Create creates a new task
-func (h *TaskHandler) Create(ctx context.Context, description, priority, project, context, due, recur, until, parentUUID, dependsOn string, tags []string) error {
+func (h *TaskHandler) Create(ctx context.Context, description, priority, project, context, due, wait, scheduled, recur, until, parentUUID, dependsOn string, tags []string) error {
 	if description == "" {
 		return fmt.Errorf("task description required")
 	}
@@ -66,6 +67,12 @@ func (h *TaskHandler) Create(ctx context.Context, description, priority, project
 	}
 	if due != "" {
 		parsed.Due = due
+	}
+	if wait != "" {
+		parsed.Wait = wait
+	}
+	if scheduled != "" {
+		parsed.Scheduled = scheduled
 	}
 	if recur != "" {
 		parsed.Recur = recur
@@ -100,6 +107,22 @@ func (h *TaskHandler) Create(ctx context.Context, description, priority, project
 			task.Due = &dueTime
 		} else {
 			return fmt.Errorf("invalid due date format, use YYYY-MM-DD: %w", err)
+		}
+	}
+
+	if parsed.Wait != "" {
+		if waitTime, err := time.Parse("2006-01-02", parsed.Wait); err == nil {
+			task.Wait = &waitTime
+		} else {
+			return fmt.Errorf("invalid wait date format, use YYYY-MM-DD: %w", err)
+		}
+	}
+
+	if parsed.Scheduled != "" {
+		if scheduledTime, err := time.Parse("2006-01-02", parsed.Scheduled); err == nil {
+			task.Scheduled = &scheduledTime
+		} else {
+			return fmt.Errorf("invalid scheduled date format, use YYYY-MM-DD: %w", err)
 		}
 	}
 
@@ -154,15 +177,15 @@ func (h *TaskHandler) Create(ctx context.Context, description, priority, project
 }
 
 // List lists all tasks with optional filtering
-func (h *TaskHandler) List(ctx context.Context, static, showAll bool, status, priority, project, context string) error {
+func (h *TaskHandler) List(ctx context.Context, static, showAll bool, status, priority, project, context, sortBy string) error {
 	if static {
-		return h.listTasksStatic(ctx, showAll, status, priority, project, context)
+		return h.listTasksStatic(ctx, showAll, status, priority, project, context, sortBy)
 	}
 
 	return h.listTasksInteractive(ctx, showAll, status, priority, project, context)
 }
 
-func (h *TaskHandler) listTasksStatic(ctx context.Context, showAll bool, status, priority, project, context string) error {
+func (h *TaskHandler) listTasksStatic(ctx context.Context, showAll bool, status, priority, project, context, sortBy string) error {
 	opts := repo.TaskListOptions{
 		Status:   status,
 		Priority: priority,
@@ -179,13 +202,29 @@ func (h *TaskHandler) listTasksStatic(ctx context.Context, showAll bool, status,
 		return fmt.Errorf("failed to list tasks: %w", err)
 	}
 
+	if sortBy == "urgency" {
+		now := time.Now()
+		sort.Slice(tasks, func(i, j int) bool {
+			return tasks[i].Urgency(now) > tasks[j].Urgency(now)
+		})
+	}
+
 	if len(tasks) == 0 {
 		fmt.Printf("No tasks found matching criteria\n")
 		return nil
 	}
 
-	fmt.Printf("Found %d task(s):\n\n", len(tasks))
+	fmt.Printf("Found %d task(s)", len(tasks))
+	if sortBy == "urgency" {
+		fmt.Printf(" (sorted by urgency)")
+	}
+	fmt.Printf(":\n\n")
+
 	for _, task := range tasks {
+		if sortBy == "urgency" {
+			urgency := task.Urgency(time.Now())
+			fmt.Printf("[%.1f] ", urgency)
+		}
 		printTask(task)
 	}
 
@@ -954,6 +993,240 @@ func (h *TaskHandler) BlockedByDep(ctx context.Context, taskID string) error {
 	fmt.Printf("Blocks %d task(s):\n", len(dependents))
 	for _, dep := range dependents {
 		fmt.Printf("  - [%d] %s\n", dep.ID, dep.Description)
+	}
+
+	return nil
+}
+
+// NextActions shows actionable tasks sorted by urgency
+func (h *TaskHandler) NextActions(ctx context.Context, limit int) error {
+	opts := repo.TaskListOptions{
+		SortBy:    "urgency",
+		SortOrder: "desc",
+	}
+
+	tasks, err := h.repos.Tasks.List(ctx, opts)
+	if err != nil {
+		return fmt.Errorf("failed to list tasks: %w", err)
+	}
+
+	now := time.Now()
+	var actionable []*models.Task
+	for _, task := range tasks {
+		if task.IsActionable(now) {
+			actionable = append(actionable, task)
+		}
+	}
+
+	sort.Slice(actionable, func(i, j int) bool {
+		return actionable[i].Urgency(now) > actionable[j].Urgency(now)
+	})
+
+	if limit > 0 && len(actionable) > limit {
+		actionable = actionable[:limit]
+	}
+
+	if len(actionable) == 0 {
+		fmt.Println("No actionable tasks found")
+		return nil
+	}
+
+	fmt.Printf("Next Actions (%d tasks, sorted by urgency):\n\n", len(actionable))
+	for i, task := range actionable {
+		urgency := task.Urgency(now)
+		fmt.Printf("%d. [Urgency: %.1f] ", i+1, urgency)
+		printTask(task)
+	}
+
+	return nil
+}
+
+// ReportCompleted shows completed tasks
+func (h *TaskHandler) ReportCompleted(ctx context.Context, limit int) error {
+	opts := repo.TaskListOptions{
+		Status:    "done",
+		SortBy:    "modified",
+		SortOrder: "desc",
+		Limit:     limit,
+	}
+
+	tasks, err := h.repos.Tasks.List(ctx, opts)
+	if err != nil {
+		return fmt.Errorf("failed to list completed tasks: %w", err)
+	}
+
+	if len(tasks) == 0 {
+		fmt.Println("No completed tasks found")
+		return nil
+	}
+
+	fmt.Printf("Completed Tasks (%d):\n\n", len(tasks))
+	for _, task := range tasks {
+		fmt.Printf("  ")
+		printTask(task)
+		if task.End != nil {
+			fmt.Printf("    Completed: %s\n", task.End.Format("2006-01-02 15:04"))
+		}
+	}
+
+	return nil
+}
+
+// ReportWaiting shows tasks that are waiting
+func (h *TaskHandler) ReportWaiting(ctx context.Context) error {
+	opts := repo.TaskListOptions{
+		SortBy:    "wait",
+		SortOrder: "asc",
+	}
+
+	tasks, err := h.repos.Tasks.List(ctx, opts)
+	if err != nil {
+		return fmt.Errorf("failed to list tasks: %w", err)
+	}
+
+	now := time.Now()
+	var waiting []*models.Task
+	for _, task := range tasks {
+		if task.IsWaiting(now) {
+			waiting = append(waiting, task)
+		}
+	}
+
+	if len(waiting) == 0 {
+		fmt.Println("No waiting tasks found")
+		return nil
+	}
+
+	fmt.Printf("Waiting Tasks (%d):\n\n", len(waiting))
+	for _, task := range waiting {
+		fmt.Printf("  ")
+		printTask(task)
+		if task.Wait != nil {
+			daysUntil := int(task.Wait.Sub(now).Hours() / 24)
+			fmt.Printf("    Wait until: %s (%d days)\n", task.Wait.Format("2006-01-02"), daysUntil)
+		}
+	}
+
+	return nil
+}
+
+// ReportBlocked shows blocked tasks
+func (h *TaskHandler) ReportBlocked(ctx context.Context) error {
+	opts := repo.TaskListOptions{
+		Status: "blocked",
+	}
+
+	tasks, err := h.repos.Tasks.List(ctx, opts)
+	if err != nil {
+		return fmt.Errorf("failed to list blocked tasks: %w", err)
+	}
+
+	if len(tasks) == 0 {
+		fmt.Println("No blocked tasks found")
+		return nil
+	}
+
+	fmt.Printf("Blocked Tasks (%d):\n\n", len(tasks))
+	for _, task := range tasks {
+		fmt.Printf("  ")
+		printTask(task)
+
+		if len(task.DependsOn) > 0 {
+			fmt.Printf("    Depends on %d task(s)\n", len(task.DependsOn))
+		}
+	}
+
+	return nil
+}
+
+// Calendar shows tasks by due date in a calendar-like view
+func (h *TaskHandler) Calendar(ctx context.Context, weeks int) error {
+	if weeks <= 0 {
+		weeks = 4
+	}
+
+	now := time.Now()
+	startDate := now.Truncate(24 * time.Hour)
+	endDate := startDate.AddDate(0, 0, weeks*7)
+
+	opts := repo.TaskListOptions{
+		SortBy:    "due",
+		SortOrder: "asc",
+	}
+
+	tasks, err := h.repos.Tasks.List(ctx, opts)
+	if err != nil {
+		return fmt.Errorf("failed to list tasks: %w", err)
+	}
+
+	tasksByDate := make(map[string][]*models.Task)
+	overdue := []*models.Task{}
+
+	for _, task := range tasks {
+		if task.Due == nil || task.IsCompleted() || task.IsDone() {
+			continue
+		}
+
+		dueDate := task.Due.Truncate(24 * time.Hour)
+		if dueDate.Before(startDate) {
+			overdue = append(overdue, task)
+		} else if dueDate.Before(endDate) {
+			dateKey := dueDate.Format("2006-01-02")
+			tasksByDate[dateKey] = append(tasksByDate[dateKey], task)
+		}
+	}
+
+	fmt.Printf("Calendar View (Next %d weeks)\n", weeks)
+	fmt.Printf("Today: %s\n\n", now.Format("Monday, January 2, 2006"))
+
+	if len(overdue) > 0 {
+		fmt.Printf("OVERDUE (%d tasks):\n", len(overdue))
+		for _, task := range overdue {
+			daysOverdue := int(now.Sub(*task.Due).Hours() / 24)
+			fmt.Printf("  [%d days overdue] ", daysOverdue)
+			printTask(task)
+		}
+		fmt.Println()
+	}
+
+	currentDate := startDate
+	for currentDate.Before(endDate) {
+		weekStart := currentDate
+		weekEnd := currentDate.AddDate(0, 0, 6)
+
+		weekTasks := 0
+		for d := weekStart; !d.After(weekEnd); d = d.AddDate(0, 0, 1) {
+			dateKey := d.Format("2006-01-02")
+			weekTasks += len(tasksByDate[dateKey])
+		}
+
+		if weekTasks > 0 {
+			fmt.Printf("Week of %s (%d tasks):\n", weekStart.Format("Jan 2"), weekTasks)
+
+			for d := weekStart; !d.After(weekEnd); d = d.AddDate(0, 0, 1) {
+				dateKey := d.Format("2006-01-02")
+				dayTasks := tasksByDate[dateKey]
+
+				if len(dayTasks) > 0 {
+					dayName := d.Format("Monday, Jan 2")
+					if d.Format("2006-01-02") == now.Format("2006-01-02") {
+						dayName += " (TODAY)"
+					}
+					fmt.Printf("  %s:\n", dayName)
+					for _, task := range dayTasks {
+						fmt.Printf("    ")
+						printTask(task)
+					}
+				}
+			}
+			fmt.Println()
+		}
+
+		currentDate = currentDate.AddDate(0, 0, 7)
+	}
+
+	if len(overdue) == 0 && len(tasksByDate) == 0 {
+		fmt.Println("No tasks with due dates in the next", weeks, "weeks")
 	}
 
 	return nil

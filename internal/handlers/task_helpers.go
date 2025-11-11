@@ -18,6 +18,8 @@ type ParsedTaskData struct {
 	Context     string
 	Tags        []string
 	Due         string
+	Wait        string
+	Scheduled   string
 	Recur       string
 	Until       string
 	ParentUUID  string
@@ -25,7 +27,7 @@ type ParsedTaskData struct {
 }
 
 // parseDescription extracts inline metadata from description text
-// Supports: +project @context #tag due:YYYY-MM-DD recur:RULE until:DATE parent:UUID depends:UUID1,UUID2
+// Supports: +project @context #tag due:YYYY-MM-DD wait:YYYY-MM-DD scheduled:YYYY-MM-DD recur:RULE until:DATE parent:UUID depends:UUID1,UUID2
 func parseDescription(text string) *ParsedTaskData {
 	parsed := &ParsedTaskData{Tags: []string{}, DependsOn: []string{}}
 	words := strings.Fields(text)
@@ -41,6 +43,10 @@ func parseDescription(text string) *ParsedTaskData {
 			parsed.Tags = append(parsed.Tags, strings.TrimPrefix(word, "#"))
 		case strings.HasPrefix(word, "due:"):
 			parsed.Due = strings.TrimPrefix(word, "due:")
+		case strings.HasPrefix(word, "wait:"):
+			parsed.Wait = strings.TrimPrefix(word, "wait:")
+		case strings.HasPrefix(word, "scheduled:"):
+			parsed.Scheduled = strings.TrimPrefix(word, "scheduled:")
 		case strings.HasPrefix(word, "recur:"):
 			parsed.Recur = strings.TrimPrefix(word, "recur:")
 		case strings.HasPrefix(word, "until:"):

@@ -126,20 +126,20 @@ Planned functionality for a complete baseline release.
 
 ### Tasks
 
-- [ ] Model
-    - [ ] Dependencies
-    - [ ] Recurrence (`recur`, `until`, templates)
-    - [ ] Wait/scheduled dates
-    - [ ] Urgency scoring
+- [x] Model
+    - [x] Dependencies
+    - [x] Recurrence (`recur`, `until`, templates)
+    - [x] Wait/scheduled dates
+    - [x] Urgency scoring
 - [ ] Operations
     - [ ] `annotate`
     - [ ] Bulk edit and undo/history
     - [ ] `$EDITOR` integration
-- [ ] Reports and Views
-    - [ ] Next actions
-    - [ ] Completed/waiting/blocked reports
-    - [ ] Calendar view
-    - [ ] Sorting and urgency-based views
+- [x] Reports and Views
+    - [x] Next actions
+    - [x] Completed/waiting/blocked reports
+    - [x] Calendar view
+    - [x] Sorting and urgency-based views
 - [ ] Queries and Filters
     - [ ] Rich query language
     - [ ] Saved filters and aliases
@@ -442,8 +442,9 @@ SQLite persistence, CI with GitHub Actions and Codecov, TUIs with Charm stack, i
 | Tasks        | Time tracking              | Complete  |
 | Tasks        | Dependencies               | Complete  |
 | Tasks        | Recurrence                 | Complete  |
-| Tasks        | Wait/scheduled             | Planned   |
-| Tasks        | Urgency scoring            | Planned   |
+| Tasks        | Wait/scheduled             | Complete  |
+| Tasks        | Urgency scoring            | Complete  |
+| Tasks        | Reports and views          | Complete  |
 | Notes        | CRUD                       | Complete  |
 | Notes        | Search/tagging             | Planned   |
 | Publications | AT Protocol sync           | Complete  |
