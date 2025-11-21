@@ -110,7 +110,6 @@ Notes have create, list, read, edit, and remove commands with interactive and st
     - Invalid IDs
     - Invalid flags
     - Schema corruption (already tested in repo)
-- [ ] Test cross-platform behavior (Linux/macOS/Windows).
 
 ### Packaging
 
@@ -134,7 +133,6 @@ Planned functionality for a complete baseline release.
 - [ ] Operations
     - [ ] `annotate`
     - [ ] Bulk edit and undo/history
-    - [ ] `$EDITOR` integration
 - [x] Reports and Views
     - [x] Next actions
     - [x] Completed/waiting/blocked reports
@@ -150,15 +148,96 @@ Planned functionality for a complete baseline release.
 ### Notes
 
 - [ ] Commands
-    - [ ] `note search`
+    - [x] `note search` - TF-IDF search via `search query` command
     - [ ] `note tag`
     - [ ] `note recent`
     - [ ] `note templates`
     - [ ] `note archive`
     - [ ] `note export`
 - [ ] Features
-    - [ ] Full-text search
+    - [x] Full-text search - TF-IDF ranking with Unicode tokenization
     - [ ] Linking between notes, tasks, and media
+
+### Search
+
+#### Ranking Improvements
+
+- [ ] BM25 scoring algorithm
+    - [ ] Implement Okapi BM25 with configurable parameters (k1, b)
+    - [ ] Field-aware BM25F with title/body weighting
+    - [ ] Pluggable scoring strategy interface (TF-IDF/BM25 interchangeable)
+    - [ ] Benchmark against TF-IDF on sample corpus
+
+#### Query Features
+
+- [ ] Phrase and proximity queries
+    - [ ] Positional inverted index (track term positions in documents)
+    - [ ] Exact phrase matching (`"go programming"`)
+    - [ ] Proximity scoring (boost when terms appear near each other)
+- [ ] Query understanding
+    - [ ] Synonym expansion with configurable dictionaries
+    - [ ] Boolean operators (AND, OR, NOT)
+    - [ ] Field-specific queries (`title:golang body:concurrency`)
+    - [ ] Spelling correction with edit distance suggestions
+    - [ ] Query boosting syntax (`title^3 golang`)
+
+#### Linguistic Processing
+
+- [ ] Text normalization
+    - [ ] Porter stemmer for English (run/runs/running → run)
+    - [ ] Stopword filtering with domain-specific lists
+    - [ ] Unicode normalization and diacritic folding
+    - [ ] Configurable token filter pipeline
+- [ ] Multi-language support
+    - [ ] Language detection
+    - [ ] Language-specific stemmers
+    - [ ] CJK tokenization improvements
+
+#### Advanced Scoring
+
+- [ ] Learning to Rank
+    - [ ] Feature extraction (TF-IDF/BM25 scores, term coverage, recency)
+    - [ ] Click-through rate tracking for relevance feedback
+    - [ ] Gradient-boosted tree models for re-ranking
+    - [ ] Evaluation metrics (NDCG, MAP)
+- [ ] Non-text signals
+    - [ ] Document recency scoring
+    - [ ] Tag-based relevance
+    - [ ] User interaction signals
+
+#### Index Management
+
+- [ ] Persistence and optimization
+    - [ ] On-disk index snapshots (gob serialization)
+    - [ ] Segmented indexing with periodic merging (Lucene-style)
+    - [ ] Incremental updates (add/update/delete without full rebuild)
+    - [ ] Index versioning and rollback
+    - [ ] Compression for large corpora
+- [ ] Performance
+    - [ ] Index build benchmarks vs corpus size
+    - [ ] Query latency monitoring
+    - [ ] Memory usage profiling
+    - [ ] Concurrent search support
+
+#### User Experience
+
+- [ ] Interactive search interface
+    - [ ] TUI with real-time search-as-you-type
+    - [ ] Result navigation with vim keybindings
+    - [ ] Preview pane showing full note content
+    - [ ] Filtering by tags, date ranges, doc kind
+    - [ ] Sort options (relevance, date, alphabetical)
+    - [ ] Quick actions (open in editor, copy ID, tag)
+- [ ] Search result display
+    - [ ] Snippet generation with matched term highlighting
+    - [ ] Configurable result limit and pagination
+    - [ ] Score explanation mode (`--explain` flag)
+    - [ ] Export results to JSON/CSV
+- [ ] CLI
+    - [ ] Saved search queries and aliases
+    - [ ] Search history
+    - [ ] Query latency and result count in output
+    - [ ] Color-coded relevance scores
 
 ### Media
 
@@ -446,7 +525,9 @@ SQLite persistence, CI with GitHub Actions and Codecov, TUIs with Charm stack, i
 | Tasks        | Urgency scoring            | Complete  |
 | Tasks        | Reports and views          | Complete  |
 | Notes        | CRUD                       | Complete  |
-| Notes        | Search/tagging             | Planned   |
+| Notes        | Search (TF-IDF)            | Complete  |
+| Notes        | Advanced search            | Planned   |
+| Notes        | Tagging                    | Planned   |
 | Publications | AT Protocol sync           | Complete  |
 | Publications | Post/patch/push            | Complete  |
 | Publications | Markdown conversion        | Complete  |
@@ -459,3 +540,8 @@ SQLite persistence, CI with GitHub Actions and Codecov, TUIs with Charm stack, i
 | System       | Configuration management   | Complete  |
 | System       | Synchronization            | Future    |
 | System       | Import/export formats      | Future    |
+
+## Parking Lot
+
+- [ ] Test cross-platform behavior (Linux/macOS/Windows).
+- [ ] `$EDITOR` integration

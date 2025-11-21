@@ -20,6 +20,7 @@ type Repositories struct {
 	Notes       *NoteRepository
 	TimeEntries *TimeEntryRepository
 	Articles    *ArticleRepository
+	Documents   *DocumentRepository
 }
 
 // NewRepositories creates a new set of [Repositories]
@@ -32,6 +33,7 @@ func NewRepositories(db *sql.DB) *Repositories {
 		Notes:       NewNoteRepository(db),
 		TimeEntries: NewTimeEntryRepository(db),
 		Articles:    NewArticleRepository(db),
+		Documents:   NewDocumentRepository(db),
 	}
 }
 

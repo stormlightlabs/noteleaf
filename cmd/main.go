@@ -24,6 +24,7 @@ var (
 	newBookHandler        = handlers.NewBookHandler
 	newArticleHandler     = handlers.NewArticleHandler
 	newPublicationHandler = handlers.NewPublicationHandler
+	newDocumentHandler    = handlers.NewDocumentHandler
 	exc                   = fang.Execute
 )
 
@@ -213,6 +214,12 @@ func run() int {
 		return 1
 	}
 
+	documentHandler, err := newDocumentHandler()
+	if err != nil {
+		log.Error("failed to create document handler", "err", err)
+		return 1
+	}
+
 	root := rootCmd()
 
 	coreGroups := []CommandGroup{
@@ -220,6 +227,7 @@ func run() int {
 		NewNoteCommand(noteHandler),
 		NewPublicationCommand(publicationHandler),
 		NewArticleCommand(articleHandler),
+		NewSearchCommand(documentHandler),
 	}
 
 	for _, group := range coreGroups {

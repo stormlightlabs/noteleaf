@@ -40,6 +40,16 @@ const (
 	queryTasksList  = "SELECT " + taskColumns + " FROM tasks"
 )
 
+const (
+	documentColumns         = "id, title, body, created_at, doc_kind"
+	queryDocumentByID       = "SELECT " + documentColumns + " FROM documents WHERE id = ?"
+	queryDocumentInsert     = `INSERT INTO documents (title, body, created_at, doc_kind) VALUES (?, ?, ?, ?)`
+	queryDocumentDelete     = "DELETE FROM documents WHERE id = ?"
+	queryDocumentsList      = "SELECT " + documentColumns + " FROM documents ORDER BY created_at DESC"
+	queryDocumentsByKind    = "SELECT " + documentColumns + " FROM documents WHERE doc_kind = ? ORDER BY created_at DESC"
+	queryDocumentsDeleteAll = "DELETE FROM documents"
+)
+
 type scanner interface {
 	Scan(dest ...any) error
 }
