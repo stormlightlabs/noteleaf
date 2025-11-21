@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -37,7 +39,7 @@ time tracking. Tasks can be filtered by status, priority, project, or context.`,
 	)
 
 	for _, init := range []func(*handlers.TaskHandler) *cobra.Command{
-		addTaskCmd, listTaskCmd, viewTaskCmd, updateTaskCmd, editTaskCmd, deleteTaskCmd,
+		addTaskCmd, listTaskCmd, viewTaskCmd, updateTaskCmd, editTaskCmd, deleteTaskCmd, taskAnnotateCmd, taskBulkEditCmd,
 	} {
 		cmd := init(c.handler)
 		cmd.GroupID = "task-ops"
@@ -53,7 +55,7 @@ time tracking. Tasks can be filtered by status, priority, project, or context.`,
 	}
 
 	for _, init := range []func(*handlers.TaskHandler) *cobra.Command{
-		timesheetViewCmd, taskStartCmd, taskStopCmd, taskCompleteCmd, taskRecurCmd, taskDependCmd,
+		timesheetViewCmd, taskStartCmd, taskStopCmd, taskCompleteCmd, taskRecurCmd, taskDependCmd, taskUndoCmd, taskHistoryCmd,
 	} {
 		cmd := init(c.handler)
 		cmd.GroupID = "task-tracking"
@@ -608,4 +610,147 @@ UUIDs to specify dependencies.`,
 
 	root.AddCommand(addCmd, removeCmd, listCmd, blockedByCmd)
 	return root
+}
+
+func taskAnnotateCmd(h *handlers.TaskHandler) *cobra.Command {
+	root := &cobra.Command{
+		Use:     "annotate",
+		Aliases: []string{"note"},
+		Short:   "Manage task annotations",
+		Long: `Add, list, or remove annotations on tasks.
+
+Annotations are timestamped notes that provide context and updates
+about a task's progress or relevant information.`,
+	}
+
+	addCmd := &cobra.Command{
+		Use:     "add <task-id> <annotation>",
+		Short:   "Add an annotation to a task",
+		Aliases: []string{"create"},
+		Args:    cobra.MinimumNArgs(2),
+		RunE: func(c *cobra.Command, args []string) error {
+			taskID := args[0]
+			annotation := strings.Join(args[1:], " ")
+			defer h.Close()
+			return h.Annotate(c.Context(), taskID, annotation)
+		},
+	}
+
+	listCmd := &cobra.Command{
+		Use:     "list <task-id>",
+		Short:   "List all annotations for a task",
+		Aliases: []string{"ls", "show"},
+		Args:    cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			defer h.Close()
+			return h.ListAnnotations(c.Context(), args[0])
+		},
+	}
+
+	removeCmd := &cobra.Command{
+		Use:     "remove <task-id> <index>",
+		Short:   "Remove an annotation by index",
+		Aliases: []string{"rm", "delete"},
+		Args:    cobra.ExactArgs(2),
+		RunE: func(c *cobra.Command, args []string) error {
+			taskID := args[0]
+			index, err := strconv.Atoi(args[1])
+			if err != nil {
+				return fmt.Errorf("invalid annotation index: %w", err)
+			}
+			defer h.Close()
+			return h.RemoveAnnotation(c.Context(), taskID, index)
+		},
+	}
+
+	root.AddCommand(addCmd, listCmd, removeCmd)
+	return root
+}
+
+func taskBulkEditCmd(h *handlers.TaskHandler) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:     "bulk-edit <task-id>...",
+		Aliases: []string{"bulk"},
+		Short:   "Update multiple tasks at once",
+		Long: `Update multiple tasks with the same changes.
+
+Allows batch updates to status, priority, project, context, and tags.
+Use --add-tags to add tags without replacing existing ones.
+Use --remove-tags to remove specific tags from tasks.
+
+Examples:
+  noteleaf todo bulk-edit 1 2 3 --status done
+  noteleaf todo bulk-edit 1 2 --project web --priority high
+  noteleaf todo bulk-edit 1 2 3 --add-tags urgent,review`,
+		Args: cobra.MinimumNArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			status, _ := c.Flags().GetString("status")
+			priority, _ := c.Flags().GetString("priority")
+			project, _ := c.Flags().GetString("project")
+			context, _ := c.Flags().GetString("context")
+			tags, _ := c.Flags().GetStringSlice("tags")
+			addTags, _ := c.Flags().GetBool("add-tags")
+			removeTags, _ := c.Flags().GetBool("remove-tags")
+
+			defer h.Close()
+			return h.BulkEdit(c.Context(), args, status, priority, project, context, tags, addTags, removeTags)
+		},
+	}
+
+	cmd.Flags().String("status", "", "Set status for all tasks")
+	cmd.Flags().String("priority", "", "Set priority for all tasks")
+	cmd.Flags().String("project", "", "Set project for all tasks")
+	cmd.Flags().String("context", "", "Set context for all tasks")
+	cmd.Flags().StringSlice("tags", []string{}, "Set tags for all tasks")
+	cmd.Flags().Bool("add-tags", false, "Add tags instead of replacing")
+	cmd.Flags().Bool("remove-tags", false, "Remove specified tags")
+
+	return cmd
+}
+
+func taskUndoCmd(h *handlers.TaskHandler) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "undo <task-id>",
+		Short: "Undo the last change to a task",
+		Long: `Revert a task to its previous state before the last update.
+
+This command uses the task history to restore the task to how it was
+before the most recent modification.
+
+Examples:
+  noteleaf todo undo 1
+  noteleaf todo undo abc-123-uuid`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			defer h.Close()
+			return h.UndoTask(c.Context(), args[0])
+		},
+	}
+
+	return cmd
+}
+
+func taskHistoryCmd(h *handlers.TaskHandler) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:     "history <task-id>",
+		Aliases: []string{"log"},
+		Short:   "Show change history for a task",
+		Long: `Display the history of changes made to a task.
+
+Shows a chronological list of modifications with timestamps.
+
+Examples:
+  noteleaf todo history 1
+  noteleaf todo history 1 --limit 5`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			limit, _ := c.Flags().GetInt("limit")
+			defer h.Close()
+			return h.ShowHistory(c.Context(), args[0], limit)
+		},
+	}
+
+	cmd.Flags().IntP("limit", "n", 10, "Limit number of history entries")
+
+	return cmd
 }

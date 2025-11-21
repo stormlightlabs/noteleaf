@@ -130,9 +130,9 @@ Planned functionality for a complete baseline release.
     - [x] Recurrence (`recur`, `until`, templates)
     - [x] Wait/scheduled dates
     - [x] Urgency scoring
-- [ ] Operations
-    - [ ] `annotate`
-    - [ ] Bulk edit and undo/history
+- [x] Operations
+    - [x] `annotate`
+    - [x] Bulk edit and undo/history
 - [x] Reports and Views
     - [x] Next actions
     - [x] Completed/waiting/blocked reports

@@ -4,6 +4,7 @@ package repo
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -199,6 +200,15 @@ func (r *TaskRepository) Get(ctx context.Context, id int64) (*models.Task, error
 
 // Update modifies an existing task
 func (r *TaskRepository) Update(ctx context.Context, task *models.Task) error {
+	oldTask, err := r.Get(ctx, task.ID)
+	if err != nil {
+		return fmt.Errorf("failed to get current task state: %w", err)
+	}
+
+	if err := r.SaveHistory(ctx, oldTask, "update"); err != nil {
+		return fmt.Errorf("failed to save history: %w", err)
+	}
+
 	task.Modified = time.Now()
 
 	tags, err := marshalTaskTags(task)
@@ -720,4 +730,112 @@ func (r *TaskRepository) GetBlockedTasks(ctx context.Context, blockingUUID strin
 		}
 	}
 	return tasks, nil
+}
+
+// BulkUpdate applies the same updates to multiple tasks
+func (r *TaskRepository) BulkUpdate(ctx context.Context, taskIDs []int64, updates *models.Task) error {
+	if len(taskIDs) == 0 {
+		return fmt.Errorf("no task IDs provided")
+	}
+
+	for _, id := range taskIDs {
+		task, err := r.Get(ctx, id)
+		if err != nil {
+			return fmt.Errorf("failed to get task %d: %w", id, err)
+		}
+
+		if updates.Status != "" {
+			task.Status = updates.Status
+		}
+		if updates.Priority != "" {
+			task.Priority = updates.Priority
+		}
+		if updates.Project != "" {
+			task.Project = updates.Project
+		}
+		if updates.Context != "" {
+			task.Context = updates.Context
+		}
+		if len(updates.Tags) > 0 {
+			task.Tags = updates.Tags
+		}
+		if updates.Due != nil {
+			task.Due = updates.Due
+		}
+
+		if err := r.Update(ctx, task); err != nil {
+			return fmt.Errorf("failed to update task %d: %w", id, err)
+		}
+	}
+
+	return nil
+}
+
+// SaveHistory saves a snapshot of a task before an operation
+func (r *TaskRepository) SaveHistory(ctx context.Context, task *models.Task, operation string) error {
+	snapshot, err := json.Marshal(task)
+	if err != nil {
+		return fmt.Errorf("failed to marshal task snapshot: %w", err)
+	}
+
+	query := `INSERT INTO task_history (task_id, operation, snapshot) VALUES (?, ?, ?)`
+	if _, err := r.db.ExecContext(ctx, query, task.ID, operation, string(snapshot)); err != nil {
+		return fmt.Errorf("failed to save task history: %w", err)
+	}
+
+	return nil
+}
+
+// GetHistory retrieves the history of changes for a task
+func (r *TaskRepository) GetHistory(ctx context.Context, taskID int64, limit int) ([]*models.TaskHistory, error) {
+	query := `SELECT id, task_id, operation, snapshot, created_at FROM task_history WHERE task_id = ? ORDER BY created_at DESC`
+	if limit > 0 {
+		query += fmt.Sprintf(" LIMIT %d", limit)
+	}
+
+	rows, err := r.db.QueryContext(ctx, query, taskID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query task history: %w", err)
+	}
+	defer rows.Close()
+
+	var history []*models.TaskHistory
+	for rows.Next() {
+		h := &models.TaskHistory{}
+		if err := rows.Scan(&h.ID, &h.TaskID, &h.Operation, &h.Snapshot, &h.CreatedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan task history: %w", err)
+		}
+		history = append(history, h)
+	}
+
+	return history, rows.Err()
+}
+
+// UndoLastChange reverts a task to its previous state
+func (r *TaskRepository) UndoLastChange(ctx context.Context, taskID int64) error {
+	history, err := r.GetHistory(ctx, taskID, 1)
+	if err != nil {
+		return fmt.Errorf("failed to get task history: %w", err)
+	}
+
+	if len(history) == 0 {
+		return fmt.Errorf("no history found for task")
+	}
+
+	lastHistory := history[0]
+	var task models.Task
+	if err := json.Unmarshal([]byte(lastHistory.Snapshot), &task); err != nil {
+		return fmt.Errorf("failed to unmarshal task snapshot: %w", err)
+	}
+
+	if err := r.Update(ctx, &task); err != nil {
+		return fmt.Errorf("failed to restore task: %w", err)
+	}
+
+	deleteQuery := `DELETE FROM task_history WHERE id = ?`
+	if _, err := r.db.ExecContext(ctx, deleteQuery, lastHistory.ID); err != nil {
+		return fmt.Errorf("failed to delete history entry: %w", err)
+	}
+
+	return nil
 }

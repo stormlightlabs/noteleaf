@@ -2123,4 +2123,342 @@ func TestTaskHandler(t *testing.T) {
 			t.Errorf("BlockedByDep failed: %v", err)
 		}
 	})
+
+	t.Run("Annotate", func(t *testing.T) {
+		suite := NewHandlerTestSuite(t)
+		defer suite.cleanup()
+
+		handler, err := NewTaskHandler()
+		if err != nil {
+			t.Fatalf("Failed to create handler: %v", err)
+		}
+		defer handler.Close()
+
+		id, err := handler.repos.Tasks.Create(ctx, &models.Task{
+			UUID:        uuid.New().String(),
+			Description: "Test task",
+			Status:      "pending",
+		})
+		if err != nil {
+			t.Fatalf("Failed to create task: %v", err)
+		}
+
+		t.Run("adds annotation successfully", func(t *testing.T) {
+			err := handler.Annotate(ctx, strconv.FormatInt(id, 10), "First annotation")
+			shared.AssertNoError(t, err, "Annotate should succeed")
+
+			task, err := handler.repos.Tasks.Get(ctx, id)
+			shared.AssertNoError(t, err, "Get should succeed")
+			shared.AssertEqual(t, 1, len(task.Annotations), "should have 1 annotation")
+			shared.AssertEqual(t, "First annotation", task.Annotations[0], "annotation text should match")
+		})
+
+		t.Run("adds multiple annotations", func(t *testing.T) {
+			err := handler.Annotate(ctx, strconv.FormatInt(id, 10), "Second annotation")
+			shared.AssertNoError(t, err, "Annotate should succeed")
+
+			task, err := handler.repos.Tasks.Get(ctx, id)
+			shared.AssertNoError(t, err, "Get should succeed")
+			shared.AssertEqual(t, 2, len(task.Annotations), "should have 2 annotations")
+		})
+
+		t.Run("fails with empty annotation", func(t *testing.T) {
+			err := handler.Annotate(ctx, strconv.FormatInt(id, 10), "")
+			shared.AssertError(t, err, "should fail with empty annotation")
+			shared.AssertContains(t, err.Error(), "annotation text required", "error message")
+		})
+
+		t.Run("fails with invalid task ID", func(t *testing.T) {
+			err := handler.Annotate(ctx, "99999", "Test annotation")
+			shared.AssertError(t, err, "should fail with invalid task ID")
+			shared.AssertContains(t, err.Error(), "failed to find task", "error message")
+		})
+
+		t.Run("works with UUID", func(t *testing.T) {
+			task := &models.Task{
+				UUID:        uuid.New().String(),
+				Description: "UUID task",
+				Status:      "pending",
+			}
+			_, err := handler.repos.Tasks.Create(ctx, task)
+			shared.AssertNoError(t, err, "Create should succeed")
+
+			err = handler.Annotate(ctx, task.UUID, "UUID annotation")
+			shared.AssertNoError(t, err, "Annotate with UUID should succeed")
+
+			retrieved, err := handler.repos.Tasks.GetByUUID(ctx, task.UUID)
+			shared.AssertNoError(t, err, "GetByUUID should succeed")
+			shared.AssertEqual(t, 1, len(retrieved.Annotations), "should have 1 annotation")
+		})
+	})
+
+	t.Run("ListAnnotations", func(t *testing.T) {
+		suite := NewHandlerTestSuite(t)
+		defer suite.cleanup()
+
+		handler, err := NewTaskHandler()
+		if err != nil {
+			t.Fatalf("Failed to create handler: %v", err)
+		}
+		defer handler.Close()
+
+		t.Run("lists annotations successfully", func(t *testing.T) {
+			task := &models.Task{
+				UUID:        uuid.New().String(),
+				Description: "Test task",
+				Status:      "pending",
+				Annotations: []string{"Annotation 1", "Annotation 2", "Annotation 3"},
+			}
+			id, err := handler.repos.Tasks.Create(ctx, task)
+			shared.AssertNoError(t, err, "Create should succeed")
+
+			err = handler.ListAnnotations(ctx, strconv.FormatInt(id, 10))
+			shared.AssertNoError(t, err, "ListAnnotations should succeed")
+		})
+
+		t.Run("handles task with no annotations", func(t *testing.T) {
+			task := &models.Task{
+				UUID:        uuid.New().String(),
+				Description: "Task without annotations",
+				Status:      "pending",
+			}
+			id, err := handler.repos.Tasks.Create(ctx, task)
+			shared.AssertNoError(t, err, "Create should succeed")
+
+			err = handler.ListAnnotations(ctx, strconv.FormatInt(id, 10))
+			shared.AssertNoError(t, err, "ListAnnotations should succeed for empty annotations")
+		})
+
+		t.Run("fails with invalid task ID", func(t *testing.T) {
+			err := handler.ListAnnotations(ctx, "99999")
+			shared.AssertError(t, err, "should fail with invalid task ID")
+			shared.AssertContains(t, err.Error(), "failed to find task", "error message")
+		})
+	})
+
+	t.Run("RemoveAnnotation", func(t *testing.T) {
+		suite := NewHandlerTestSuite(t)
+		defer suite.cleanup()
+
+		handler, err := NewTaskHandler()
+		if err != nil {
+			t.Fatalf("Failed to create handler: %v", err)
+		}
+		defer handler.Close()
+
+		t.Run("removes annotation successfully", func(t *testing.T) {
+			task := &models.Task{
+				UUID:        uuid.New().String(),
+				Description: "Test task",
+				Status:      "pending",
+				Annotations: []string{"First", "Second", "Third"},
+			}
+			id, err := handler.repos.Tasks.Create(ctx, task)
+			shared.AssertNoError(t, err, "Create should succeed")
+
+			err = handler.RemoveAnnotation(ctx, strconv.FormatInt(id, 10), 2)
+			shared.AssertNoError(t, err, "RemoveAnnotation should succeed")
+
+			retrieved, err := handler.repos.Tasks.Get(ctx, id)
+			shared.AssertNoError(t, err, "Get should succeed")
+			shared.AssertEqual(t, 2, len(retrieved.Annotations), "should have 2 annotations")
+			shared.AssertEqual(t, "First", retrieved.Annotations[0], "first annotation should remain")
+			shared.AssertEqual(t, "Third", retrieved.Annotations[1], "third annotation should be second")
+		})
+
+		t.Run("fails with invalid index (too low)", func(t *testing.T) {
+			task := &models.Task{
+				UUID:        uuid.New().String(),
+				Description: "Test task",
+				Status:      "pending",
+				Annotations: []string{"First"},
+			}
+			id, err := handler.repos.Tasks.Create(ctx, task)
+			shared.AssertNoError(t, err, "Create should succeed")
+
+			err = handler.RemoveAnnotation(ctx, strconv.FormatInt(id, 10), 0)
+			shared.AssertError(t, err, "should fail with index 0")
+			shared.AssertContains(t, err.Error(), "index out of range", "error message")
+		})
+
+		t.Run("fails with invalid index (too high)", func(t *testing.T) {
+			task := &models.Task{
+				UUID:        uuid.New().String(),
+				Description: "Test task",
+				Status:      "pending",
+				Annotations: []string{"First"},
+			}
+			id, err := handler.repos.Tasks.Create(ctx, task)
+			shared.AssertNoError(t, err, "Create should succeed")
+
+			err = handler.RemoveAnnotation(ctx, strconv.FormatInt(id, 10), 5)
+			shared.AssertError(t, err, "should fail with index > len")
+			shared.AssertContains(t, err.Error(), "index out of range", "error message")
+		})
+
+		t.Run("fails when task has no annotations", func(t *testing.T) {
+			task := &models.Task{
+				UUID:        uuid.New().String(),
+				Description: "Task without annotations",
+				Status:      "pending",
+			}
+			id, err := handler.repos.Tasks.Create(ctx, task)
+			shared.AssertNoError(t, err, "Create should succeed")
+
+			err = handler.RemoveAnnotation(ctx, strconv.FormatInt(id, 10), 1)
+			shared.AssertError(t, err, "should fail when no annotations")
+			shared.AssertContains(t, err.Error(), "has no annotations", "error message")
+		})
+
+		t.Run("fails with invalid task ID", func(t *testing.T) {
+			err := handler.RemoveAnnotation(ctx, "99999", 1)
+			shared.AssertError(t, err, "should fail with invalid task ID")
+			shared.AssertContains(t, err.Error(), "failed to find task", "error message")
+		})
+	})
+
+	t.Run("BulkEdit", func(t *testing.T) {
+		suite := NewHandlerTestSuite(t)
+		defer suite.cleanup()
+
+		handler, err := NewTaskHandler()
+		if err != nil {
+			t.Fatalf("Failed to create handler: %v", err)
+		}
+		defer handler.Close()
+
+		t.Run("updates multiple tasks successfully", func(t *testing.T) {
+			id1, err := handler.repos.Tasks.Create(ctx, &models.Task{
+				UUID:        uuid.New().String(),
+				Description: "Task 1",
+				Status:      "pending",
+			})
+			shared.AssertNoError(t, err, "Create should succeed")
+
+			id2, err := handler.repos.Tasks.Create(ctx, &models.Task{
+				UUID:        uuid.New().String(),
+				Description: "Task 2",
+				Status:      "pending",
+			})
+			shared.AssertNoError(t, err, "Create should succeed")
+
+			taskIDs := []string{strconv.FormatInt(id1, 10), strconv.FormatInt(id2, 10)}
+			err = handler.BulkEdit(ctx, taskIDs, "done", "high", "test-project", "", []string{}, false, false)
+			shared.AssertNoError(t, err, "BulkEdit should succeed")
+
+			task1, err := handler.repos.Tasks.Get(ctx, id1)
+			shared.AssertNoError(t, err, "Get should succeed")
+			shared.AssertEqual(t, "done", task1.Status, "task 1 status should be updated")
+			shared.AssertEqual(t, "high", task1.Priority, "task 1 priority should be updated")
+			shared.AssertEqual(t, "test-project", task1.Project, "task 1 project should be updated")
+
+			task2, err := handler.repos.Tasks.Get(ctx, id2)
+			shared.AssertNoError(t, err, "Get should succeed")
+			shared.AssertEqual(t, "done", task2.Status, "task 2 status should be updated")
+			shared.AssertEqual(t, "high", task2.Priority, "task 2 priority should be updated")
+			shared.AssertEqual(t, "test-project", task2.Project, "task 2 project should be updated")
+		})
+
+		t.Run("updates with tag replacement", func(t *testing.T) {
+			id1, err := handler.repos.Tasks.Create(ctx, &models.Task{
+				UUID:        uuid.New().String(),
+				Description: "Task 1",
+				Status:      "pending",
+				Tags:        []string{"old-tag"},
+			})
+			shared.AssertNoError(t, err, "Create should succeed")
+
+			taskIDs := []string{strconv.FormatInt(id1, 10)}
+			err = handler.BulkEdit(ctx, taskIDs, "", "", "", "", []string{"new-tag1", "new-tag2"}, false, false)
+			shared.AssertNoError(t, err, "BulkEdit should succeed")
+
+			task, err := handler.repos.Tasks.Get(ctx, id1)
+			shared.AssertNoError(t, err, "Get should succeed")
+			shared.AssertEqual(t, 2, len(task.Tags), "should have 2 tags")
+			shared.AssertTrue(t, slices.Contains(task.Tags, "new-tag1"), "should contain new-tag1")
+			shared.AssertTrue(t, slices.Contains(task.Tags, "new-tag2"), "should contain new-tag2")
+		})
+
+		t.Run("adds tags with add-tags flag", func(t *testing.T) {
+			id1, err := handler.repos.Tasks.Create(ctx, &models.Task{
+				UUID:        uuid.New().String(),
+				Description: "Task 1",
+				Status:      "pending",
+				Tags:        []string{"existing-tag"},
+			})
+			shared.AssertNoError(t, err, "Create should succeed")
+
+			taskIDs := []string{strconv.FormatInt(id1, 10)}
+			err = handler.BulkEdit(ctx, taskIDs, "", "", "", "", []string{"new-tag"}, true, false)
+			shared.AssertNoError(t, err, "BulkEdit should succeed")
+
+			task, err := handler.repos.Tasks.Get(ctx, id1)
+			shared.AssertNoError(t, err, "Get should succeed")
+			shared.AssertEqual(t, 2, len(task.Tags), "should have 2 tags")
+			shared.AssertTrue(t, slices.Contains(task.Tags, "existing-tag"), "should contain existing-tag")
+			shared.AssertTrue(t, slices.Contains(task.Tags, "new-tag"), "should contain new-tag")
+		})
+
+		t.Run("removes tags with remove-tags flag", func(t *testing.T) {
+			id1, err := handler.repos.Tasks.Create(ctx, &models.Task{
+				UUID:        uuid.New().String(),
+				Description: "Task 1",
+				Status:      "pending",
+				Tags:        []string{"tag1", "tag2", "tag3"},
+			})
+			shared.AssertNoError(t, err, "Create should succeed")
+
+			taskIDs := []string{strconv.FormatInt(id1, 10)}
+			err = handler.BulkEdit(ctx, taskIDs, "", "", "", "", []string{"tag2"}, false, true)
+			shared.AssertNoError(t, err, "BulkEdit should succeed")
+
+			task, err := handler.repos.Tasks.Get(ctx, id1)
+			shared.AssertNoError(t, err, "Get should succeed")
+			shared.AssertEqual(t, 2, len(task.Tags), "should have 2 tags")
+			shared.AssertTrue(t, slices.Contains(task.Tags, "tag1"), "should contain tag1")
+			shared.AssertTrue(t, slices.Contains(task.Tags, "tag3"), "should contain tag3")
+			shared.AssertFalse(t, slices.Contains(task.Tags, "tag2"), "should not contain tag2")
+		})
+
+		t.Run("fails with no task IDs", func(t *testing.T) {
+			err := handler.BulkEdit(ctx, []string{}, "done", "", "", "", []string{}, false, false)
+			shared.AssertError(t, err, "should fail with no task IDs")
+			shared.AssertContains(t, err.Error(), "no task IDs provided", "error message")
+		})
+
+		t.Run("fails with invalid task ID", func(t *testing.T) {
+			err := handler.BulkEdit(ctx, []string{"99999"}, "done", "", "", "", []string{}, false, false)
+			shared.AssertError(t, err, "should fail with invalid task ID")
+		})
+
+		t.Run("works with UUIDs", func(t *testing.T) {
+			task1 := &models.Task{
+				UUID:        uuid.New().String(),
+				Description: "UUID task 1",
+				Status:      "pending",
+			}
+			_, err := handler.repos.Tasks.Create(ctx, task1)
+			shared.AssertNoError(t, err, "Create should succeed")
+
+			task2 := &models.Task{
+				UUID:        uuid.New().String(),
+				Description: "UUID task 2",
+				Status:      "pending",
+			}
+			_, err = handler.repos.Tasks.Create(ctx, task2)
+			shared.AssertNoError(t, err, "Create should succeed")
+
+			taskIDs := []string{task1.UUID, task2.UUID}
+			err = handler.BulkEdit(ctx, taskIDs, "done", "", "", "", []string{}, false, false)
+			shared.AssertNoError(t, err, "BulkEdit with UUIDs should succeed")
+
+			retrieved1, err := handler.repos.Tasks.GetByUUID(ctx, task1.UUID)
+			shared.AssertNoError(t, err, "GetByUUID should succeed")
+			shared.AssertEqual(t, "done", retrieved1.Status, "task 1 status should be updated")
+
+			retrieved2, err := handler.repos.Tasks.GetByUUID(ctx, task2.UUID)
+			shared.AssertNoError(t, err, "GetByUUID should succeed")
+			shared.AssertEqual(t, "done", retrieved2.Status, "task 2 status should be updated")
+		})
+	})
 }

@@ -1231,3 +1231,251 @@ func (h *TaskHandler) Calendar(ctx context.Context, weeks int) error {
 
 	return nil
 }
+
+// Annotate adds an annotation to a task
+func (h *TaskHandler) Annotate(ctx context.Context, taskID, annotation string) error {
+	if annotation == "" {
+		return fmt.Errorf("annotation text required")
+	}
+
+	var task *models.Task
+	var err error
+
+	if id, err_ := strconv.ParseInt(taskID, 10, 64); err_ == nil {
+		task, err = h.repos.Tasks.Get(ctx, id)
+	} else {
+		task, err = h.repos.Tasks.GetByUUID(ctx, taskID)
+	}
+
+	if err != nil {
+		return fmt.Errorf("failed to find task: %w", err)
+	}
+
+	task.Annotations = append(task.Annotations, annotation)
+
+	err = h.repos.Tasks.Update(ctx, task)
+	if err != nil {
+		return fmt.Errorf("failed to update task: %w", err)
+	}
+
+	fmt.Printf("Annotation added to task (ID: %d): %s\n", task.ID, task.Description)
+	fmt.Printf("Annotation: %s\n", annotation)
+
+	return nil
+}
+
+// ListAnnotations lists all annotations for a task
+func (h *TaskHandler) ListAnnotations(ctx context.Context, taskID string) error {
+	var task *models.Task
+	var err error
+
+	if id, err_ := strconv.ParseInt(taskID, 10, 64); err_ == nil {
+		task, err = h.repos.Tasks.Get(ctx, id)
+	} else {
+		task, err = h.repos.Tasks.GetByUUID(ctx, taskID)
+	}
+
+	if err != nil {
+		return fmt.Errorf("failed to find task: %w", err)
+	}
+
+	fmt.Printf("Task (ID: %d): %s\n", task.ID, task.Description)
+
+	if len(task.Annotations) == 0 {
+		fmt.Printf("No annotations\n")
+		return nil
+	}
+
+	fmt.Printf("Annotations (%d):\n", len(task.Annotations))
+	for i, annotation := range task.Annotations {
+		fmt.Printf("  %d. %s\n", i+1, annotation)
+	}
+
+	return nil
+}
+
+// RemoveAnnotation removes an annotation from a task by index
+func (h *TaskHandler) RemoveAnnotation(ctx context.Context, taskID string, index int) error {
+	var task *models.Task
+	var err error
+
+	if id, err_ := strconv.ParseInt(taskID, 10, 64); err_ == nil {
+		task, err = h.repos.Tasks.Get(ctx, id)
+	} else {
+		task, err = h.repos.Tasks.GetByUUID(ctx, taskID)
+	}
+
+	if err != nil {
+		return fmt.Errorf("failed to find task: %w", err)
+	}
+
+	if len(task.Annotations) == 0 {
+		return fmt.Errorf("task has no annotations")
+	}
+
+	if index < 1 || index > len(task.Annotations) {
+		return fmt.Errorf("annotation index out of range (1-%d)", len(task.Annotations))
+	}
+
+	annotation := task.Annotations[index-1]
+	task.Annotations = append(task.Annotations[:index-1], task.Annotations[index:]...)
+
+	err = h.repos.Tasks.Update(ctx, task)
+	if err != nil {
+		return fmt.Errorf("failed to update task: %w", err)
+	}
+
+	fmt.Printf("Annotation removed from task (ID: %d): %s\n", task.ID, task.Description)
+	fmt.Printf("Removed: %s\n", annotation)
+
+	return nil
+}
+
+// BulkEdit updates multiple tasks with the same changes
+func (h *TaskHandler) BulkEdit(ctx context.Context, taskIDs []string, status, priority, project, context string, tags []string, addTags, removeTags bool) error {
+	if len(taskIDs) == 0 {
+		return fmt.Errorf("no task IDs provided")
+	}
+
+	var ids []int64
+	for _, taskID := range taskIDs {
+		id, err := strconv.ParseInt(taskID, 10, 64)
+		if err != nil {
+			task, err := h.repos.Tasks.GetByUUID(ctx, taskID)
+			if err != nil {
+				return fmt.Errorf("invalid task ID %s: %w", taskID, err)
+			}
+			id = task.ID
+		}
+		ids = append(ids, id)
+	}
+
+	updates := &models.Task{
+		Status:   status,
+		Priority: priority,
+		Project:  project,
+		Context:  context,
+	}
+
+	if len(tags) > 0 {
+		if addTags {
+			for _, id := range ids {
+				task, err := h.repos.Tasks.Get(ctx, id)
+				if err != nil {
+					return fmt.Errorf("failed to get task: %w", err)
+				}
+				for _, tag := range tags {
+					if !slices.Contains(task.Tags, tag) {
+						task.Tags = append(task.Tags, tag)
+					}
+				}
+				if err := h.repos.Tasks.Update(ctx, task); err != nil {
+					return fmt.Errorf("failed to update task: %w", err)
+				}
+			}
+		} else if removeTags {
+			for _, id := range ids {
+				task, err := h.repos.Tasks.Get(ctx, id)
+				if err != nil {
+					return fmt.Errorf("failed to get task: %w", err)
+				}
+				for _, tag := range tags {
+					task.Tags = removeString(task.Tags, tag)
+				}
+				if err := h.repos.Tasks.Update(ctx, task); err != nil {
+					return fmt.Errorf("failed to update task: %w", err)
+				}
+			}
+		} else {
+			updates.Tags = tags
+		}
+	}
+
+	if err := h.repos.Tasks.BulkUpdate(ctx, ids, updates); err != nil {
+		return fmt.Errorf("bulk update failed: %w", err)
+	}
+
+	fmt.Printf("Updated %d task(s)\n", len(ids))
+	if status != "" {
+		fmt.Printf("Status: %s\n", status)
+	}
+	if priority != "" {
+		fmt.Printf("Priority: %s\n", priority)
+	}
+	if project != "" {
+		fmt.Printf("Project: %s\n", project)
+	}
+	if context != "" {
+		fmt.Printf("Context: %s\n", context)
+	}
+	if len(tags) > 0 {
+		if addTags {
+			fmt.Printf("Added tags: %s\n", strings.Join(tags, ", "))
+		} else if removeTags {
+			fmt.Printf("Removed tags: %s\n", strings.Join(tags, ", "))
+		} else {
+			fmt.Printf("Set tags: %s\n", strings.Join(tags, ", "))
+		}
+	}
+
+	return nil
+}
+
+// UndoTask reverts a task to its previous state
+func (h *TaskHandler) UndoTask(ctx context.Context, taskID string) error {
+	var task *models.Task
+	var err error
+
+	if id, err_ := strconv.ParseInt(taskID, 10, 64); err_ == nil {
+		task, err = h.repos.Tasks.Get(ctx, id)
+	} else {
+		task, err = h.repos.Tasks.GetByUUID(ctx, taskID)
+	}
+
+	if err != nil {
+		return fmt.Errorf("failed to find task: %w", err)
+	}
+
+	err = h.repos.Tasks.UndoLastChange(ctx, task.ID)
+	if err != nil {
+		return fmt.Errorf("failed to undo task: %w", err)
+	}
+
+	fmt.Printf("Undid last change to task (ID: %d)\n", task.ID)
+	return nil
+}
+
+// ShowHistory displays the change history for a task
+func (h *TaskHandler) ShowHistory(ctx context.Context, taskID string, limit int) error {
+	var task *models.Task
+	var err error
+
+	if id, err_ := strconv.ParseInt(taskID, 10, 64); err_ == nil {
+		task, err = h.repos.Tasks.Get(ctx, id)
+	} else {
+		task, err = h.repos.Tasks.GetByUUID(ctx, taskID)
+	}
+
+	if err != nil {
+		return fmt.Errorf("failed to find task: %w", err)
+	}
+
+	history, err := h.repos.Tasks.GetHistory(ctx, task.ID, limit)
+	if err != nil {
+		return fmt.Errorf("failed to get history: %w", err)
+	}
+
+	if len(history) == 0 {
+		fmt.Printf("No history found for task (ID: %d): %s\n", task.ID, task.Description)
+		return nil
+	}
+
+	fmt.Printf("Task (ID: %d): %s\n", task.ID, task.Description)
+	fmt.Printf("History (%d changes):\n\n", len(history))
+
+	for i, h := range history {
+		fmt.Printf("%d. [%s] %s at %s\n", i+1, h.Operation, task.Description, h.CreatedAt.Format("2006-01-02 15:04:05"))
+	}
+
+	return nil
+}

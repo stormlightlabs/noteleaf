@@ -221,6 +221,15 @@ type Article struct {
 	Modified     time.Time `json:"modified"`
 }
 
+// TaskHistory represents a historical snapshot of a task for undo functionality
+type TaskHistory struct {
+	ID        int64     `json:"id"`
+	TaskID    int64     `json:"task_id"`
+	Operation string    `json:"operation"` // update, delete
+	Snapshot  string    `json:"snapshot"`  // JSON snapshot of task
+	CreatedAt time.Time `json:"created_at"`
+}
+
 // MarshalTags converts tags slice to JSON string for database storage
 func (t *Task) MarshalTags() (string, error) {
 	if len(t.Tags) == 0 {

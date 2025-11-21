@@ -1174,4 +1174,79 @@ func TestTaskRepository(t *testing.T) {
 		shared.AssertNoError(t, err, "GetBlockedTasks for independent should succeed")
 		shared.AssertEqual(t, 0, len(emptyBlocked), "independent task should not block anything")
 	})
+
+	t.Run("BulkUpdate", func(t *testing.T) {
+		t.Run("updates multiple tasks successfully", func(t *testing.T) {
+			task1 := CreateSampleTask()
+			task1.Status = "pending"
+			task1.Priority = "low"
+			id1, err := repo.Create(ctx, task1)
+			shared.AssertNoError(t, err, "Create should succeed")
+
+			task2 := CreateSampleTask()
+			task2.Status = "pending"
+			task2.Priority = "low"
+			id2, err := repo.Create(ctx, task2)
+			shared.AssertNoError(t, err, "Create should succeed")
+
+			updates := &models.Task{
+				Status:   "done",
+				Priority: "high",
+				Project:  "bulk-test",
+			}
+
+			err = repo.BulkUpdate(ctx, []int64{id1, id2}, updates)
+			shared.AssertNoError(t, err, "BulkUpdate should succeed")
+
+			updated1, err := repo.Get(ctx, id1)
+			shared.AssertNoError(t, err, "Get should succeed")
+			shared.AssertEqual(t, "done", updated1.Status, "task 1 status should be updated")
+			shared.AssertEqual(t, "high", updated1.Priority, "task 1 priority should be updated")
+			shared.AssertEqual(t, "bulk-test", updated1.Project, "task 1 project should be updated")
+
+			updated2, err := repo.Get(ctx, id2)
+			shared.AssertNoError(t, err, "Get should succeed")
+			shared.AssertEqual(t, "done", updated2.Status, "task 2 status should be updated")
+			shared.AssertEqual(t, "high", updated2.Priority, "task 2 priority should be updated")
+			shared.AssertEqual(t, "bulk-test", updated2.Project, "task 2 project should be updated")
+		})
+
+		t.Run("fails with no task IDs", func(t *testing.T) {
+			updates := &models.Task{Status: "done"}
+			err := repo.BulkUpdate(ctx, []int64{}, updates)
+			shared.AssertError(t, err, "should fail with empty task IDs")
+			shared.AssertContains(t, err.Error(), "no task IDs provided", "error message")
+		})
+
+		t.Run("fails with invalid task ID", func(t *testing.T) {
+			updates := &models.Task{Status: "done"}
+			err := repo.BulkUpdate(ctx, []int64{99999}, updates)
+			shared.AssertError(t, err, "should fail with invalid task ID")
+			shared.AssertContains(t, err.Error(), "failed to get task", "error message")
+		})
+
+		t.Run("updates only non-empty fields", func(t *testing.T) {
+			task1 := CreateSampleTask()
+			task1.Status = "pending"
+			task1.Priority = "low"
+			task1.Project = "original-project"
+			task1.Context = "original-context"
+			id1, err := repo.Create(ctx, task1)
+			shared.AssertNoError(t, err, "Create should succeed")
+
+			updates := &models.Task{
+				Status: "done",
+			}
+
+			err = repo.BulkUpdate(ctx, []int64{id1}, updates)
+			shared.AssertNoError(t, err, "BulkUpdate should succeed")
+
+			updated, err := repo.Get(ctx, id1)
+			shared.AssertNoError(t, err, "Get should succeed")
+			shared.AssertEqual(t, "done", updated.Status, "status should be updated")
+			shared.AssertEqual(t, "low", updated.Priority, "priority should remain unchanged")
+			shared.AssertEqual(t, "original-project", updated.Project, "project should remain unchanged")
+			shared.AssertEqual(t, "original-context", updated.Context, "context should remain unchanged")
+		})
+	})
 }
